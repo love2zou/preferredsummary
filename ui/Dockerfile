@@ -1,0 +1,41 @@
+# ---------- 第 1 阶段：构建前端 ----------
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:18-alpine AS builder
+
+# 设置工作目录
+WORKDIR /app
+
+# 使用国内 npm 镜像
+RUN npm config set registry https://registry.npmmirror.com
+
+# 仅复制依赖声明文件，利于构建缓存
+COPY preferred-admin/package*.json ./
+
+# 安装所有依赖（含 devDependencies），仅用于构建
+RUN npm ci
+
+# 复制源码
+COPY preferred-admin/ ./
+
+# 构建 vite 项目
+RUN npm run build
+
+# ---------- 第 2 阶段：部署产物 ----------
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.27.0
+
+# 设置 nginx 工作目录
+WORKDIR /var/www/html
+
+# 删除默认配置，避免冲突
+RUN rm /etc/nginx/conf.d/default.conf
+
+# 复制自定义 nginx 配置
+COPY nginx.conf /etc/nginx/conf.d/
+
+# 复制构建好的静态文件
+COPY --from=builder /app/dist /var/www/html
+
+# 开放端口（请根据你 nginx.conf 中配置确认）
+EXPOSE 8091
+
+# 启动 nginx
+CMD ["nginx", "-g", "daemon off;"]

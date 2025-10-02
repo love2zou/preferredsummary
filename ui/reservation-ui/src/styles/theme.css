@@ -1,0 +1,57 @@
+:root {
+  /* 主题色：温暖绿色 */
+  --primary-color: #06c167;
+  --primary-color-600: #04a253;
+  --primary-color-700: #03914a;
+
+  /* 页面与文本 */
+  --bg-page: #f7faf8;
+  --text-color: #222;
+  --text-secondary: #667085;
+  --border-color: #e6efe9;
+
+  /* 组件风格（扁平化） */
+  --radius: 12px;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+
+  /* Element Plus 主色 */
+  --el-color-primary: #06c167;
+}
+
+/* 页面基础风格（移除默认外边距，统一盒模型） */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-page);
+  color: var(--text-color);
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* 根容器占满视口，便于内容居中 */
+#app {
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* 通用卡片（扁平化） */
+.mini-card {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+}
+
+/* 小程序式功能栅格 */
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .mini-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

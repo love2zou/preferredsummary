@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  preferred-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      # 挂载图片存储目录到宿主机
+      - ./data/upload:/app/wwwroot/upload
+      # 可选：挂载配置文件
+      - ./api/Preferred.Api/appsettings.json:/app/appsettings.json:ro
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+    networks:
+      - preferred-network
+volumes:
+  upload-data:
+
+networks:
+  preferred-network:
+    driver: bridge
