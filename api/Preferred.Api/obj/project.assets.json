@@ -7497,11 +7497,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\git\\preferred\\api\\Preferred.Api\\Preferred.Api.csproj",
+      "projectUniqueName": "D:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
       "projectName": "Preferred.Api",
-      "projectPath": "D:\\git\\preferred\\api\\Preferred.Api\\Preferred.Api.csproj",
+      "projectPath": "D:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
       "packagesPath": "C:\\Users\\love2\\.nuget\\packages\\",
-      "outputPath": "D:\\git\\preferred\\api\\Preferred.Api\\obj\\",
+      "outputPath": "D:\\github\\preferredsummary\\api\\Preferred.Api\\obj\\",
       "projectStyle": "PackageReference",
       "configFilePaths": [
         "C:\\Users\\love2\\AppData\\Roaming\\NuGet\\NuGet.Config"

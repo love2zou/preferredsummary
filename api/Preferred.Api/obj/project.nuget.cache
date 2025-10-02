@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "qpJHZ0xYsv46kevtOrju+axycq00hfkb1gSg+g8Q8s66EyIjFTR/Dw/d6anvwCH5XoBd2Db6/JDKHxBPqyNReg==",
+  "dgSpecHash": "FbsdP+052et3dbQTmzkP8JKRjvzOIENMOWypl7J0wgilb2aoX0kFmv8un3r+qVfrgyjITZ/UK0f7fuLcScfsAw==",
   "success": true,
-  "projectFilePath": "D:\\git\\preferred\\api\\Preferred.Api\\Preferred.Api.csproj",
+  "projectFilePath": "d:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\love2\\.nuget\\packages\\cronos\\0.7.1\\cronos.0.7.1.nupkg.sha512",
     "C:\\Users\\love2\\.nuget\\packages\\epplus\\5.2.1\\epplus.5.2.1.nupkg.sha512",

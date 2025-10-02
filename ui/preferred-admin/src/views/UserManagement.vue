@@ -535,10 +535,13 @@ const calculateTableHeight = () => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
   console.log('UserManagement component mounted')
   calculateTableHeight()
-  loadUserList()
+  // 并行加载两个下拉选项
+  await Promise.all([loadUserTypeOptions(), loadSystemOptions()])
+  // 选项加载完成后再拉取列表，避免显示 "-"
+  await loadUserList()
   window.addEventListener('resize', calculateTableHeight)
 })
 
