@@ -96,7 +96,9 @@ namespace Preferred.Api.Services
                 Data = new LoginResponseDto
                 {
                     Token = token,
+                    UserId = user.Id,   
                     UserName = user.UserName,
+                    UserTypeCode = user.UserTypeCode,
                     Email = user.Email
                 },
                 Message = "登录成功"
@@ -291,6 +293,49 @@ namespace Preferred.Api.Services
             {
                 return false;
             }
+        }
+        
+        public async Task<UserListDto> GetUserDetailDto(int id)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (user == null)
+            {
+                return null;
+            }
+
+            var dto = new UserListDto
+            {
+                Id = user.Id,
+                UserName = user.UserName,
+                Email = user.Email,
+                PhoneNumber = user.PhoneNumber,
+                Bio = user.Bio,
+                IsActive = user.IsActive,
+                IsEmailVerified = user.IsEmailVerified,
+                CrtTime = user.CrtTime,
+                UpdTime = user.UpdTime,
+                LastLoginTime = user.LastLoginTime,
+                UserTypeCode = user.UserTypeCode,
+                UserToSystemCode = user.UserToSystemCode,
+                ProfilePictureUrl = user.ProfilePictureUrl
+            };
+
+            if (!string.IsNullOrWhiteSpace(user.UserTypeCode))
+            {
+                var tag = await _context.Tags
+                    .Where(t => t.TagCode == user.UserTypeCode)
+                    .OrderBy(t => t.SeqNo)
+                    .FirstOrDefaultAsync();
+
+                if (tag != null)
+                {
+                    dto.UserTypeName = tag.TagName;
+                    dto.UserTypeHexColor = tag.HexColor;
+                    dto.UserTypeRgbColor = tag.RgbColor;
+                }
+            }
+
+            return dto;
         }
     }
 }

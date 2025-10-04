@@ -1,0 +1,285 @@
+<template>
+  <div class="booking-page">
+    <div class="hero-header">
+      <div class="left-actions" @click="goBack">
+        <el-icon><ArrowLeft /></el-icon>
+      </div>
+      <div class="app-title">健身预约</div>
+      <div class="right-actions"></div>
+    </div>
+
+    <div class="content">
+      <div class="mini-card">
+        <div class="mini-card-header">
+          <h3>选择教练</h3>
+        </div>
+        <template v-if="hasBoundCoach">
+          <!-- 删除冗余的步骤提示 -->
+          <div class="coach-list">
+            <div
+              v-for="c in boundCoaches"
+              :key="c.coachId"
+              :class="['coach-card', { selected: selectedCoachId === c.coachId }]"
+              @click="selectCoach(c.coachId)"
+            >
+              <div class="coach-card-content">
+                <div class="avatar">
+                  <div class="avatar-fallback">{{ (c.coachName || '').slice(0,1).toUpperCase() }}</div>
+                </div>
+                <div class="name">{{ c.coachName }}</div>
+              </div>
+            </div>
+          </div>
+        </template>
+        <template v-else>
+          <div class="hint" style="margin-bottom:8px">尚未绑定教练，请联系教练在“我的会员”页面为您完成绑定</div>
+        </template>
+      </div>
+
+      <div class="mini-card">
+        <h3>选择日期</h3>
+        <div class="date-pills">
+          <el-button :type="dateKey === 'today' ? 'primary' : 'default'" @click="setDate('today')">
+            <el-icon style="margin-right: 6px"><Calendar /></el-icon>今天 ({{ todayLabel }})
+          </el-button>
+          <el-button :type="dateKey === 'tomorrow' ? 'primary' : 'default'" @click="setDate('tomorrow')">
+            <el-icon style="margin-right: 6px"><Calendar /></el-icon>明天 ({{ tomorrowLabel }})
+          </el-button>
+        </div>
+      </div>
+
+      <div class="mini-card">
+        <h3>可预约时段</h3>
+        <div v-if="!selectedCoachId" class="hint">请先选择教练</div>
+        <div v-else>
+          <div v-if="loadingSlots" class="hint">正在加载可预约时段...</div>
+          <div v-else-if="filteredSlots.length === 0" class="hint">暂无预约时段</div>
+          <div v-else class="slots-grid">
+            <el-tag
+              v-for="s in filteredSlots"
+              :key="s.slotId"
+              :type="isSelected(s) ? 'success' : (s.isAvailable ? 'info' : 'danger')"
+              :class="['slot-tag', { disabled: !s.isAvailable, selected: isSelected(s) }]"
+              @click="toggleSelect(s)"
+            >
+              {{ s.startTime }} - {{ s.endTime }}
+            </el-tag>
+          </div>
+        </div>
+      </div>
+
+      <div class="fixed-actions">
+        <el-button type="primary" :disabled="!canSubmit" @click="submitBooking">确认预约</el-button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { AvailableSlot, bookingService, BoundCoach } from '@/services/bookingService'
+import { useUserStore } from '@/stores/user'
+import { ArrowLeft, Calendar } from '@element-plus/icons-vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+const userStore = useUserStore()
+
+const boundCoaches = ref<BoundCoach[]>([])
+const selectedCoachId = ref<number | null>(null)
+const dateKey = ref<'today' | 'tomorrow'>('today')
+const loadingSlots = ref(false)
+const availableSlots = ref<AvailableSlot[]>([])
+const selectedSlots = ref<{ startTime: string; endTime: string }[]>([])
+
+const goBack = () => router.back()
+
+const today = new Date()
+const tomorrow = new Date(today.getTime() + 86400000)
+const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const todayLabel = computed(() => fmt(today))
+const tomorrowLabel = computed(() => fmt(tomorrow))
+const bookDate = computed(() => (dateKey.value === 'today' ? todayLabel.value : tomorrowLabel.value))
+
+const setDate = (key: 'today' | 'tomorrow') => {
+  dateKey.value = key
+}
+
+const isSelected = (s: AvailableSlot) => selectedSlots.value.some(x => x.startTime === s.startTime && x.endTime === s.endTime)
+const toggleSelect = (s: AvailableSlot) => {
+  if (!s.isAvailable) return
+  const idx = selectedSlots.value.findIndex(x => x.startTime === s.startTime && x.endTime === s.endTime)
+  if (idx >= 0) selectedSlots.value.splice(idx, 1)
+  else selectedSlots.value.push({ startTime: s.startTime, endTime: s.endTime })
+}
+
+const canSubmit = computed(() => !!selectedCoachId.value && selectedSlots.value.length > 0)
+
+// 方法：loadBoundCoaches、loadAvailableSlots
+// 移除：绑定教练候选与状态
+// 原：const bindCandidates = ref<AdminUser[]>([])
+// 移除：绑定教练候选与状态
+// 原：const pendingBindCoachId = ref<number | null>(null)
+const hasBoundCoach = computed(() => boundCoaches.value.length > 0)
+
+// 加载已绑定教练
+const loadBoundCoaches = async () => {
+  const memberId = userStore.user?.id || 0
+  const resp = await bookingService.getBoundCoaches(memberId)
+  const coaches = Array.isArray(resp?.data) ? resp.data : []
+  boundCoaches.value = coaches
+  selectedCoachId.value = coaches.length > 0 ? coaches[0].coachId : null
+}
+
+const loadAvailableSlots = async () => {
+  if (!selectedCoachId.value) return
+  loadingSlots.value = true
+  try {
+    const resp = await bookingService.getAvailableSlots(selectedCoachId.value, bookDate.value)
+    availableSlots.value = Array.isArray(resp?.data) ? resp.data : []
+  } finally {
+    loadingSlots.value = false
+  }
+}
+
+// 移除：加载可绑定教练（会员端不再使用）
+// 原函数 loadBindableCoaches(...) 已删除
+
+// 移除：绑定教练后继续预约逻辑（会员端不再使用）
+// 原函数 bindCoachThenProceed(...) 已删除
+
+onMounted(async () => {
+  await loadBoundCoaches()
+  await loadAvailableSlots()
+})
+
+const submitBooking = async () => {
+  if (!canSubmit.value) return
+  const memberId = userStore.user?.id || 0
+  await bookingService.batchCreate({
+    memberId,
+    coachId: selectedCoachId.value!,
+    bookDate: bookDate.value,
+    timeSlots: selectedSlots.value
+  })
+  router.push('/booking')
+}
+
+watch([selectedCoachId, bookDate], loadAvailableSlots)
+const selectCoach = (id: number) => {
+  selectedCoachId.value = id
+}
+// 移除：跳转绑定教练页面的入口
+// 原：const bindSectionEl = ref<HTMLElement | null>(null)
+// 原：const openBindSection = () => { router.push('/bind-coach') }
+
+// 统一时段过滤：营业 09:00–21:00，午休 12:00–14:00 不可约
+const filteredSlots = computed(() => {
+  const businessStart = 9 * 60
+  const restStart = 12 * 60
+  const restEnd = 14 * 60
+  const businessEnd = 21 * 60
+  return availableSlots.value.filter(s => {
+    const start = toMin(s.startTime)
+    const end = toMin(s.endTime)
+    if (start < businessStart || end > businessEnd) return false
+    if (start < restEnd && end > restStart) return false
+    return true
+  })
+})
+
+// 解析 "HH:mm" 为分钟用于比较
+const toMin = (t: string) => {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + (m || 0)
+}
+</script>
+
+<style scoped>
+.booking-page { display: flex; flex-direction: column; min-height: 100vh; }
+.hero-header { display: flex; align-items: center; height: 56px; padding: 0 12px; border-bottom: 1px solid var(--el-border-color); }
+.left-actions { width: 48px; display: flex; align-items: center; cursor: pointer; }
+.app-title { flex: 1; text-align: center; font-weight: 600; }
+.right-actions { width: 48px; }
+.content { flex: 1; padding: 12px; }
+.mini-card { background: var(--el-bg-color); border: 1px solid var(--el-border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
+.bind-tip { margin-top: 8px; color: var(--el-text-color-secondary); font-size: 13px; }
+.date-pills { display: flex; gap: 10px; margin-top: 16px; }
+.slots-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
+.slot-tag { cursor: pointer; user-select: none; }
+.slot-tag.disabled { opacity: 0.5; cursor: not-allowed; }
+.slot-tag.selected { box-shadow: 0 0 0 2px var(--el-color-success); }
+.fixed-actions { position: sticky; bottom: 0; background: var(--el-bg-color); padding: 12px; border-top: 1px solid var(--el-border-color); display: flex; justify-content: center; }
+.step-title { margin-bottom: 6px; font-weight: 600; }
+.coach-list { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); 
+  gap: 10px; 
+}
+.coach-card { 
+  border: 1px solid var(--el-border-color); 
+  border-radius: 8px; 
+  cursor: pointer; 
+  background: var(--el-bg-color); 
+  transition: border-color .15s ease; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  overflow: hidden; 
+}
+.coach-card:hover { 
+  border-color: var(--el-color-primary-light-8); 
+}
+.coach-card.selected { 
+  border-color: var(--el-color-primary); 
+}
+.coach-card-content { 
+  width: 100%;             /* 与卡片宽度一致 */
+  gap: 6px;                /* 更紧凑的内容间距 */
+  box-sizing: border-box;  /* 宽度包含内边距，避免视觉抖动 */
+}
+.coach-card .name { 
+  width: 100%;
+  display: flex;              /* 让内部内容可居中 */
+  align-items: center;        /* 垂直居中 */
+  justify-content: center;    /* 水平居中 */
+  text-align: center;         /* 文本居中 */
+  font-weight: 600; 
+  font-size: 14px; 
+  line-height: 1.2; 
+  height: 32px;               /* 给定高度以形成可显著的垂直居中 */
+  margin: 0;                  /* 避免默认 margin 影响居中 */
+}
+.avatar { 
+   width: 100%; 
+  height: 80px; 
+  margin: 0; 
+  border-radius: 8px 8px 0 0; 
+  overflow: hidden; 
+  border: none; /* 移除头像边框，避免双框 */
+  background: var(--el-fill-color-light); 
+  display: block; 
+}
+
+.avatar img { 
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+  display: block; 
+}
+.avatar-fallback { 
+  width: 100%; 
+  height: 100%; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  color: var(--el-text-color-primary); 
+  font-weight: 700; 
+  font-size: 20px; 
+}
+.mini-card-header { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+}
+</style>

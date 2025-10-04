@@ -1,8 +1,12 @@
+// axios 基础配置（按环境直连后端）
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
+const isDev = import.meta.env.MODE === 'development'
+const baseURL = isDev ? 'http://localhost:5000/api' : '/api'
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL,
   timeout: 10000
 })
 

@@ -1,3 +1,4 @@
+// 路由配置（新增 BindCoach 路由）
 import { useUserStore } from '@/stores/user'
 import { createRouter, createWebHistory } from 'vue-router'
 
@@ -26,13 +27,6 @@ const router = createRouter({
       component: () => import('@/views/Home.vue'),
       meta: { requiresAuth: true }
     },
-    // 新增：我的约课
-    {
-      path: '/booking',
-      name: 'Booking',
-      component: () => import('@/views/member/Booking.vue'),
-      meta: { requiresAuth: true }
-    },
     // 新增：个人信息
     {
       path: '/profile',
@@ -47,12 +41,38 @@ const router = createRouter({
       component: () => import('@/views/Fitness.vue'),
       meta: { requiresAuth: true }
     },
-    // 在路由表中新增“新建约课”页面的路由
+    // 新增：健身预约 - 创建
     {
       path: '/booking/create',
-      name: 'BookingCreate',
-      component: () => import('@/views/BookingCreate.vue'),
-      meta: { requiresAuth: true, title: '新建约课' }
+      name: 'CreateBooking',
+      component: () => import('@/views/booking/CreateBooking.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/booking',
+      name: 'BookingList',
+      component: () => import('@/views/booking/BookingList.vue'),
+      meta: { requiresAuth: true }
+    },
+    // 移除：会员端绑定教练页面
+    // 原：{
+    //   path: '/bind-coach',
+    //   name: 'BindCoach',
+    //   component: () => import('@/views/booking/BindCoach.vue'),
+    //   meta: { requiresAuth: true }
+    // }
+    {
+      path: '/members',
+      name: 'MyMembers',
+      component: () => import('@/views/trainer/MyMembers.vue'),
+      meta: { requiresAuth: true }
+    },
+    // 新增：添加会员页面
+    {
+      path: '/members/add',
+      name: 'AddMembers',
+      component: () => import('@/views/trainer/AddMembers.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

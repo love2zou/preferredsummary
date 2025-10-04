@@ -1,4 +1,4 @@
-/* 全局样式 */
+/* 全局样式入口：统一 APP 风格 */
 * {
   margin: 0;
   padding: 0;
@@ -10,71 +10,67 @@ body {
   background-color: #f5f5f5;
 }
 
-/* 小程序风格的页面容器 */
+/* 容器：使用全局变量实现 PC/移动自适应 */
 .page-container {
-  max-width: 414px;
+  width: 100%;
+  max-width: var(--app-max-width);
   margin: 0 auto;
   background-color: #fff;
   min-height: 100vh;
   padding: 0 16px;
 }
 
-/* 小程序风格的卡片 */
+/* 卡片：与主题保持一致 */
 .mini-card {
   background: #fff;
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 16px;
   margin: 12px 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  border: 1px solid #f0f0f0;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
 }
 
-/* 小程序风格的按钮 */
+/* 扁平化按钮：主色绿色，去渐变 */
 .mini-button {
   width: 100%;
   height: 44px;
-  border-radius: 22px;
+  border-radius: 12px;
   border: none;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: background-color .2s ease, transform .1s ease;
 }
-
 .mini-button.primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--primary-color);
   color: #fff;
 }
+.mini-button.primary:hover { background: var(--primary-color-600); }
+.mini-button.primary:active { transform: translateY(1px); }
 
-.mini-button.primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
+/* 次按钮：扁平化边框 */
 .mini-button.secondary {
-  background: #f8f9fa;
-  color: #666;
-  border: 1px solid #e9ecef;
+  background: #fff;
+  color: var(--primary-color);
+  border: 1px solid var(--border-color);
 }
+.mini-button.secondary:hover { border-color: var(--primary-color); }
 
-/* 小程序风格的输入框 */
+/* 输入框：聚焦为绿色主色 */
 .mini-input {
   width: 100%;
   height: 44px;
   padding: 0 16px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   font-size: 16px;
   background: #fff;
-  transition: border-color 0.3s;
+  transition: border-color .2s ease;
 }
+.mini-input:focus { outline: none; border-color: var(--primary-color); }
 
-.mini-input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-/* 小程序风格的标题 */
+/* 响应式优化 */
+@media (max-width: 768px) { .page-container { padding: 0 12px; } }
 .page-title {
   font-size: 24px;
   font-weight: 600;

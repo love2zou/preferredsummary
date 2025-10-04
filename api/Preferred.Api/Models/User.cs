@@ -112,13 +112,21 @@ namespace Preferred.Api.Models
         /// </summary>
         /// <example>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</example>
         public string Token { get; set; } = string.Empty;
-
+        /// <summary>
+        /// 用户Id
+        /// </summary>
+        /// <example>1</example>
+        public int UserId { get; set; }
         /// <summary>
         /// 用户名
         /// </summary>
         /// <example>john_doe</example>
         public string UserName { get; set; } = string.Empty;
-
+        /// <summary>
+        /// 用户类型
+        /// </summary>
+        /// <example>jiaolian</example>
+        public string UserTypeCode { get; set; } = string.Empty;
         /// <summary>
         /// 邮箱地址
         /// </summary>
@@ -145,6 +153,10 @@ namespace Preferred.Api.Models
         public string? UserTypeCode { get; set; }
         public string? UserToSystemCode { get; set; }
         public string? ProfilePictureUrl { get; set; }
+        // 新增：从 tb_tag 联动的用户类型信息
+        public string? UserTypeName { get; set; }
+        public string? UserTypeHexColor { get; set; }
+        public string? UserTypeRgbColor { get; set; }
     }
 
     /// <summary>

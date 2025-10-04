@@ -1581,11 +1581,6 @@
             <param name="changePasswordDto">修改密码信息</param>
             <returns>操作结果</returns>
         </member>
-        <member name="M:Preferred.Api.Extensions.ServiceCollectionExtensions.AddApplicationServices(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)">
-            <summary>
-            注册应用程序服务
-            </summary>
-        </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
             API响应基础模型
@@ -2883,11 +2878,23 @@
             </summary>
             <example>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</example>
         </member>
+        <member name="P:Preferred.Api.Models.LoginResponseDto.UserId">
+            <summary>
+            用户Id
+            </summary>
+            <example>1</example>
+        </member>
         <member name="P:Preferred.Api.Models.LoginResponseDto.UserName">
             <summary>
             用户名
             </summary>
             <example>john_doe</example>
+        </member>
+        <member name="P:Preferred.Api.Models.LoginResponseDto.UserTypeCode">
+            <summary>
+            用户类型
+            </summary>
+            <example>jiaolian</example>
         </member>
         <member name="P:Preferred.Api.Models.LoginResponseDto.Email">
             <summary>

@@ -1,5 +1,5 @@
 :root {
-  /* 主题色：温暖绿色 */
+  /* 主题色：暖绿色 */
   --primary-color: #06c167;
   --primary-color-600: #04a253;
   --primary-color-700: #03914a;
@@ -14,18 +14,35 @@
   --radius: 12px;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 
-  /* Element Plus 主色 */
+  /* Element Plus 主色：改为暖绿色 + 完整色阶 */
   --el-color-primary: #06c167;
+  --el-color-primary-dark-2: #04a253;
+  /* 深两档：悬停/激活可用 */
+  --el-color-primary-light-3: #3fd681;
+  /* 浅三档：按钮 hover 常用 */
+  --el-color-primary-light-5: #7de7ab;
+  --el-color-primary-light-7: #bdf5d2;
+  --el-color-primary-light-8: #d6f9e3;
+  /* 卡片 hover 边框常用 */
+  --el-color-primary-light-9: #ebfcf2;
+
+  /* 新增：卡片背景 与 响应式最大宽度 */
+  --card-bg: #ffffff;
+  --app-max-width: 960px;
 }
 
 /* 页面基础风格（移除默认外边距，统一盒模型） */
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   background: var(--bg-page);
   color: var(--text-color);
 }
-*, *::before, *::after {
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -33,6 +50,14 @@ html, body {
 #app {
   min-height: 100vh;
   width: 100%;
+}
+
+/* 新增：全局页面容器（移动端满宽、PC 居中） */
+.page-container {
+  width: 100%;
+  max-width: var(--app-max-width);
+  margin: 0 auto;
+  padding: 0 16px;
 }
 
 /* 通用卡片（扁平化） */
@@ -54,4 +79,186 @@ html, body {
   .mini-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .page-container {
+    padding: 0 12px;
+  }
+}
+
+/* 主题与基础变量已存在 */
+/* 胶囊标签（Chip）与标签组 */
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.chip {
+  appearance: none;
+  border: 1px solid var(--border-color);
+  background: #fff;
+  color: var(--text-color);
+  border-radius: 9999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+
+.chip:hover {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.chip.is-active {
+  border-color: var(--primary-color);
+  background: rgba(6, 193, 103, 0.08);
+  color: var(--primary-color);
+  box-shadow: 0 1px 0 rgba(6, 193, 103, 0.12) inset;
+}
+
+/* Banner 卡片（标题/价格/状态） */
+.banner-card {
+  position: relative;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: #fff;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+}
+
+.banner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.banner-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.banner-price {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.banner-stats {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 8px 0;
+}
+
+.banner-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #0f5132;
+  background: #d1e7dd;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-top: 10px;
+}
+
+/* 进度条 */
+.progress {
+  width: 100%;
+  height: 6px;
+  background: #e6efe9;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--primary-color);
+  border-radius: 9999px;
+  width: 0;
+  transition: width .3s ease;
+}
+
+/* 课程大卡片与右侧 CTA 徽标 */
+.course-card-lg {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.course-cover {
+  width: 64px;
+  height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-color-600));
+}
+
+.course-main {
+  flex: 1;
+}
+
+.course-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.course-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.cta-badge {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  background: var(--primary-color);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+}
+
+/* 底部固定 CTA */
+.cta-fixed {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 12px 16px;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border-color);
+}
+
+.cta-btn {
+  width: 100%;
+  height: 48px;
+  border-radius: 9999px;
+  background: var(--primary-color);
+  color: #fff;
+  border: 0;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cta-btn:active {
+  transform: scale(0.997);
 }

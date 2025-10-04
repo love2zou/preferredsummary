@@ -13,6 +13,8 @@ import router from './router'
 
 // 引入全局主题（暖绿色、扁平化）
 import './styles/theme.css'
+// 新增：引入全局 APP/小程序风格样式（按钮、容器、卡片）
+import './style/index.css'
 
 console.log('📦 正在创建 Vue 应用...')
 

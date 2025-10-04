@@ -14,7 +14,7 @@ namespace Preferred.Api.Services
         // 用户管理接口
         Task<List<UserListDto>> GetAllUsers(int page = 1, int pageSize = 10, UserSearchParams searchParams = null);
         Task<int> GetUsersCount(UserSearchParams searchParams = null);
-        Task<User> GetUserById(int id);
+        Task<UserListDto> GetUserDetailDto(int id);
         Task<bool> UpdateUser(int id, UserUpdateDto userDto);
         Task<bool> DeleteUser(int id);
         Task<bool> ChangePassword(int userId, string newPassword);

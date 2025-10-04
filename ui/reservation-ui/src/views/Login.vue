@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { authService, type LoginResponse } from '@/services/authService'
+import { authService } from '@/services/authService'
 import type { User } from '@/stores/user'
 import { useUserStore } from '@/stores/user'
 import { Trophy } from '@element-plus/icons-vue'
@@ -85,54 +85,52 @@ const rules = {
   ]
 }
 
+// handleLogin
+// 在 <script setup>：handleLogin 内更新角色映射
 const handleLogin = async () => {
-  console.log('开始登录流程')
   if (!formRef.value) return
-
   try {
     await formRef.value.validate()
     loading.value = true
 
-    // 接口对接：调用后端登录
     const resp = await authService.login({
       username: loginForm.username,
       password: loginForm.password
-    }) as LoginResponse
+    })
 
-    // 明确出一个字符串 token，避免传入 union 类型
-    const authToken: string = resp?.token ?? `mock-token-${Date.now()}`
-
-    // 生成完整的 User 对象，保证满足 Pinia 的 User 类型
+    const payload = (resp as any)?.data ?? resp
+    const authToken = (payload as any)?.token ?? (payload as any)?.Token ?? ''
+    // 读取后端用户类型代码并标准化为角色
+    const rawType = (payload as any)?.userTypeCode
+    // 持久化，供首页回退判断使用
+    localStorage.setItem('userTypeCode', rawType)
+  
     const userData: User = {
-      id: resp?.user?.id ?? 1,
-      username: resp?.user?.username ?? loginForm.username,
-      email: resp?.user?.email ?? '',
-      phone: resp?.user?.phone ?? '',
-      role: (resp?.user?.role ?? 'member') as 'member' | 'trainer',
-      avatar: resp?.user?.avatar ?? '',
-      createdAt: resp?.user?.createdAt ?? new Date().toISOString()
+      id:(payload as any)?.userId ?? (payload as any)?.UserId ?? 0,
+      username:
+        (payload as any)?.user?.username ?? (payload as any)?.UserName ?? loginForm.username,
+      email: (payload as any)?.user?.email ?? (payload as any)?.Email ?? '',
+      phone: (payload as any)?.user?.phone ?? '',
+      role: rawType, // 归一化后的角色，供 userStore.isTrainer 使用
+      avatar: (payload as any)?.user?.avatar ?? '',
+      createdAt: (payload as any)?.user?.createdAt ?? new Date().toISOString()
     }
-
-    // 写入本地缓存
-    if (authToken) {
+  
+      // 写入本地缓存（只使用后端真实令牌）
       localStorage.setItem('token', authToken)
+      localStorage.setItem('user', JSON.stringify(userData))
       localStorage.setItem('username', userData.username)
-      const expiryTime = Date.now() + 24 * 60 * 60 * 1000
-      localStorage.setItem('tokenExpireTime', String(expiryTime))
+      localStorage.setItem('tokenExpireTime', String(Date.now() + 24 * 60 * 60 * 1000))
+  
+      userStore.login(userData, authToken)
+      ElMessage.success('登录成功')
+      router.replace('/home')
+    } catch (error: any) {
+      console.error('登录失败:', error)
+      ElMessage.error(error?.response?.data?.message || error?.message || '登录失败，请检查用户名和密码')
+    } finally {
+      loading.value = false
     }
-
-    // 使用确定的字符串类型调用 login，避免报错
-    userStore.login(userData, authToken)
-
-    ElMessage.success('登录成功')
-    router.replace('/home')
-
-  } catch (error: any) {
-    console.error('登录失败:', error)
-    ElMessage.error(error?.response?.data?.message || '登录失败，请检查用户名和密码')
-  } finally {
-    loading.value = false
-  }
 }
 </script>
 

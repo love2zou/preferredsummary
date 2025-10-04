@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "d:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj": {}
+    "D:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj": {}
   },
   "projects": {
-    "d:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj": {
+    "D:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "d:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
+        "projectUniqueName": "D:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
         "projectName": "Preferred.Api",
-        "projectPath": "d:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
+        "projectPath": "D:\\github\\preferredsummary\\api\\Preferred.Api\\Preferred.Api.csproj",
         "packagesPath": "C:\\Users\\love2\\.nuget\\packages\\",
-        "outputPath": "d:\\github\\preferredsummary\\api\\Preferred.Api\\obj\\",
+        "outputPath": "D:\\github\\preferredsummary\\api\\Preferred.Api\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\love2\\AppData\\Roaming\\NuGet\\NuGet.Config"

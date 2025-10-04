@@ -9,17 +9,17 @@ namespace Preferred.Api.Migrations
         {
             migrationBuilder.AlterColumn<DateTime>(
                 name: "UpdatedAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime",
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
                 oldClrType: typeof(DateTime),
                 oldType: "datetime(6)",
                 oldDefaultValueSql: "CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)");
-
+        
             migrationBuilder.AlterColumn<DateTime>(
                 name: "CreatedAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime",
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP",
@@ -32,17 +32,17 @@ namespace Preferred.Api.Migrations
         {
             migrationBuilder.AlterColumn<DateTime>(
                 name: "UpdatedAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime(6)",
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)",
                 oldClrType: typeof(DateTime),
                 oldType: "datetime",
                 oldDefaultValueSql: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-
+        
             migrationBuilder.AlterColumn<DateTime>(
                 name: "CreatedAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime(6)",
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP(6)",

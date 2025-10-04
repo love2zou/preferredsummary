@@ -9,7 +9,7 @@ namespace Preferred.Api.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
-                name: "Users",
+                name: "Tb_User",
                 columns: table => new
                 {
                     Id = table.Column<int>(nullable: false)
@@ -23,32 +23,32 @@ namespace Preferred.Api.Migrations
                     Bio = table.Column<string>(maxLength: 1000, nullable: true),
                     IsActive = table.Column<bool>(nullable: false),
                     IsEmailVerified = table.Column<bool>(nullable: false),
+                    // 旧命名，便于后续迁移删除/替换
                     CreatedAt = table.Column<DateTime>(nullable: false, defaultValueSql: "CURRENT_TIMESTAMP(6)"),
                     UpdatedAt = table.Column<DateTime>(nullable: false, defaultValueSql: "CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)"),
                     LastLoginAt = table.Column<DateTime>(nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Users", x => x.Id);
+                    table.PrimaryKey("PK_Tb_User", x => x.Id);
                 });
-
+        
             migrationBuilder.CreateIndex(
-                name: "IX_Users_Email",
-                table: "Users",
+                name: "IX_Tb_User_Email",
+                table: "Tb_User",
                 column: "Email",
                 unique: true);
-
+        
             migrationBuilder.CreateIndex(
-                name: "IX_Users_Username",
-                table: "Users",
+                name: "IX_Tb_User_Username",
+                table: "Tb_User",
                 column: "Username",
                 unique: true);
         }
-
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Users");
+                name: "Tb_User");
         }
     }
 }

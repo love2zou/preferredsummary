@@ -18,10 +18,12 @@ namespace Preferred.Api.Controllers
     public class UserController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly ITagService _tagService;
 
-        public UserController(IUserService userService)
+        public UserController(IUserService userService, ITagService tagService)
         {
             _userService = userService;
+            _tagService = tagService;
         }
 
         /// <summary>
@@ -88,28 +90,11 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                var user = await _userService.GetUserById(id);
-                if (user == null)
+                var userDto = await _userService.GetUserDetailDto(id);
+                if (userDto == null)
                 {
                     return NotFound(new ApiErrorResponse { Message = "用户不存在" });
                 }
-                
-                var userDto = new UserListDto
-                {
-                    Id = user.Id,
-                    UserName = user.UserName,
-                    Email = user.Email,
-                    PhoneNumber = user.PhoneNumber,
-                    IsActive = user.IsActive,
-                    IsEmailVerified = user.IsEmailVerified,
-                    CrtTime = user.CrtTime,
-                    UpdTime = user.UpdTime,
-                    LastLoginTime = user.LastLoginTime,
-                    UserTypeCode = user.UserTypeCode,
-                    UserToSystemCode = user.UserToSystemCode,
-                    ProfilePictureUrl = user.ProfilePictureUrl // 新增：头像
-                };
-                
                 return Ok(userDto);
             }
             catch (Exception ex)

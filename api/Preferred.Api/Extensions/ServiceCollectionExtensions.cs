@@ -7,9 +7,6 @@ namespace Preferred.Api.Extensions
 {
     public static class ServiceCollectionExtensions
     {
-        /// <summary>
-        /// 注册应用程序服务
-        /// </summary>
         public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
         {
             // 注册所有业务服务
@@ -22,6 +19,7 @@ namespace Preferred.Api.Extensions
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<ISystemResourceService, SystemResourceService>();
             services.AddScoped<IScheduledTaskService, ScheduledTaskService>();
+            services.AddScoped<IBookingService, BookingService>();
             // 注册系统监控服务
             services.AddScoped<ISystemMonitorService, SystemMonitorService>();
             

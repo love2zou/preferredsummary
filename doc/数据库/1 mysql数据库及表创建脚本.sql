@@ -167,3 +167,27 @@ CREATE TABLE IF NOT EXISTS Tb_ScheduledTaskLog (
    CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
 )ENGINE=INNODB DEFAULT CHARSET=utf8;
+/*==============================================================*/
+/* 健身预约: Tb_CoachMemberRelation  教练会员关系表                              */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_CoachMemberRelation (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   CoachId            	INT                   NOT NULL COMMENT '教练Id',
+   MemberId             INT                   NOT NULL COMMENT '会员Id',
+   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+)ENGINE=INNODB DEFAULT CHARSET=utf8;
+/*==============================================================*/
+/* 健身预约: Tb_BookTask  预约课程表                              */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_BookTask (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   CoachId            	INT                   NOT NULL COMMENT '教练Id',
+   MemberId             INT                   NOT NULL COMMENT '会员Id',
+   BookDate             DATETIME              NOT NULL COMMENT '预约日期',
+   BookTimeSlot         VARCHAR(20)           NOT NULL COMMENT '预约时间段',
+   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
+)ENGINE=INNODB DEFAULT CHARSET=utf8;

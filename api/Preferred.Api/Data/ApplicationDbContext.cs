@@ -20,6 +20,8 @@ namespace Preferred.Api.Data
         public DbSet<SystemResource> SystemResources { get; set; }
         public DbSet<ScheduledTask> ScheduledTasks { get; set; }
         public DbSet<ScheduledTaskLog> ScheduledTaskLogs { get; set; }
+        public DbSet<CoachMemberRelation> CoachMemberRelations { get; set; }
+        public DbSet<BookTask> BookTasks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -208,6 +210,33 @@ namespace Preferred.Api.Data
                 entity.HasIndex(e => e.TaskCode);
                 entity.HasIndex(e => e.StartTime);
                 entity.HasIndex(e => e.Success);
+            });
+            modelBuilder.Entity<CoachMemberRelation>(entity =>
+            {
+                entity.ToTable("Tb_CoachMemberRelation");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.CoachId).IsRequired();
+                entity.Property(e => e.MemberId).IsRequired();
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.MemberId, e.CoachId }).IsUnique();
+            });
+            
+            modelBuilder.Entity<BookTask>(entity =>
+            {
+                entity.ToTable("Tb_BookTask");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.CoachId).IsRequired();
+                entity.Property(e => e.MemberId).IsRequired();
+                entity.Property(e => e.BookDate).IsRequired();
+                entity.Property(e => e.BookTimeSlot).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.CoachId, e.BookDate, e.BookTimeSlot }).IsUnique();
             });
         }
     }

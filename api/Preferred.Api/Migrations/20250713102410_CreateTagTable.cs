@@ -10,69 +10,69 @@ namespace Preferred.Api.Migrations
         {
             migrationBuilder.AlterColumn<DateTime>(
                 name: "UpdatedAt",
-                table: "Users",
+                table: "Tb_User",
                 nullable: false,
                 oldClrType: typeof(DateTime),
                 oldType: "datetime",
                 oldDefaultValueSql: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "Salt",
-                table: "Users",
+                table: "Tb_User",
                 nullable: true,
                 oldClrType: typeof(string),
                 oldType: "longtext CHARACTER SET utf8mb4");
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "ProfilePictureUrl",
-                table: "Users",
+                table: "Tb_User",
                 nullable: true,
                 oldClrType: typeof(string),
                 oldType: "varchar(500) CHARACTER SET utf8mb4",
                 oldMaxLength: 500,
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "PhoneNumber",
-                table: "Users",
+                table: "Tb_User",
                 nullable: true,
                 oldClrType: typeof(string),
                 oldType: "varchar(20) CHARACTER SET utf8mb4",
                 oldMaxLength: 20,
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "PasswordHash",
-                table: "Users",
+                table: "Tb_User",
                 nullable: true,
                 oldClrType: typeof(string),
                 oldType: "longtext CHARACTER SET utf8mb4");
-
+        
             migrationBuilder.AlterColumn<DateTime>(
                 name: "LastLoginAt",
-                table: "Users",
+                table: "Tb_User",
                 nullable: true,
                 oldClrType: typeof(DateTime),
                 oldType: "datetime",
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<DateTime>(
                 name: "CreatedAt",
-                table: "Users",
+                table: "Tb_User",
                 nullable: false,
                 oldClrType: typeof(DateTime),
                 oldType: "datetime",
                 oldDefaultValueSql: "CURRENT_TIMESTAMP");
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "Bio",
-                table: "Users",
+                table: "Tb_User",
                 nullable: true,
                 oldClrType: typeof(string),
                 oldType: "varchar(1000) CHARACTER SET utf8mb4",
                 oldMaxLength: 1000,
                 oldNullable: true);
-
+    
             migrationBuilder.CreateTable(
                 name: "Tb_Tag",
                 columns: table => new
@@ -92,7 +92,7 @@ namespace Preferred.Api.Migrations
                 {
                     table.PrimaryKey("PK_Tb_Tag", x => x.Id);
                 });
-
+    
             migrationBuilder.CreateIndex(
                 name: "IX_Tb_Tag_ParName_TagCode",
                 table: "Tb_Tag",
@@ -107,65 +107,65 @@ namespace Preferred.Api.Migrations
 
             migrationBuilder.AlterColumn<DateTime>(
                 name: "UpdatedAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime",
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
                 oldClrType: typeof(DateTime));
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "Salt",
-                table: "Users",
+                table: "Tb_User",
                 type: "longtext CHARACTER SET utf8mb4",
                 nullable: false,
                 oldClrType: typeof(string),
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "ProfilePictureUrl",
-                table: "Users",
+                table: "Tb_User",
                 type: "varchar(500) CHARACTER SET utf8mb4",
                 maxLength: 500,
                 nullable: true,
                 oldClrType: typeof(string),
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "PhoneNumber",
-                table: "Users",
+                table: "Tb_User",
                 type: "varchar(20) CHARACTER SET utf8mb4",
                 maxLength: 20,
                 nullable: true,
                 oldClrType: typeof(string),
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "PasswordHash",
-                table: "Users",
+                table: "Tb_User",
                 type: "longtext CHARACTER SET utf8mb4",
                 nullable: false,
                 oldClrType: typeof(string),
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<DateTime>(
                 name: "LastLoginAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime",
                 nullable: true,
                 oldClrType: typeof(DateTime),
                 oldNullable: true);
-
+        
             migrationBuilder.AlterColumn<DateTime>(
                 name: "CreatedAt",
-                table: "Users",
+                table: "Tb_User",
                 type: "datetime",
                 nullable: false,
                 defaultValueSql: "CURRENT_TIMESTAMP",
                 oldClrType: typeof(DateTime));
-
+        
             migrationBuilder.AlterColumn<string>(
                 name: "Bio",
-                table: "Users",
+                table: "Tb_User",
                 type: "varchar(1000) CHARACTER SET utf8mb4",
                 maxLength: 1000,
                 nullable: true,
