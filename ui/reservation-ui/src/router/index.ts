@@ -73,6 +73,12 @@ const router = createRouter({
       name: 'AddMembers',
       component: () => import('@/views/trainer/AddMembers.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/notifications',
+      name: 'Notifications',
+      component: () => import('@/views/notifications/NotificationList.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

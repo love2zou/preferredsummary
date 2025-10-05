@@ -245,7 +245,7 @@ function toggleBound(id: number) {
 .selected-hint { color: var(--el-color-primary); background: var(--el-color-primary-light-9); border: 1px solid var(--el-color-primary); border-radius: 12px; padding: 4px 10px; font-size: 13px; }
 .empty { color: var(--el-text-color-secondary); text-align: center; padding: 48px 0; }
 .list { display: flex; flex-direction: column; gap: 8px; }
-.list.cards-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.list.cards-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
 .item { display: flex; align-items: center; gap: 8px; border: 1px solid var(--el-border-color); border-radius: 8px; padding: 8px; background: var(--el-bg-color); }
 .meta { display: flex; flex-direction: column; }
 .name { font-weight: 600; }

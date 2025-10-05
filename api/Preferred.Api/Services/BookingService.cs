@@ -112,8 +112,39 @@ namespace Preferred.Api.Services
         {
             var items = await _context.BookTasks
                 .Where(b => b.MemberId == memberId)
-                .OrderBy(b => b.BookDate)
-                .ThenBy(b => b.BookTimeSlot)
+                .OrderByDescending(b => b.BookDate)
+                .ThenByDescending(b => b.BookTimeSlot)
+                .ToListAsync();
+
+            var coachIds = items.Select(i => i.CoachId).Distinct().ToList();
+            var coachMap = await _context.Users
+                .Where(u => coachIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.UserName);
+
+            return items.Select(i =>
+            {
+                var parts = i.BookTimeSlot.Split('-', StringSplitOptions.RemoveEmptyEntries);
+                var start = parts.Length > 0 ? parts[0] : "";
+                var end = parts.Length > 1 ? parts[1] : "";
+                return new BookingItemDto
+                {
+                    Id = i.Id,
+                    MemberId = i.MemberId,
+                    CoachId = i.CoachId,
+                    CoachName = coachMap.TryGetValue(i.CoachId, out var name) ? name : "",
+                    BookDate = i.BookDate.ToString("yyyy-MM-dd"),
+                    StartTime = start,
+                    EndTime = end,
+                    Status = 0
+                };
+            }).ToList();
+        }
+        public async Task<List<BookingItemDto>> ListByCoachAsync(int coachId)
+        {
+            var items = await _context.BookTasks
+                .Where(b => b.CoachId == coachId)
+                .OrderByDescending(b => b.BookDate)
+                .ThenByDescending(b => b.BookTimeSlot)
                 .ToListAsync();
 
             var coachIds = items.Select(i => i.CoachId).Distinct().ToList();
@@ -183,6 +214,33 @@ namespace Preferred.Api.Services
                 .ToListAsync();
 
             return members;
+        }
+
+        public async Task<List<ReservedByDateDto>> GetReservedByDateAsync(int coachId, DateTime bookDate)
+        {
+            var booked = await _context.BookTasks
+                .Where(b => b.CoachId == coachId && b.BookDate.Date == bookDate.Date)
+                .ToListAsync();
+
+            var memberIds = booked.Select(b => b.MemberId).Distinct().ToList();
+            var memberMap = await _context.Users
+                .Where(u => memberIds.Contains(u.Id))
+                .ToDictionaryAsync(u => u.Id, u => u.UserName);
+
+            var result = new List<ReservedByDateDto>();
+            foreach (var b in booked)
+            {
+                var parts = b.BookTimeSlot.Split('-', StringSplitOptions.RemoveEmptyEntries);
+                var start = parts.Length > 0 ? parts[0] : "";
+                var end = parts.Length > 1 ? parts[1] : "";
+                result.Add(new ReservedByDateDto
+                {
+                    StartTime = start,
+                    EndTime = end,
+                    MemberName = memberMap.TryGetValue(b.MemberId, out var name) ? name : ""
+                });
+            }
+            return result;
         }
     }
 }

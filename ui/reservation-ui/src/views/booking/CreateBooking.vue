@@ -62,7 +62,16 @@
               :class="['slot-tag', { disabled: !s.isAvailable, selected: isSelected(s) }]"
               @click="toggleSelect(s)"
             >
-              {{ s.startTime }} - {{ s.endTime }}
+              <div class="slot-content">
+                <div class="slot-time">{{ s.startTime }} - {{ s.endTime }}</div>
+                <div class="slot-right" v-if="reservedMap[`${s.startTime}-${s.endTime}`]">
+                  <span class="slot-name">{{ reservedMap[`${s.startTime}-${s.endTime}`] }}</span>
+                  <span class="slot-status">已预约</span>
+                </div>
+                <div class="slot-right" v-else-if="!s.isAvailable">
+                  <span class="slot-status">已预约</span>
+                </div>
+              </div>
             </el-tag>
           </div>
         </div>
@@ -79,6 +88,7 @@
 import { AvailableSlot, bookingService, BoundCoach } from '@/services/bookingService'
 import { useUserStore } from '@/stores/user'
 import { ArrowLeft, Calendar } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -91,6 +101,7 @@ const dateKey = ref<'today' | 'tomorrow'>('today')
 const loadingSlots = ref(false)
 const availableSlots = ref<AvailableSlot[]>([])
 const selectedSlots = ref<{ startTime: string; endTime: string }[]>([])
+const reservedMap = ref<Record<string, string>>({})
 
 const goBack = () => router.back()
 
@@ -137,6 +148,14 @@ const loadAvailableSlots = async () => {
   try {
     const resp = await bookingService.getAvailableSlots(selectedCoachId.value, bookDate.value)
     availableSlots.value = Array.isArray(resp?.data) ? resp.data : []
+    // 同步拉取：教练+日期 下已被预约的姓名
+    const r = await bookingService.getReservedByDate(selectedCoachId.value, bookDate.value)
+    const arr = Array.isArray(r?.data) ? r.data : []
+    const map: Record<string, string> = {}
+    for (const it of arr) {
+      map[`${it.startTime}-${it.endTime}`] = it.memberName
+    }
+    reservedMap.value = map
   } finally {
     loadingSlots.value = false
   }
@@ -162,7 +181,10 @@ const submitBooking = async () => {
     bookDate: bookDate.value,
     timeSlots: selectedSlots.value
   })
-  router.push('/booking')
+  ElMessage.success('预约成功')
+  // 刷新：清空选择并重新获取当日可约与已约信息
+  selectedSlots.value = []
+  await loadAvailableSlots()
 }
 
 watch([selectedCoachId, bookDate], loadAvailableSlots)
@@ -208,78 +230,81 @@ const toMin = (t: string) => {
 .slots-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
 .slot-tag { cursor: pointer; user-select: none; }
 .slot-tag.disabled { opacity: 0.5; cursor: not-allowed; }
-.slot-tag.selected { box-shadow: 0 0 0 2px var(--el-color-success); }
+.slot-tag.selected { box-shadow: 0 0 0 1px var(--el-color-success); }
 .fixed-actions { position: sticky; bottom: 0; background: var(--el-bg-color); padding: 12px; border-top: 1px solid var(--el-border-color); display: flex; justify-content: center; }
 .step-title { margin-bottom: 6px; font-weight: 600; }
-.coach-list { 
-  display: grid; 
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); 
-  gap: 10px; 
-}
-.coach-card { 
-  border: 1px solid var(--el-border-color); 
-  border-radius: 8px; 
-  cursor: pointer; 
-  background: var(--el-bg-color); 
-  transition: border-color .15s ease; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  overflow: hidden; 
-}
-.coach-card:hover { 
-  border-color: var(--el-color-primary-light-8); 
-}
-.coach-card.selected { 
-  border-color: var(--el-color-primary); 
-}
-.coach-card-content { 
-  width: 100%;             /* 与卡片宽度一致 */
-  gap: 6px;                /* 更紧凑的内容间距 */
-  box-sizing: border-box;  /* 宽度包含内边距，避免视觉抖动 */
-}
-.coach-card .name { 
-  width: 100%;
-  display: flex;              /* 让内部内容可居中 */
-  align-items: center;        /* 垂直居中 */
-  justify-content: center;    /* 水平居中 */
-  text-align: center;         /* 文本居中 */
-  font-weight: 600; 
-  font-size: 14px; 
-  line-height: 1.2; 
-  height: 32px;               /* 给定高度以形成可显著的垂直居中 */
-  margin: 0;                  /* 避免默认 margin 影响居中 */
-}
-.avatar { 
-   width: 100%; 
-  height: 80px; 
-  margin: 0; 
-  border-radius: 8px 8px 0 0; 
-  overflow: hidden; 
-  border: none; /* 移除头像边框，避免双框 */
-  background: var(--el-fill-color-light); 
-  display: block; 
+.coach-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
 }
 
-.avatar img { 
-  width: 100%; 
-  height: 100%; 
-  object-fit: cover; 
-  display: block; 
+.coach-card {
+  border: 1px solid var(--el-border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  background: var(--el-bg-color);
+  transition: border-color .15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* 恢复：卡片内容与边框贴合 */
 }
-.avatar-fallback { 
-  width: 100%; 
-  height: 100%; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
-  color: var(--el-text-color-primary); 
-  font-weight: 700; 
-  font-size: 20px; 
+.coach-card:hover { border-color: var(--el-color-primary-light-8); }
+.coach-card.selected { border-color: var(--el-color-primary); }
+
+.coach-card-content {
+  width: 100%;            /* 恢复：内容宽度与卡片一致 */
+  gap: 6px;               /* 紧凑内容间距 */
+  box-sizing: border-box; /* 包含内边距避免抖动 */
 }
-.mini-card-header { 
-  display: flex; 
-  justify-content: space-between; 
-  align-items: center; 
+
+.avatar {
+  width: 100%;
+  height: 80px;
+  margin: 0;
+  border-radius: 8px 8px 0 0; /* 恢复：顶部圆角与卡片一致，左右贴边 */
+  overflow: hidden;
+  border: none;
+  background: var(--el-fill-color-light);
+  display: block;
 }
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--el-text-color-primary);
+  font-weight: 700;
+  font-size: 20px;
+}
+
+.coach-card .name {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.2;
+  height: 32px;
+  margin: 0;
+}
+
+/* 保留：时段姓名的布局与绿色高亮 */
+.slot-tag { display: flex; width: 100%; }
+.slot-content { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; }
+.slot-right { display: flex; align-items: center; gap: 6px; }
+.slot-name { color: var(--el-color-success); font-weight: 600; }
+.slot-status { color: var(--el-text-color-secondary); }
+.slot-right { color: var(--el-text-color-secondary); }
 </style>

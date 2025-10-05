@@ -7,7 +7,7 @@ export interface LoginResponse {
     username: string
     email?: string
     phone?: string
-    role: 'member' | 'trainer'
+    role: 'huiyuan' | 'jianlian'
     avatar?: string
     createdAt?: string
   }
@@ -21,8 +21,9 @@ export const authService = {
     username: string
     email: string
     password: string
-    phone?: string
-    userType?: 'member' | 'trainer'
+    phoneNumber: string
+    userTypeCode: string
+    userToSystemCode: string // 新增：系统码，要求为必填
   }): Promise<any> {
     return api.post('/auth/register', payload)
   },

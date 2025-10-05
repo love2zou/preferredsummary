@@ -12,17 +12,27 @@
       <div v-if="loading" class="hint">正在加载...</div>
       <div v-else-if="items.length === 0" class="hint">暂无预约记录</div>
       <div v-else class="list">
-        <div class="item" v-for="it in items" :key="it.id">
+        <div
+          v-for="it in items"
+          :key="it.id"
+          :class="['item', { past: isPast(it) }]"
+        >
           <div class="line1">
             <span class="date">{{ it.bookDate }}</span>
             <span class="time">{{ it.startTime }} - {{ it.endTime }}</span>
           </div>
           <div class="line2">
-            <span class="coach">教练：{{ it.coachName }}</span>
-            <el-tag :type="it.status === 9 ? 'info' : 'success'">{{ it.status === 9 ? '已取消' : '已预约' }}</el-tag>
+            <span class="coach">
+              {{ userStore.isTrainer ? `会员：${it.memberName || it.memberId}` : `教练：${it.coachName}` }}
+            </span>
+            <!-- 教练视图不显示状态标签（reserved-by-date 无状态字段） -->
+            <el-tag v-if="!userStore.isTrainer" :type="it.status === 9 ? 'info' : 'success'">
+              {{ it.status === 9 ? '已取消' : '已预约' }}
+            </el-tag>
           </div>
           <div class="actions">
-            <el-button v-if="it.status !== 9" size="small" type="danger" @click="cancel(it.id)">取消</el-button>
+            <!-- 教练不展示取消按钮；会员按原逻辑展示 -->
+            <el-button v-if="!userStore.isTrainer && it.status !== 9 && !isPast(it)" size="small" type="danger" @click="cancel(it.id)">取消</el-button>
           </div>
         </div>
       </div>
@@ -44,13 +54,24 @@ const loading = ref(false)
 
 const goBack = () => router.back()
 
+const toYMD = (d: Date) => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 // 方法：loadList
 const loadList = async () => {
   loading.value = true
   try {
-    const memberId = userStore.user?.id || 0
-    const { data } = await bookingService.list(memberId)
-    items.value = data.data
+    const userId = userStore.user?.id || 0
+    const request = userStore.user?.role === 'jiaolian'
+      ? bookingService.listByCoach(userId)
+      : bookingService.list(userId)
+
+    const { data } = await request
+    items.value = Array.isArray(data)
+      ? data
+      : (Array.isArray((data as any)?.data) ? (data as any).data : [])
   } finally {
     loading.value = false
   }
@@ -62,6 +83,13 @@ const cancel = async (id: number) => {
 }
 
 onMounted(loadList)
+
+// 辅助函数：判断预约是否已结束（历史日期/已过结束时间）
+const isPast = (it: BookingItem) => {
+  const end = new Date(`${it.bookDate}T${it.endTime}:00`)
+  const now = new Date()
+  return end.getTime() < now.getTime()
+}
 </script>
 
 <style scoped>
@@ -78,4 +106,15 @@ onMounted(loadList)
 .date, .time, .coach { font-size: 14px; }
 .actions { margin-top: 8px; display: flex; justify-content: flex-end; }
 .hint { color: var(--el-text-color-secondary); font-size: 13px; }
+/* 过期预约的卡片配色（更淡、更灰），与正常区分开 */
+.item.past {
+  background: var(--el-fill-color-light);
+  border-color: var(--el-border-color);
+  opacity: 0.92;
+}
+.item.past .date,
+.item.past .time,
+.item.past .coach {
+  color: var(--el-text-color-secondary);
+}
 </style>

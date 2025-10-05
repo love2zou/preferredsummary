@@ -74,11 +74,33 @@ namespace Preferred.Api.Controllers
             return Ok(new ApiResponse<BookingItemDto[]>{ Success = true, Message = "获取成功", Data = data.ToArray() });
         }
 
+        [HttpGet("listbycoach")]
+        [ProducesResponseType(typeof(ApiResponse<BookingItemDto[]>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ListByCoach([FromQuery] int coachId)
+        {
+            var data = await _bookingService.ListByCoachAsync(coachId);
+            return Ok(new ApiResponse<BookingItemDto[]>{ Success = true, Message = "获取成功", Data = data.ToArray() });
+        }
+
         [HttpPost("cancel")]
         public async Task<IActionResult> Cancel([FromBody] CancelRequest request)
         {
             var ok = await _bookingService.CancelAsync(request.Id);
             return Ok(new ApiResponse { Success = ok, Message = ok ? "取消成功" : "取消失败" });
+        }
+
+        [HttpGet("reserved-by-date")]
+        [ProducesResponseType(typeof(ApiResponse<ReservedByDateDto[]>), StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetReservedByDate([FromQuery] int coachId, [FromQuery] string bookDate)
+        {
+            var date = DateTime.Parse(bookDate);
+            var data = await _bookingService.GetReservedByDateAsync(coachId, date);
+            return Ok(new ApiResponse<ReservedByDateDto[]>
+            {
+                Success = true,
+                Message = "获取成功",
+                Data = data.ToArray()
+            });
         }
     }
 }

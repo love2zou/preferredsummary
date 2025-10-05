@@ -42,8 +42,10 @@
             <div class="feature-icon">👥</div>
             <div class="feature-text">我的会员</div>
           </div>
-          <div class="feature-item" @click="$router.push('/profile')">
-            <div class="feature-icon">💬</div>
+          <div class="feature-item" @click="$router.push('/notifications')">
+            <el-badge :value="unreadCount" :hidden="unreadCount === 0" type="danger">
+              <div class="feature-icon">💬</div>
+            </el-badge>
             <div class="feature-text">我的消息</div>
           </div>
           <div class="feature-item" @click="$router.push('/fitness')">
@@ -67,6 +69,7 @@
 </template>
 
 <script setup lang="ts">
+import { notificationService } from '@/services/notificationService'
 import { useBookingStore, type Booking } from '@/stores/booking'
 import { useUserStore } from '@/stores/user'
 import { ElMessageBox } from 'element-plus'
@@ -109,10 +112,30 @@ const confirmLogout = async () => {
     // 用户取消
   }
 }
+const unreadCount = ref(0)
+
 onMounted(async () => {
   if (userStore.user) {
     await bookingStore.fetchUserBookings(userStore.user.id)
     recentBookings.value = bookingStore.bookings.slice(0, 3)
+  }
+  // 加载未读消息数量（移入 onMounted，移除顶层 await）
+  if (userStore.user) {
+    const receiver = String(
+      userStore.user.username || userStore.user.phone || userStore.user.id || ''
+    )
+    try {
+      const resp = await notificationService.getUnreadCount(receiver)
+      const payload = (resp as any)?.data ?? resp
+      // 兼容不同返回结构：数字或对象
+      unreadCount.value = typeof payload === 'number'
+        ? payload
+        : (payload?.count ?? payload?.Data ?? 0)
+    } catch {
+      unreadCount.value = 0
+    }
+  } else {
+    unreadCount.value = 0
   }
 })
 // 新增：基于 userTypeCode 的教练判断回退

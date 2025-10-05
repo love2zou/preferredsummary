@@ -52,4 +52,10 @@ namespace Preferred.Api.Models
     {
         public int Id { get; set; }
     }
+    public class ReservedByDateDto
+    {
+        public string StartTime { get; set; } = string.Empty;
+        public string EndTime { get; set; } = string.Empty;
+        public string MemberName { get; set; } = string.Empty;
+    }
 }

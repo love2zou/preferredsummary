@@ -1,12 +1,12 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 
 export interface User {
   id: number
   username: string
   email: string
   phone: string
-  role: 'member' | 'trainer'
+  role: string
   avatar?: string
   createdAt: string
 }
@@ -16,8 +16,8 @@ export const useUserStore = defineStore('user', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
 
   const isLoggedIn = computed(() => !!token.value && !!user.value)
-  const isMember = computed(() => user.value?.role === 'member')
-  const isTrainer = computed(() => user.value?.role === 'trainer')
+  const isMember = computed(() => user.value?.role === 'huiyuan')
+  const isTrainer = computed(() => user.value?.role === 'jianlian')
 
   const login = (userData: User, authToken: string) => {
     user.value = userData

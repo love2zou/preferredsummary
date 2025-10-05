@@ -26,10 +26,9 @@
               clearable
               style="width: 100%"
             >
-              <el-option label="系统通知" value="system" />
-              <el-option label="用户通知" value="user" />
-              <el-option label="警告通知" value="warning" />
-              <el-option label="错误通知" value="error" />
+              <el-option label="通知" value="notice" />
+              <el-option label="提醒" value="remind" />
+              <el-option label="告警" value="alert" />
             </el-select>
           </el-col>
           <el-col :span="4">
@@ -113,17 +112,18 @@
           </el-table-column>
           <el-table-column prop="notifyType" label="通知类型" width="120">
             <template #default="scope">
-              <el-tag 
-                :type="getTypeTagType(scope.row.notifyType)"
-                size="small"
-              >
+              <el-tag :type="getTypeTagType(scope.row.notifyType)" size="small">
                 {{ getTypeLabel(scope.row.notifyType) }}
               </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="sendUser" label="发送人" width="100" />
-          <el-table-column prop="receiver" label="接收人" width="100" />
-            <el-table-column prop="sendTime" label="发送时间" width="160">
+          <el-table-column prop="receiver" label="接收人" min-width="220">
+            <template #default="scope">
+              {{ formatReceiverList(scope.row.receiver) }}
+            </template>
+          </el-table-column>
+          <el-table-column prop="sendTime" label="发送时间" width="160">
             <template #default="scope">
               {{ formatDate(scope.row.sendTime) }}
             </template>
@@ -208,27 +208,39 @@
             placeholder="请选择通知类型"
             style="width: 100%"
           >
-            <el-option label="系统通知" value="system" />
-            <el-option label="用户通知" value="user" />
-            <el-option label="警告通知" value="warning" />
-            <el-option label="错误通知" value="error" />
+            <el-option label="通知" value="notice" />
+            <el-option label="提醒" value="remind" />
+            <el-option label="告警" value="alert" />
           </el-select>
         </el-form-item>
         
+        <!-- 模板：发送人与接收人表单项 -->
+        <!-- 发送人：禁用编辑，显示当前登录用户 -->
         <el-form-item label="发送人" prop="sendUser">
           <el-input 
             v-model="notificationForm.sendUser" 
-            placeholder="请输入发送人"
-            :disabled="isEdit"
+            placeholder="当前登录用户"
+            :disabled="true"
           />
         </el-form-item>
         
+        <!-- 接收人：改为多选下拉，来自用户管理 -->
         <el-form-item label="接收人" prop="receiver">
-          <el-input
+          <el-select
             v-model="notificationForm.receiver"
-            placeholder="请输入接收人"
-            :disabled="isEdit"
-          />
+            multiple
+            filterable
+            placeholder="请选择接收人"
+            :loading="receiverLoading"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="opt in receiverOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
+            />
+          </el-select>
         </el-form-item>
         
         <el-form-item label="备注" prop="remark">
@@ -256,18 +268,47 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage, ElMessageBox, ElTable } from 'element-plus'
-import type { FormInstance } from 'element-plus'
-import { 
-  Search, Refresh, Plus, Edit, Delete, Check
-} from '@element-plus/icons-vue'
-import notificationApi, { 
-  type NotificationListDto, 
-  type NotificationCreateDto, 
-  type NotificationUpdateDto,
-  type NotificationSearchParams 
+// 统一并保留正确的类型映射（移除重复旧版，修复 L279/L285）
+const normalizeType = (type: string) => {
+  const t = (type || '').toLowerCase()
+  if (t === 'system' || t === 'user') return 'notice'
+  if (t === 'warning' || t === 'error') return 'alert'
+  if (['notice', 'remind', 'alert'].includes(t)) return t
+  return 'notice'
+}
+
+const getTypeTagType = (type: string) => {
+  const t = normalizeType(type)
+  const map: Record<string, string> = { notice: 'info', remind: 'warning', alert: 'danger' }
+  return map[t] || 'info'
+}
+
+const getTypeLabel = (type: string) => {
+  const t = normalizeType(type)
+  const map: Record<string, string> = { notice: '通知', remind: '提醒', alert: '告警' }
+  return map[t] || t
+}
+
+import {
+  notificationApi,
+  type NotificationCreateDto,
+  type NotificationListDto,
+  type NotificationSearchParams,
+  type NotificationUpdateDto
 } from '@/api/notification'
+import { tagApi, type Tag } from '@/api/tag'
+import { userApi, type User } from '@/api/user'
+import { useAuthStore } from '@/stores/auth'
+import {
+  Check,
+  Delete,
+  Plus,
+  Refresh,
+  Search
+} from '@element-plus/icons-vue'
+import type { FormInstance } from 'element-plus'
+import { ElMessage, ElMessageBox, ElTable } from 'element-plus'
+import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 interface NotificationFormData {
   id?: number
@@ -275,7 +316,7 @@ interface NotificationFormData {
   content: string
   type: string
   sendUser: string
-  receiver: string
+  receiver: string[]
   remark: string
 }
 
@@ -307,14 +348,94 @@ const pagination = reactive({
 // 对话框相关
 const dialogVisible = ref(false)
 const isEdit = ref(false)
+// 声明 authStore
+const authStore = useAuthStore()
+
+// 新增：标签名称映射与用户详情映射
+const userTypeNameMap = ref<Record<string, string>>({})
+const systemNameMap = ref<Record<string, string>>({})
+const userDetailMap = ref<Record<string, { userTypeCode?: string | null; userToSystemCode?: string | null }>>({})
+
+const getUserTypeName = (code?: string | null) => {
+  if (!code) return '-'
+  return userTypeNameMap.value[code] || code
+}
+
+const getSystemName = (code?: string | null) => {
+  if (!code) return '-'
+  return systemNameMap.value[code] || code
+}
+
+const buildReceiverLabel = (userName: string) => {
+  const detail = userDetailMap.value[userName]
+  const typeName = getUserTypeName(detail?.userTypeCode)
+  const sysName = getSystemName(detail?.userToSystemCode)
+  return `${userName} [${typeName} - ${sysName}]`
+}
+
+// 接收人下拉数据源与加载状态
+const receiverOptions = ref<{ label: string; value: string }[]>([])
+const receiverLoading = ref(false)
+
+// 加载接收人选项：先拉取标签名称映射，再拉取用户列表
+const loadReceiverOptions = async () => {
+  receiverLoading.value = true
+  try {
+    const [userTypeRes, systemRes] = await Promise.all([
+      tagApi.getTagsByModule('用户管理-用户类型'),
+      tagApi.getTagsByModule('用户管理-所属系统')
+    ])
+    const userTypeTags = Array.isArray(userTypeRes?.data) ? userTypeRes.data : []
+    const systemTags = Array.isArray(systemRes?.data) ? systemRes.data : []
+
+    userTypeNameMap.value = userTypeTags.reduce((acc: Record<string, string>, t: Tag) => {
+      acc[t.tagCode] = t.tagName
+      return acc
+    }, {})
+    systemNameMap.value = systemTags.reduce((acc: Record<string, string>, t: Tag) => {
+      acc[t.tagCode] = t.tagName
+      return acc
+    }, {})
+
+    const res = await userApi.getUserList({ page: 1, size: 1000 })
+    const list = Array.isArray(res?.data) ? res.data : []
+
+    // 建立用户名到详情的映射，供列表显示与下拉标签使用
+    userDetailMap.value = {}
+    list.forEach((u: User) => {
+      userDetailMap.value[u.userName] = {
+        userTypeCode: u.userTypeCode || undefined,
+        userToSystemCode: u.userToSystemCode || undefined
+      }
+    })
+
+    receiverOptions.value = list.map((u: User) => ({
+      value: u.userName,
+      label: buildReceiverLabel(u.userName)
+    }))
+  } catch (e) {
+    receiverOptions.value = []
+  } finally {
+    receiverLoading.value = false
+  }
+}
+
+// 列表中显示接收人（兼容历史数据）
+const formatReceiverList = (receiver: string | string[]) => {
+  const names = Array.isArray(receiver)
+    ? receiver
+    : (receiver || '').split(',').filter(Boolean)
+  if (!names.length) return '-'
+  return names.map((n) => buildReceiverLabel(n)).join(', ')
+}
 
 // 通知表单
 const notificationForm = reactive<NotificationFormData>({
   title: '',
   content: '',
-  type: 'system',
-  sendUser: 'admin',
-  receiver: '',
+  type: 'notice',
+  sendUser: '',
+  receiver: [] as string[],
   remark: ''
 })
 
@@ -335,32 +456,14 @@ const notificationRules = {
     { required: true, message: '请输入发送人', trigger: 'blur' }
   ],
   receiver: [
-    { required: true, message: '请输入接收人', trigger: 'blur' }
+    { validator: (_: any, value: string[], cb: Function) => {
+        if (!value || value.length === 0) cb(new Error('请至少选择一个接收人'))
+        else cb()
+      }, trigger: 'change' }
   ],
   remark: [
     { max: 200, message: '备注长度不能超过200个字符', trigger: 'blur' }
   ]
-}
-
-// 工具函数
-const getTypeTagType = (type: string) => {
-  const typeMap: Record<string, string> = {
-    'system': 'info',
-    'user': 'success',
-    'warning': 'warning',
-    'error': 'danger'
-  }
-  return typeMap[type] || 'info'
-}
-
-const getTypeLabel = (type: string) => {
-  const labelMap: Record<string, string> = {
-    'system': '系统通知',
-    'user': '用户通知',
-    'warning': '警告通知',
-    'error': '错误通知'
-  }
-  return labelMap[type] || type
 }
 
 // 计算表格高度
@@ -412,23 +515,20 @@ const loadNotificationList = async () => {
 // 提交表单
 const handleSubmit = async () => {
   if (!notificationFormRef.value) return
-  
   try {
     await notificationFormRef.value.validate()
     submitting.value = true
-    
     const submitData: NotificationCreateDto = {
       name: notificationForm.title,
       content: notificationForm.content,
       notifyType: notificationForm.type,
       sendTime: new Date().toISOString(),
       sendUser: notificationForm.sendUser,
-      receiver: notificationForm.receiver,
+      receiver: notificationForm.receiver.join(','),
       remark: notificationForm.remark,
       notifyStatus: 0,
       seqNo: 0
     }
-    
     if (isEdit.value) {
       const updateData: NotificationUpdateDto = {
         id: notificationForm.id!,
@@ -436,7 +536,7 @@ const handleSubmit = async () => {
         content: notificationForm.content,
         notifyType: notificationForm.type,
         sendUser: notificationForm.sendUser,
-        receiver: notificationForm.receiver,
+        receiver: notificationForm.receiver.join(','),
         remark: notificationForm.remark
       }
       await notificationApi.updateNotification(updateData.id, updateData)
@@ -445,11 +545,9 @@ const handleSubmit = async () => {
       await notificationApi.createNotification(submitData)
       ElMessage.success('创建成功')
     }
-    
     dialogVisible.value = false
     await loadNotificationList()
   } catch (error) {
-    console.error('提交失败:', error)
     ElMessage.error('操作失败')
   } finally {
     submitting.value = false
@@ -581,24 +679,26 @@ const handleAdd = () => {
   Object.assign(notificationForm, {
     title: '',
     content: '',
-    type: 'system',
-    sendUser: 'admin',
-    receiver: '',
+    type: 'notice',
+    sendUser: authStore.user?.userName || '',
+    receiver: [] as string[],
     remark: ''
   })
   dialogVisible.value = true
 }
-
-// 编辑通知
-const handleEdit = (row: NotificationListDto) => {
+// 编辑通知时确保选项已加载
+const handleEdit = async (row: NotificationListDto) => {
   isEdit.value = true
+  if (!receiverOptions.value.length) {
+    await loadReceiverOptions()
+  }
   Object.assign(notificationForm, {
     id: row.id,
     title: row.name,
     content: row.content,
-    type: row.notifyType,
+    type: normalizeType(row.notifyType),
     sendUser: row.sendUser,
-    receiver: row.receiver,
+    receiver: (row.receiver || '').split(',').filter(Boolean),
     remark: row.remark || ''
   })
   dialogVisible.value = true
@@ -608,7 +708,8 @@ const handleEdit = (row: NotificationListDto) => {
 onMounted(() => {
   loadNotificationList()
   calculateTableHeight()
-  
+  loadReceiverOptions()
+  notificationForm.sendUser = authStore.user?.userName || ''
   window.addEventListener('resize', calculateTableHeight)
 })
 

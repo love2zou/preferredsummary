@@ -24,6 +24,7 @@ export interface BookingItem {
   memberId: number
   coachId: number
   coachName: string
+  memberName?: string // 教练视图展示会员姓名（若后端返回）
   bookDate: string // 'YYYY-MM-DD'
   startTime: string
   endTime: string
@@ -42,6 +43,12 @@ export interface BoundMember {
   id: number
   userName: string
   phoneNumber?: string
+}
+
+export interface ReservedByDate {
+  startTime: string
+  endTime: string
+  memberName: string
 }
 
 export const bookingService = {
@@ -67,7 +74,13 @@ export const bookingService = {
   list(memberId: number) {
     return api.get<ApiResponse<BookingItem[]>>('/booking/list', { params: { memberId } })
   },
+  listByCoach(coachId: number) {
+    return api.get<ApiResponse<BookingItem[]>>('/booking/listbycoach', { params: { coachId } })
+  },
   cancel(bookingId: number) {
     return api.post<ApiResponse<any>>('/booking/cancel', { id: bookingId })
-  }
+  },
+  getReservedByDate(coachId: number, bookDate: string) {
+    return api.get<ApiResponse<ReservedByDate[]>>('/booking/reserved-by-date', { params: { coachId, bookDate } })
+  },
 }

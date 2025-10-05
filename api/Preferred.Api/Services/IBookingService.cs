@@ -13,7 +13,9 @@ namespace Preferred.Api.Services
         Task<List<AvailableSlotDto>> GetAvailableSlotsAsync(int coachId, DateTime bookDate);
         Task<bool> BatchCreateAsync(CreateBatchRequest request);
         Task<List<BookingItemDto>> ListAsync(int memberId);
+        Task<List<BookingItemDto>> ListByCoachAsync(int coachId);
         Task<bool> CancelAsync(int id);
         Task<List<BoundMemberDto>> GetBoundMembersAsync(int coachId);
+        Task<List<ReservedByDateDto>> GetReservedByDateAsync(int coachId, DateTime bookDate);
     }
 }
