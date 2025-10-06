@@ -6,7 +6,7 @@ services:
       context: ./api
       dockerfile: Dockerfile
     ports:
-      - "8090:8090"
+      - "8080:8080"
     volumes:
       # 挂载图片存储目录到宿主机
       - ./data/upload:/app/wwwroot/upload

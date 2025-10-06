@@ -996,29 +996,30 @@ const getCronDescription = (cron: string) => {
   return cronMap[cron] || '自定义表达式'
 }
 
+// 提升作用域：让 onMounted 与 onUnmounted 使用相同函数引用
+const calculateTableHeight = () => {
+  const windowHeight = window.innerHeight
+  const headerHeight = 60 // 顶部导航高度
+  const cardHeaderHeight = 80 // 卡片头部高度
+  const searchSectionHeight = 100 // 搜索区域高度
+  const paginationHeight = 60 // 分页高度
+  const padding = 80 // 其他间距
+  
+  tableHeight.value = windowHeight - headerHeight - cardHeaderHeight - searchSectionHeight - paginationHeight - padding
+  logTableHeight.value = 300 // 日志表格固定高度
+}
+
 // 组件挂载时获取数据
 onMounted(() => {
   getTaskList()
-  
-  // 计算表格高度
-  const calculateTableHeight = () => {
-    const windowHeight = window.innerHeight
-    const headerHeight = 60 // 顶部导航高度
-    const cardHeaderHeight = 80 // 卡片头部高度
-    const searchSectionHeight = 100 // 搜索区域高度
-    const paginationHeight = 60 // 分页高度
-    const padding = 80 // 其他间距
-    
-    tableHeight.value = windowHeight - headerHeight - cardHeaderHeight - searchSectionHeight - paginationHeight - padding
-    logTableHeight.value = 300 // 日志表格固定高度
-  }
-  
+  // 计算表格高度并注册监听
   calculateTableHeight()
   window.addEventListener('resize', calculateTableHeight)
 })
 
 // 清理事件监听
 onUnmounted(() => {
+  // 移除监听使用同一个函数引用
   window.removeEventListener('resize', calculateTableHeight)
 })
 </script>

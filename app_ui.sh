@@ -1,7 +1,6 @@
 #!/bin/bash
 # 进入源码根目录
 #cd /usr/src/preferredsummary
-
 # 拉取代码
 #git fetch --all  
 #git reset --hard origin/main
@@ -24,21 +23,21 @@ sudo systemctl restart docker
 cd /usr/src/preferredsummary/ui
 
 # 停止并删除旧容器
-docker stop preferred_client.ui 2>/dev/null || true
-docker rm preferred_client.ui 2>/dev/null || true
+docker stop preferred_reservation.ui 2>/dev/null || true
+docker rm preferred_reservation.ui 2>/dev/null || true
 
 # 按条件删除镜像
-old_images=$(docker images | grep preferred_client.ui.image | awk '{print $3}')
+old_images=$(docker images | grep preferred_reservation.ui.image | awk '{print $3}')
 if [ ! -z "$old_images" ]; then
     docker rmi --force $old_images
 fi
 
 # 构建镜像
 imtag=$(uuidgen |sed 's/-//g')
-docker build -f client_dockerfile -t preferred_client.ui.image.${imtag} . --network=host
+docker build -f reservation_dockerfile -t preferred_reservation.ui.image.${imtag} . --network=host
 
 # 运行容器
-docker run --name=preferred_client.ui -p 80:80 -v /etc/localtime:/etc/localtime --user root -dit --restart=always -d preferred_client.ui.image.${imtag}
+docker run --name=preferred_reservation.ui -p 8090:8090 -v /etc/localtime:/etc/localtime --user root -dit --restart=always -d preferred_reservation.ui.image.${imtag}
 
 # 查看镜像和容器
 docker images

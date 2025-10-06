@@ -1,10 +1,10 @@
 #!/bin/bash
 # 进入源码根目录
-cd /usr/src/preferred
+#cd /usr/src/preferredsummary
 # 拉取代码
-git fetch --all  
-git reset --hard origin/master
-git pull 'git@e.coding.net:majiang/preferred/preferred.git'
+#git fetch --all  
+#git reset --hard origin/main
+#git pull 'git@github.com:love2zou/preferredsummary.git'
 
 # 2. 配置Docker镜像加速器（如果还没配置）
 sudo mkdir -p /etc/docker
@@ -20,7 +20,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart docker
 
 # 切换到ui目录
-cd /usr/src/preferred/ui
+cd /usr/src/preferredsummary/ui
 
 # 停止并删除旧容器
 docker stop preferred_admin.ui 2>/dev/null || true
@@ -34,10 +34,10 @@ fi
 
 # 构建镜像
 imtag=$(uuidgen |sed 's/-//g')
-docker build -f Dockerfile -t preferred_admin.ui.image.${imtag} . --network=host
+docker build -f admin_dockerfile -t preferred_admin.ui.image.${imtag} . --network=host
 
 # 运行容器
-docker run --name=preferred_admin.ui -p 8091:8091 -v /etc/localtime:/etc/localtime --user root -dit --restart=always -d preferred_admin.ui.image.${imtag}
+docker run --name=preferred_admin.ui -p 8081:8081 -v /etc/localtime:/etc/localtime --user root -dit --restart=always -d preferred_admin.ui.image.${imtag}
 
 # 查看镜像和容器
 docker images

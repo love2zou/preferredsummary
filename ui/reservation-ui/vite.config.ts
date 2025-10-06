@@ -5,7 +5,7 @@ import { defineConfig } from 'vite'
 export default defineConfig(({ mode }) => {
   const apiTarget = mode === 'development'
     ? 'http://localhost:5000'
-    : 'http://159.75.184.108:8090'
+    : 'http://159.75.184.108:8080'
 
   return {
     plugins: [vue()],

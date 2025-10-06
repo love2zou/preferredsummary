@@ -15,7 +15,7 @@ namespace Preferred.Api.Models
         /// <summary>
         /// 服务器端口
         /// </summary>
-        public string ServerPort { get; set; } = "8090";
+        public string ServerPort { get; set; } = "8080";
         
         /// <summary>
         /// 图片基础路径

@@ -2,7 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 
 const isDev = import.meta.env.MODE === 'development'
-const apiBaseURL = isDev ? 'http://localhost:5000/api' : 'http://159.75.184.108:8090/api'
+const apiBaseURL = isDev ? 'http://localhost:5000/api' : 'http://159.75.184.108:8080/api'
 
 const adminApi = axios.create({
     baseURL: apiBaseURL,

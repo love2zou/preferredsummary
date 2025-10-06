@@ -77,6 +77,8 @@ const userStore = useUserStore()
 
 const items = ref<NotificationItem[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
+const hasMore = ref(true)
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
@@ -85,6 +87,8 @@ const keyword = ref('')
 const filterStatus = ref<number | undefined>(undefined)
 const filterType = ref<string>('')
 
+// 接收者标识提升为响应式，供 loadList / loadMore 共用
+const receiver = ref<string>('')
 const goBack = () => router.back()
 
 function normalizePaged(resp: any) {
@@ -146,16 +150,16 @@ function formatTime(it: NotificationItem) {
 
 // 仅保留基础查询请求，无复杂筛选参数（前端 chips 过滤）
 async function loadList() {
-  const receiver = String(
+  receiver.value = String(
     userStore.user?.username || localStorage.getItem('username') || userStore.user?.phone || ''
   )
-  if (!receiver) return
+  if (!receiver.value) return
   loading.value = true
   try {
     const resp = await notificationService.list({
       page: page.value,
       size: pageSize.value,
-      receiver
+      receiver: receiver.value
     })
     const { dataArr, t, p, ps } = normalizePaged(resp)
     items.value = (dataArr || []).map((x: any) => ({
@@ -174,6 +178,8 @@ async function loadList() {
     total.value = t
     page.value = p
     pageSize.value = ps
+    // 依据总数判断是否还有更多
+    hasMore.value = items.value.length < total.value
   } catch (e) {
     ElMessage.error('加载消息失败')
   } finally {
@@ -181,6 +187,49 @@ async function loadList() {
   }
 }
 
+// 加载更多：追加后统一按发送时间倒序
+async function loadMore() {
+  // 并发保护与边界检查
+  if (loadingMore.value || !hasMore.value) return
+  if (!receiver.value) return
+  loadingMore.value = true
+  try {
+    const nextPage = page.value + 1
+    const resp = await notificationService.list({
+      page: nextPage,
+      size: pageSize.value,
+      receiver: receiver.value
+    })
+    const { dataArr, t, p, ps } = normalizePaged(resp)
+    const more = (dataArr || []).map((x: any) => ({
+      id: x.id ?? x.Id,
+      name: x.name ?? x.Name,
+      content: x.content ?? x.Content,
+      notifyType: x.notifyType ?? x.NotifyType,
+      notifyStatus: x.notifyStatus ?? x.NotifyStatus,
+      isRead: x.isRead ?? x.IsRead,
+      sendUser: x.sendUser ?? x.SendUser,
+      receiver: x.receiver ?? x.Receiver,
+      createdAt: x.createdAt ?? x.CrtTime ?? x.crtTime,
+      crtTime: x.crtTime ?? x.CrtTime ?? x.createdAt
+    }))
+    // 追加并排序
+    items.value = items.value.concat(more)
+    items.value.sort((a, b) => getTimestamp(b.createdAt || b.crtTime) - getTimestamp(a.createdAt || a.crtTime))
+
+    // 更新分页与更多标志
+    total.value = t
+    page.value = p
+    pageSize.value = ps
+    hasMore.value = items.value.length < total.value
+  } catch (e) {
+    ElMessage.error('加载消息失败')
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+onMounted(loadList)
 async function markAsRead(it: NotificationItem) {
   if (!it?.id) return
   try {
@@ -236,41 +285,6 @@ function getTimestamp(raw: any): number {
   return isNaN(d.getTime()) ? 0 : d.getTime()
 }
 
-// 加载更多：追加后统一按发送时间倒序
-async function loadMore() {
-  if (!receiver) return
-  loading.value = true
-  try {
-    const resp = await notificationService.list({
-      page: page.value,
-      size: pageSize.value,
-      receiver
-    })
-    const { dataArr, t, p, ps } = normalizePaged(resp)
-    const more = (dataArr || []).map((x: any) => ({
-      id: x.id ?? x.Id,
-      name: x.name ?? x.Name,
-      content: x.content ?? x.Content,
-      notifyType: x.notifyType ?? x.NotifyType,
-      notifyStatus: x.notifyStatus ?? x.NotifyStatus,
-      isRead: x.isRead ?? x.IsRead,
-      sendUser: x.sendUser ?? x.SendUser,
-      receiver: x.receiver ?? x.Receiver,
-      createdAt: x.createdAt ?? x.CrtTime ?? x.crtTime,
-      crtTime: x.crtTime ?? x.CrtTime ?? x.createdAt
-    }))
-    items.value = items.value.concat(more)
-    items.value.sort((a, b) => getTimestamp(b.createdAt || b.crtTime) - getTimestamp(a.createdAt || a.crtTime))
-    total.value = t
-    page.value = p
-    pageSize.value = ps
-  } catch (e) {
-    ElMessage.error('加载消息失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 function reload() {
   page.value = 1
   loadList()
@@ -280,8 +294,6 @@ function changePage(p: number) {
   page.value = p
   loadList()
 }
-
-onMounted(loadList)
 </script>
 
 <style scoped>
