@@ -25,7 +25,11 @@ namespace Preferred.Api.Services
             var coachIds = rels.Select(r => r.CoachId).Distinct().ToList();
             var coaches = await _context.Users
                 .Where(u => coachIds.Contains(u.Id))
-                .Select(u => new BoundCoachDto { CoachId = u.Id, CoachName = u.UserName })
+                .Select(u => new BoundCoachDto {
+                    CoachId = u.Id,
+                    CoachName = u.UserName,
+                    AvatarUrl = u.ProfilePictureUrl
+                })
                 .ToListAsync();
             return coaches;
         }

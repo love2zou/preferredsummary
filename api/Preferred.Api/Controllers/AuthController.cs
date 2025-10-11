@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Http;
@@ -15,14 +16,17 @@ namespace Preferred.Api.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IUserService _userService;
+        private readonly INotificationService _notificationService;
 
         /// <summary>
         /// 构造函数
         /// </summary>
         /// <param name="userService">用户服务</param>
-        public AuthController(IUserService userService)
+        // 构造函数：注入通知服务
+        public AuthController(IUserService userService, INotificationService notificationService)
         {
             _userService = userService;
+            _notificationService = notificationService;
         }
 
         /// <summary>
@@ -45,9 +49,8 @@ namespace Preferred.Api.Controllers
         /// </remarks>
         /// <response code="200">注册成功</response>
         /// <response code="400">请求参数错误或用户已存在</response>
+        // 方法：Register([FromBody] UserDto userDto)
         [HttpPost("register")]
-        [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Register([FromBody] UserDto userDto)
         {
             if (string.IsNullOrEmpty(userDto.Username) || string.IsNullOrEmpty(userDto.Password))
@@ -68,7 +71,22 @@ namespace Preferred.Api.Controllers
             var result = await _userService.Register(userDto);
             if (!result)
             {
-                return BadRequest(new ApiErrorResponse { Message = "用户名或邮箱已存在" });
+                // 修改返回信息，包含手机号重复
+                return BadRequest(new ApiErrorResponse { Message = "用户名或手机号已存在" });
+            }
+
+            // 将消息下沉到通知服务统一管理
+            var receiver = (userDto.Username ?? string.Empty).Trim();
+            if (!string.IsNullOrEmpty(receiver))
+            {
+                try
+                {
+                    await _notificationService.SendRegisterMessagesAsync(receiver);
+                }
+                catch
+                {
+                    // 通知发送失败不影响注册流程
+                }
             }
 
             return Ok(new ApiResponse { Message = "注册成功" });
@@ -96,10 +114,9 @@ namespace Preferred.Api.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
-            // 只有请求格式错误才返回 400
             if (string.IsNullOrEmpty(loginDto.UserName) || string.IsNullOrEmpty(loginDto.Password))
             {
-                return BadRequest(new ApiErrorResponse { Message = "用户名和密码不能为空" });
+                return BadRequest(new ApiErrorResponse { Message = "用户名或手机号与密码不能为空" });
             }
     
             var result = await _userService.Login(loginDto.UserName, loginDto.Password);

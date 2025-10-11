@@ -10,7 +10,8 @@
       
       <!-- 搜索和操作区域 -->
       <div class="search-section">
-        <el-row :gutter="20">
+        <!-- 第一行：搜索控件 + 搜索/重置按钮 -->
+        <el-row :gutter="20" type="flex" align="middle">
           <el-col :span="5">
             <el-input
               v-model="searchForm.title"
@@ -43,38 +44,63 @@
             </el-select>
           </el-col>
           <el-col :span="4">
-            <el-button type="primary" @click="handleSearch">
-              <el-icon><Search /></el-icon>
-              搜索
-            </el-button>
-            <el-button @click="handleReset">
-              <el-icon><Refresh /></el-icon>
-              重置
-            </el-button>
+            <el-select
+              v-model="searchForm.sendStatus"
+              placeholder="发送状态"
+              clearable
+              style="width: 100%"
+            >
+              <el-option label="未发送" :value="0" />
+              <el-option label="已发送" :value="1" />
+              <el-option label="发送失败" :value="2" />
+            </el-select>
           </el-col>
-          <el-col :span="7" style="text-align: right">
-            <el-button type="success" @click="handleAdd">
-              <el-icon><Plus /></el-icon>
-              新增
-            </el-button>
-            <el-button 
-              type="info" 
-              @click="handleBatchMarkAsRead"
-              :disabled="!selectedNotifications.length"
-            >
-              <el-icon><Check /></el-icon>
-              批量已读 ({{ selectedNotifications.length }})
-            </el-button>
-            <el-button 
-              type="danger" 
-              @click="handleBatchDelete"
-              :disabled="!selectedNotifications.length"
-            >
-              <el-icon><Delete /></el-icon>
-              批量删除 ({{ selectedNotifications.length }})
-            </el-button>
+          <el-col :span="7">
+            <div class="search-actions">
+              <el-button type="primary" @click="handleSearch">
+                <el-icon><Search /></el-icon>
+                搜索
+              </el-button>
+              <el-button @click="handleReset">
+                <el-icon><Refresh /></el-icon>
+                重置
+              </el-button>
+            </div>
           </el-col>
         </el-row>
+      
+      <!-- 第二行：右侧操作按钮，防止与第一行栅格相加溢出 -->
+      <el-row :gutter="20" type="flex" justify="end" class="actions-row">
+        <el-col :span="24" style="text-align: left">
+          <el-button type="success" @click="handleAdd">
+            <el-icon><Plus /></el-icon>
+            新增
+          </el-button>
+          <el-button 
+            type="info" 
+            @click="handleBatchMarkAsRead"
+            :disabled="!selectedNotifications.length"
+          >
+            <el-icon><Check /></el-icon>
+            批量已读 ({{ selectedNotifications.length }})
+          </el-button>
+          <el-button
+            type="primary"
+            @click="handleBatchSend"
+            :disabled="!selectedNotifications.length"
+          >
+            批量发送 ({{ selectedNotifications.length }})
+          </el-button>
+          <el-button 
+            type="danger" 
+            @click="handleBatchDelete"
+            :disabled="!selectedNotifications.length"
+          >
+            <el-icon><Delete /></el-icon>
+            批量删除 ({{ selectedNotifications.length }})
+          </el-button>
+        </el-col>
+      </el-row>
       </div>
     
       <!-- 表格容器 -->
@@ -102,7 +128,7 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="name" label="通知标题" min-width="200" />
+          <el-table-column prop="name" label="通知标题" min-width="150" />
           <el-table-column prop="content" label="通知内容" min-width="300">
             <template #default="scope">
               <div class="content-cell">
@@ -110,17 +136,25 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column prop="notifyType" label="通知类型" width="120">
+          <el-table-column prop="notifyType" label="通知类型" width="90">
             <template #default="scope">
               <el-tag :type="getTypeTagType(scope.row.notifyType)" size="small">
                 {{ getTypeLabel(scope.row.notifyType) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="sendUser" label="发送人" width="100" />
-          <el-table-column prop="receiver" label="接收人" min-width="220">
+          <!-- 新增：发送状态列 -->
+          <el-table-column prop="sendStatus" label="发送状态" width="110">
             <template #default="scope">
-              {{ formatReceiverList(scope.row.receiver) }}
+              <el-tag :type="getSendStatusTagType(scope.row.sendStatus)" size="small">
+                {{ getSendStatusLabel(scope.row.sendStatus) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="sendUser" label="发送人" width="90" />
+          <el-table-column prop="receiver" label="接收人" min-width="160" :show-overflow-tooltip="true">
+            <template #default="scope">
+              <span class="receiver-ellipsis">{{ formatReceiverList(scope.row.receiver) }}</span>
             </template>
           </el-table-column>
           <el-table-column prop="sendTime" label="发送时间" width="160">
@@ -137,6 +171,14 @@
           </el-table-column>
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="scope">
+              <el-button
+                type="success"
+                size="small"
+                :disabled="scope.row.sendStatus === 1"
+                @click="handleSend(scope.row)"
+              >
+                发送
+              </el-button>
               <el-button
                 type="primary"
                 size="small"
@@ -211,6 +253,14 @@
             <el-option label="通知" value="notice" />
             <el-option label="提醒" value="remind" />
             <el-option label="告警" value="alert" />
+          </el-select>
+        </el-form-item>
+        <!-- 新增：发送状态选择（默认未发送） -->
+        <el-form-item label="发送状态" prop="sendStatus">
+          <el-select v-model="notificationForm.sendStatus" placeholder="请选择发送状态" style="width: 100%">
+            <el-option label="未发送" :value="0" />
+            <el-option label="已发送" :value="1" />
+            <el-option label="发送失败" :value="2" />
           </el-select>
         </el-form-item>
         
@@ -289,6 +339,16 @@ const getTypeLabel = (type: string) => {
   return map[t] || t
 }
 
+// 新增：发送状态映射函数（用于表格列）
+const getSendStatusTagType = (status?: number) => {
+  const map: Record<number, string> = { 0: 'warning', 1: 'success', 2: 'danger' }
+  return map[status ?? 0] || 'info'
+}
+
+const getSendStatusLabel = (status?: number) => {
+  const map: Record<number, string> = { 0: '未发送', 1: '已发送', 2: '发送失败' }
+  return map[status ?? 0] || '未发送'
+}
 import {
   notificationApi,
   type NotificationCreateDto,
@@ -318,6 +378,8 @@ interface NotificationFormData {
   sendUser: string
   receiver: string[]
   remark: string
+  // 新增：发送状态
+  sendStatus: number
 }
 
 // 响应式数据
@@ -332,7 +394,9 @@ const selectedNotifications = ref<NotificationListDto[]>([])
 const searchForm = reactive({
   title: '',
   type: '',
-  isRead: undefined as number | undefined
+  isRead: undefined as number | undefined,
+  // 新增：发送状态搜索
+  sendStatus: undefined as number | undefined
 })
 
 // 通知列表
@@ -436,7 +500,8 @@ const notificationForm = reactive<NotificationFormData>({
   type: 'notice',
   sendUser: '',
   receiver: [] as string[],
-  remark: ''
+  remark: '',
+  sendStatus: 0
 })
 
 // 表单验证规则
@@ -499,13 +564,13 @@ const loadNotificationList = async () => {
       pageSize: pagination.pageSize,
       Name: searchForm.title,
       NotifyType: searchForm.type,
-      IsRead: searchForm.isRead
+      IsRead: searchForm.isRead,
+      SendStatus: searchForm.sendStatus
     }
     const response = await notificationApi.getNotificationList(params)
     notificationList.value = response.data
     pagination.total = response.total
   } catch (error) {
-    console.error('加载通知列表失败:', error)
     ElMessage.error('加载通知列表失败')
   } finally {
     loading.value = false
@@ -527,20 +592,23 @@ const handleSubmit = async () => {
       receiver: notificationForm.receiver.join(','),
       remark: notificationForm.remark,
       notifyStatus: 0,
-      seqNo: 0
+      seqNo: 0,
+      // 新增：发送状态
+      sendStatus: notificationForm.sendStatus
     }
     if (isEdit.value) {
       const updateData: NotificationUpdateDto = {
-        id: notificationForm.id!,
-        name: notificationForm.title,
-        content: notificationForm.content,
-        notifyType: notificationForm.type,
-        sendUser: notificationForm.sendUser,
-        receiver: notificationForm.receiver.join(','),
-        remark: notificationForm.remark
-      }
-      await notificationApi.updateNotification(updateData.id, updateData)
-      ElMessage.success('更新成功')
+      id: notificationForm.id!,
+      name: notificationForm.title,
+      content: notificationForm.content,
+      notifyType: notificationForm.type,
+      sendUser: notificationForm.sendUser,
+      receiver: notificationForm.receiver.join(','),
+      remark: notificationForm.remark,
+      sendStatus: notificationForm.sendStatus
+    }
+    await notificationApi.updateNotification(updateData)
+    ElMessage.success('更新成功')
     } else {
       await notificationApi.createNotification(submitData)
       ElMessage.success('创建成功')
@@ -608,7 +676,62 @@ const handleBatchDelete = async () => {
     }
   }
 }
+// 单条发送
+const handleSend = async (row: NotificationListDto) => {
+  try {
+    if (row.sendStatus === 1) {
+      ElMessage.info('该通知已发送')
+      return
+    }
+    await ElMessageBox.confirm(
+      `确定发送通知 "${row.name}" 吗？`,
+      '确认发送',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    await notificationApi.sendNotification(row.id)
+    ElMessage.success('发送成功')
+    await loadNotificationList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('发送通知失败:', error)
+      ElMessage.error('发送通知失败')
+    }
+  }
+}
 
+// 批量发送
+const handleBatchSend = async () => {
+  if (!selectedNotifications.value.length) {
+    ElMessage.warning('请选择要发送的通知')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定要发送选中的 ${selectedNotifications.value.length} 个通知吗？`,
+      '确认批量发送',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+    const ids = selectedNotifications.value.map(n => n.id)
+    await notificationApi.batchSendNotifications(ids)
+    ElMessage.success('批量发送成功')
+    selectedNotifications.value = []
+    tableRef.value?.clearSelection()
+    await loadNotificationList()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('批量发送失败:', error)
+      ElMessage.error('批量发送失败')
+    }
+  }
+}
 // 标记为已读
 const handleMarkAsRead = async (row: NotificationListDto) => {
   try {
@@ -664,6 +787,7 @@ const handleReset = async () => {
   searchForm.title = ''
   searchForm.type = ''
   searchForm.isRead = undefined
+  searchForm.sendStatus = undefined
   pagination.currentPage = 1
   await loadNotificationList()
 }
@@ -682,7 +806,9 @@ const handleAdd = () => {
     type: 'notice',
     sendUser: authStore.user?.userName || '',
     receiver: [] as string[],
-    remark: ''
+    remark: '',
+    // 新增：默认未发送
+    sendStatus: 0
   })
   dialogVisible.value = true
 }
@@ -699,7 +825,9 @@ const handleEdit = async (row: NotificationListDto) => {
     type: normalizeType(row.notifyType),
     sendUser: row.sendUser,
     receiver: (row.receiver || '').split(',').filter(Boolean),
-    remark: row.remark || ''
+    remark: row.remark || '',
+    // 新增：回填发送状态（兼容后端返回）
+    sendStatus: typeof row.sendStatus === 'number' ? row.sendStatus : 0
   })
   dialogVisible.value = true
 }
@@ -750,7 +878,14 @@ onUnmounted(() => {
   background-color: #f8f9fa;
   border-radius: 8px;
 }
-
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.actions-row {
+  margin-top: 8px;
+}
 .table-container {
   background-color: #fff;
   border-radius: 8px;
@@ -796,5 +931,12 @@ onUnmounted(() => {
   .el-col {
     margin-bottom: 12px;
   }
+}
+
+.receiver-ellipsis { 
+  display: block; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  white-space: nowrap; 
 }
 </style>

@@ -39,11 +39,12 @@ namespace Preferred.Api.Models
         /// <returns>完整URL</returns>
         public string GetImageUrl(string fileName)
         {
+            var safeFileName = System.Uri.EscapeDataString(fileName);
             if (UseRemoteAccess)
             {
-                return $"http://{ServerHost}:{ServerPort}{ImageBasePath}/{fileName}";
+                return $"http://{ServerHost}:{ServerPort}{ImageBasePath}/{safeFileName}";
             }
-            return $"{ImageBasePath}/{fileName}";
+            return $"{ImageBasePath}/{safeFileName}";
         }
         
         /// <summary>

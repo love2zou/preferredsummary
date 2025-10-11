@@ -15,9 +15,12 @@ namespace Preferred.Api.Controllers
     public class BookingController : ControllerBase
     {
         private readonly IBookingService _bookingService;
-        public BookingController(IBookingService bookingService)
+        private readonly INotificationService _notificationService;
+        
+        public BookingController(IBookingService bookingService, INotificationService notificationService)
         {
             _bookingService = bookingService;
+            _notificationService = notificationService;
         }
 
         [HttpGet("bound-coaches")]
@@ -63,6 +66,22 @@ namespace Preferred.Api.Controllers
         public async Task<IActionResult> BatchCreate([FromBody] CreateBatchRequest request)
         {
             var ok = await _bookingService.BatchCreateAsync(request);
+            if (ok)
+            {
+                try
+                {
+                    await _notificationService.SendBookingCreatedToCoachAsync(
+                        request.CoachId,
+                        request.MemberId,
+                        DateTime.Parse(request.BookDate),
+                        request.TimeSlots
+                    );
+                }
+                catch
+                {
+                    // 通知失败不影响预约接口响应
+                }
+            }
             return Ok(new ApiResponse { Success = ok, Message = ok ? "创建成功" : "创建失败" });
         }
 

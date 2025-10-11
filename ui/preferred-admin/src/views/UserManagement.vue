@@ -193,6 +193,8 @@
           <el-input
             v-model="userForm.phoneNumber"
             placeholder="请输入电话号码"
+            type="tel"
+            maxlength="11"
           />
         </el-form-item>
         
@@ -338,6 +340,8 @@ const submitLoading = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const userFormRef = ref<InstanceType<typeof ElForm>>()
+  // 新增：对话框标题（编辑/新增自动切换）
+const dialogTitle = computed(() => (isEdit.value ? '编辑用户' : '新增用户'))
 // 搜索表单
 const searchForm = reactive({
   username: '',
@@ -370,7 +374,7 @@ const userForm = reactive({
 })
 
 // 表单验证规则
-const userRules: FormRules = {
+const userRules = computed<FormRules>(() => ({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, message: '用户名长度不能少于3位', trigger: 'blur' }
@@ -380,6 +384,7 @@ const userRules: FormRules = {
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
   ],
   phoneNumber: [
+    { required: true, message: '请输入电话号码', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
   ],
   password: [
@@ -389,12 +394,7 @@ const userRules: FormRules = {
   isActive: [
     { required: true, message: '请选择状态', trigger: 'change' }
   ]
-}
-
-// 计算属性
-const dialogTitle = computed(() => {
-  return isEdit.value ? '编辑用户' : '新增用户'
-})
+}))
 
 // 方法
 const loadUserList = async () => {
@@ -461,7 +461,7 @@ const handleSubmit = async () => {
             username: userForm.username,
             email: userForm.email,
             password: userForm.password,
-            phoneNumber: userForm.phoneNumber || undefined,
+            phoneNumber: userForm.phoneNumber,
             bio: userForm.bio || undefined,
             userTypeCode: userForm.userTypeCode || undefined,        // 改为 code
             userToSystemCode: userForm.userToSystemCode || undefined, // 改为 code

@@ -48,6 +48,11 @@ namespace Preferred.Api.Models
         public int NotifyStatus { get; set; } = 0;
 
         /// <summary>
+        /// 发送状态(0 未发送, 1 已发送, 2 发送失败)
+        /// </summary>
+        public int SendStatus { get; set; } = 0;
+
+        /// <summary>
         /// 发送时间
         /// </summary>
         [Required]
@@ -102,6 +107,7 @@ namespace Preferred.Api.Models
         public string Content { get; set; }
         public string NotifyType { get; set; }
         public int NotifyStatus { get; set; }
+        public int SendStatus { get; set; }
         public DateTime SendTime { get; set; }
         public string SendUser { get; set; }
         public string Receiver { get; set; }
@@ -129,6 +135,8 @@ namespace Preferred.Api.Models
         public string NotifyType { get; set; }
 
         public int NotifyStatus { get; set; } = 0;
+
+        public int SendStatus { get; set; } = 0;
 
         [Required(ErrorMessage = "发送时间不能为空")]
         public DateTime SendTime { get; set; }
@@ -166,7 +174,9 @@ namespace Preferred.Api.Models
         [StringLength(20, ErrorMessage = "通知类型长度不能超过20个字符")]
         public string NotifyType { get; set; }
 
-        public int? NotifyStatus { get; set; }
+        public int? NotifyStatus { get; set; } = 0;
+
+        public int? SendStatus { get; set; } = 0;
 
         public DateTime? SendTime { get; set; }
 
@@ -185,8 +195,7 @@ namespace Preferred.Api.Models
     /// <summary>
     /// 通知搜索参数
     /// </summary>
-    public class NotificationSearchParams
-    {
+    public class NotificationSearchParams {
         public string Name { get; set; }
         public string Content { get; set; }
         public string NotifyType { get; set; }
@@ -196,5 +205,6 @@ namespace Preferred.Api.Models
         public string Receiver { get; set; }
         public DateTime? StartTime { get; set; }
         public DateTime? EndTime { get; set; }
+        public int? SendStatus { get; set; }
     }
 }

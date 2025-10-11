@@ -10,6 +10,7 @@ export interface Notification {
   userId: number
   crtTime: string
   updTime: string
+  sendStatus?: number // 新增：发送状态
 }
 
 // 修正 NotificationCreateDto 接口定义
@@ -24,9 +25,12 @@ export interface NotificationCreateDto {
   receiver: string
   remark?: string  // 添加备注字段
   seqNo?: number
+  // 新增：发送状态
+  sendStatus?: number
 }
 
 // 通知更新DTO
+// NotificationUpdateDto & NotificationListDto 中补充 sendStatus 属性
 export interface NotificationUpdateDto {
   id: number
   isRead?: number
@@ -39,9 +43,10 @@ export interface NotificationUpdateDto {
   receiver?: string
   remark?: string  // 添加备注字段
   seqNo?: number
+  // 新增：发送状态
+  sendStatus?: number
 }
 
-// 通知列表DTO
 export interface NotificationListDto {
   id: number
   isRead: number
@@ -54,6 +59,8 @@ export interface NotificationListDto {
   receiver: string
   remark?: string  // 添加备注字段
   seqNo: number
+  // 新增：发送状态（列表展示需要）
+  sendStatus?: number
 }
 
 // 通知搜索参数
@@ -69,6 +76,7 @@ export interface NotificationSearchParams {
   Receiver?: string
   StartTime?: string
   EndTime?: string
+  SendStatus?: number
 }
 
 export interface PagedResponse<T> {
@@ -103,8 +111,8 @@ export const notificationApi = {
   },
 
   // 更新通知
-  updateNotification(id: number, data: NotificationUpdateDto): Promise<ApiResponse<NotificationListDto>> {
-    return request.put(`/api/notification/${id}`, data)
+  updateNotification(data: NotificationUpdateDto): Promise<ApiResponse<NotificationListDto>> {
+    return request.put('/api/notification', data)
   },
 
   // 删除通知
@@ -121,11 +129,18 @@ export const notificationApi = {
   markAsRead(id: number): Promise<ApiResponse<boolean>> {
     return request.put(`/api/notification/${id}/read`)
   },
-
   // 批量标记为已读
   batchMarkAsRead(ids: number[]): Promise<ApiResponse<boolean>> {
     return request.post('/api/notification/batch-read', ids)
-  }
+  },
+  // 新增：发送通知（单条）
+  sendNotification(id: number): Promise<ApiResponse<boolean>> {
+    return request.put(`/api/notification/${id}/send`)
+  },
+  // 新增：批量发送通知
+  batchSendNotifications(ids: number[]): Promise<ApiResponse<boolean>> {
+    return request.post('/api/notification/batch-send', ids)
+  },
 }
 
 export default notificationApi

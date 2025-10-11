@@ -53,8 +53,9 @@ namespace Preferred.Api.Controllers
             [FromQuery] string sendUser = "",
             [FromQuery] string receiver = "",
             [FromQuery] DateTime? startTime = null,
-            [FromQuery] DateTime? endTime = null)
-        {
+            [FromQuery] DateTime? endTime = null,
+            [FromQuery] int? sendStatus = null
+        ) {
             try
             {
                 var searchParams = new NotificationSearchParams
@@ -67,7 +68,8 @@ namespace Preferred.Api.Controllers
                     SendUser = sendUser,
                     Receiver = receiver,
                     StartTime = startTime,
-                    EndTime = endTime
+                    EndTime = endTime,
+                    SendStatus = sendStatus
                 };
 
                 var notifications = await _notificationService.GetNotificationList(page, size, searchParams);
@@ -346,6 +348,62 @@ namespace Preferred.Api.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new ApiErrorResponse { Message = "获取未读数量失败", Details = ex.Message });
+            }
+        }
+        [HttpPut("{id}/send")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> SendNotification(int id)
+        {
+            try
+            {
+                var sender = User?.Identity?.Name ?? "管理员";
+                var result = await _notificationService.SendNotification(id, sender);
+                if (result.Success)
+                {
+                    return Ok(result);
+                }
+                else
+                {
+                    return BadRequest(new ApiErrorResponse { Message = result.Message });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiErrorResponse { Message = "发送通知失败", Details = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// 批量删除通知
+        /// </summary>
+        /// <param name="ids">通知ID列表</param>
+        /// <returns>删除结果</returns>
+        [HttpPost("batch-send")]
+        [ProducesResponseType(typeof(ApiResponse<bool>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> BatchSendNotifications([FromBody] List<int> ids)
+        {
+            try
+            {
+                if (ids == null || ids.Count == 0)
+                {
+                    return BadRequest(new ApiErrorResponse { Message = "请提供要发送的通知ID列表" });
+                }
+                var sender = User?.Identity?.Name ?? "管理员";
+                var result = await _notificationService.BatchSendNotifications(ids, sender);
+                if (result.Success)
+                {
+                    return Ok(result);
+                }
+                else
+                {
+                    return BadRequest(new ApiErrorResponse { Message = result.Message });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiErrorResponse { Message = "批量发送失败", Details = ex.Message });
             }
         }
     }

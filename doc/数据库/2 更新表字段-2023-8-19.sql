@@ -9,3 +9,4 @@ USE Db_PreferredData;
 */
 ALTER TABLE Tb_SystemResource ADD COLUMN HostName VARCHAR(100) NOT NULL COMMENT '主机名称' AFTER Id;
 ALTER TABLE Tb_SystemResource ADD COLUMN DiskName VARCHAR(100) NOT NULL COMMENT '系统盘名称' AFTER MemoryUsage;
+ALTER TABLE Tb_Notification ADD COLUMN SendStatus INT DEFAULT 0 NOT NULL COMMENT '发送状态(0 未发送, 1 已发送, 2 发送失败)' AFTER NotifyStatus;

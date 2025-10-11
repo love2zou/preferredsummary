@@ -24,7 +24,13 @@
             >
               <div class="coach-card-content">
                 <div class="avatar">
-                  <div class="avatar-fallback">{{ (c.coachName || '').slice(0,1).toUpperCase() }}</div>
+                  <img
+                    v-if="safeAvatarUrl(c) && !brokenAvatar[c.coachId]"
+                    :src="safeAvatarUrl(c)"
+                    :alt="c.coachName || 'avatar'"
+                    @error="onImgError(c.coachId)"
+                  />
+                  <div v-else class="avatar-fallback">{{ (c.coachName || '').toUpperCase() }}</div>
                 </div>
                 <div class="name">{{ c.coachName }}</div>
               </div>
@@ -215,6 +221,29 @@ const toMin = (t: string) => {
   const [h, m] = t.split(':').map(Number)
   return h * 60 + (m || 0)
 }
+const brokenAvatar = ref<Record<number, boolean>>({})
+
+function safeCoachOrigin(base: string) {
+  // 去掉可能的 /api 后缀，确保用于图片等非 API 资源
+  return base.replace(/\/api\/?$/i, '')
+}
+
+function safeAvatarUrl(c: BoundCoach): string | '' {
+  const url = (c as any).avatarUrl || (c as any).profilePictureUrl || (c as any).avatar || ''
+  if (!url) return ''
+  // 绝对地址直接返回
+  if (/^https?:\/\//i.test(url)) return url
+  // 相对地址：用后端 Origin 拼接
+  const base = (import.meta as any).env?.VITE_API_BASE_URL || ''
+  const origin = base ? safeCoachOrigin(base) : ''
+  // 若没有配置 base，直接返回相对路径以支持同域开发
+  if (!origin) return url
+  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`
+}
+
+function onImgError(coachId: number) {
+  brokenAvatar.value[coachId] = true
+}
 </script>
 
 <style scoped>
@@ -226,85 +255,38 @@ const toMin = (t: string) => {
 .content { flex: 1; padding: 12px; }
 .mini-card { background: var(--el-bg-color); border: 1px solid var(--el-border-color); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .bind-tip { margin-top: 8px; color: var(--el-text-color-secondary); font-size: 13px; }
-.date-pills { display: flex; gap: 10px; margin-top: 16px; }
-.slots-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 16px; }
+/* 让“今天/明天”在小屏优先避免横向溢出 */
+.date-pills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+@media (max-width: 380px) {
+  .date-pills { grid-template-columns: 1fr; }
+}
+/* 修复：相邻按钮的额外左边距，避免“今天/明天”不对齐 */
+.date-pills :deep(.el-button + .el-button) { margin-left: 0 !important; }
+/* 修复格子在小屏的横向溢出，必要时栈叠 */
+.slots-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+@media (max-width: 380px) {
+  .slots-grid { grid-template-columns: 1fr; }
+}
 .slot-tag { cursor: pointer; user-select: none; }
 .slot-tag.disabled { opacity: 0.5; cursor: not-allowed; }
 .slot-tag.selected { box-shadow: 0 0 0 1px var(--el-color-success); }
 .fixed-actions { position: sticky; bottom: 0; background: var(--el-bg-color); padding: 12px; border-top: 1px solid var(--el-border-color); display: flex; justify-content: center; }
 .step-title { margin-bottom: 6px; font-weight: 600; }
-.coach-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.coach-card {
-  border: 1px solid var(--el-border-color);
-  border-radius: 8px;
-  cursor: pointer;
-  background: var(--el-bg-color);
-  transition: border-color .15s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden; /* 恢复：卡片内容与边框贴合 */
-}
+.coach-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 10px; margin-top: 16px; }
+.coach-card { border: 1px solid var(--el-border-color); border-radius: 8px; cursor: pointer; background: var(--el-bg-color); transition: border-color .15s ease; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .coach-card:hover { border-color: var(--el-color-primary-light-8); }
 .coach-card.selected { border-color: var(--el-color-primary); }
+.coach-card-content { width: 100%; gap: 6px; box-sizing: border-box; }
+.avatar { width: 100%; height: 80px; margin: 0; border-radius: 8px 8px 0 0; overflow: hidden; border: none; background: var(--el-fill-color-light); display: block; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--el-text-color-primary); font-weight: 700; font-size: 20px; }
+.coach-card .name { width: 100%; display: flex; align-items: center; justify-content: center; text-align: center; font-weight: 600; font-size: 14px; line-height: 1.2; height: 32px; margin: 0; }
 
-.coach-card-content {
-  width: 100%;            /* 恢复：内容宽度与卡片一致 */
-  gap: 6px;               /* 紧凑内容间距 */
-  box-sizing: border-box; /* 包含内边距避免抖动 */
-}
-
-.avatar {
-  width: 100%;
-  height: 80px;
-  margin: 0;
-  border-radius: 8px 8px 0 0; /* 恢复：顶部圆角与卡片一致，左右贴边 */
-  overflow: hidden;
-  border: none;
-  background: var(--el-fill-color-light);
-  display: block;
-}
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.avatar-fallback {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--el-text-color-primary);
-  font-weight: 700;
-  font-size: 20px;
-}
-
-.coach-card .name {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-weight: 600;
-  font-size: 14px;
-  line-height: 1.2;
-  height: 32px;
-  margin: 0;
-}
-
-/* 保留：时段姓名的布局与绿色高亮 */
-.slot-tag { display: flex; width: 100%; }
-.slot-content { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; }
-.slot-right { display: flex; align-items: center; gap: 6px; }
+/* 保留：时段姓名的布局与绿色高亮 + 防溢出 */
+.slot-tag { display: flex; width: 100%; max-width: 100%; }
+.slot-content { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-width: 0; }
+.slot-time { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot-right { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--el-text-color-secondary); }
 .slot-name { color: var(--el-color-success); font-weight: 600; }
 .slot-status { color: var(--el-text-color-secondary); }
-.slot-right { color: var(--el-text-color-secondary); }
 </style>

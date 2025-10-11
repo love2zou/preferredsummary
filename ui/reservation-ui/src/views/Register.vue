@@ -1,11 +1,11 @@
 <template>
   <div class="page">
-    <div class="navbar">
-      <span class="navbar-back" @click="$router.go(-1)">
-        <el-icon><ArrowLeft /></el-icon> 返回
-      </span>
-      <span class="navbar-title">注册账号</span>
-      <span></span>
+    <div class="hero-header">
+      <div class="left-actions" @click="$router.back()">
+        <el-icon><ArrowLeft /></el-icon>
+      </div>
+      <div class="app-title">注册账号</div>
+      <div class="right-actions"></div>
     </div>
 
     <div class="register-container">
@@ -152,7 +152,7 @@ const handleRegister = async () => {
     }
 
     await authService.register(payload)
-    
+
     ElMessage.success('注册成功，请登录')
     router.push('/login')
     
@@ -167,6 +167,28 @@ const handleRegister = async () => {
 </script>
 
 <style scoped>
+.page { display: flex; flex-direction: column; min-height: 100vh; }
+.hero-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: saturate(180%) blur(8px);
+  border-bottom: 1px solid var(--el-border-color);
+}
+.left-actions, .right-actions {
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.left-actions { cursor: pointer; }
+.left-actions:hover { color: var(--el-color-primary); }
+.app-title { flex: 1; text-align: center; font-weight: 600; }
 .register-container {
   padding: 16px;
 }
@@ -196,5 +218,13 @@ const handleRegister = async () => {
 
 :deep(.el-radio) {
   margin-right: 24px;
+}
+.register-btn {
+  width: 100%;        /* 扩宽为表单内容区的整宽 */
+  display: block;     /* 作为块级元素，便于居中 */
+  margin: 8px auto 0; /* 水平居中并与上方留距 */
+}
+@media (min-width: 768px) {
+  .register-btn { max-width: 420px; } /* 大屏适度收敛，仍居中 */
 }
 </style>

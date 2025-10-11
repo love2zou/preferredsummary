@@ -102,7 +102,7 @@
                   <!-- 只使用关联图片，删除iconUrl逻辑 -->
                   <el-image
                     v-if="scope.row.selectedPicture"
-                    :src="getImageUrl(scope.row.selectedPicture.imagePath)"
+                    :src="getServerUrl(scope.row.selectedPicture.imagePath)"
                     style="width: 40px; height: 40px" 
                     fit="cover"
                   />
@@ -283,7 +283,7 @@
             <!-- 已选择的图片预览和操作按钮在同一行 -->
             <div v-if="selectedPicture" class="selected-picture-row">
               <el-image
-                :src="getImageUrl(selectedPicture.imagePath)"
+                :src="getServerUrl(selectedPicture.imagePath)"
                 :alt="selectedPicture.imageName"
                 style="width: 50px; height: 50px; border-radius: 4px; margin-right: 12px;"
                 fit="cover"
@@ -481,7 +481,7 @@
           @click="selectPicture(picture)"
         >
           <el-image
-            :src="getImageUrl(picture.imagePath)"
+            :src="getServerUrl(picture.imagePath)"
             :alt="picture.imageName"
             style="width: 100%; height: 100px; object-fit: cover;"
             fit="cover"
@@ -539,12 +539,10 @@ import {
 } from '@/api/networkUrl'
 import { pictureApi, type PictureSearchParams, type Picture as PictureType } from '@/api/picture'
 import { tagApi, type Tag } from '@/api/tag'
+import { getServerUrl } from '@/utils/url'
 import { Check, Close, Picture, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElForm, ElMessage, ElMessageBox, type FormRules } from 'element-plus'
 import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
-
-// API基础URL配置
-const API_BASE_URL = 'http://localhost:5000'
 
 // 响应式数据
 const loading = ref(false)
@@ -649,17 +647,6 @@ const networkUrlRules: FormRules = {
     { required: true, message: '请选择分类菜单', trigger: 'change' }
   ]
 }
-
-// 图片URL处理函数
-const getImageUrl = (imagePath: string) => {
-  if (!imagePath) return ''
-  if (imagePath.startsWith('http')) {
-    return imagePath
-  }
-  return `${API_BASE_URL}${imagePath}`
-}
-
-
 
 // 计算表格高度
 const calculateTableHeight = () => {

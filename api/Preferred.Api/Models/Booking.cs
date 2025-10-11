@@ -7,6 +7,7 @@ namespace Preferred.Api.Models
     {
         public int CoachId { get; set; }
         public string CoachName { get; set; } = string.Empty;
+        public string? AvatarUrl { get; set; }
     }
 
     public class AvailableSlotDto
@@ -42,6 +43,7 @@ namespace Preferred.Api.Models
         public int MemberId { get; set; }
         public int CoachId { get; set; }
         public string CoachName { get; set; } = string.Empty;
+        public string? AvatarUrl { get; set; }
         public string BookDate { get; set; } = string.Empty;
         public string StartTime { get; set; } = string.Empty;
         public string EndTime { get; set; } = string.Empty;

@@ -20,8 +20,7 @@ namespace Preferred.Api.Services
             _context = context;
         }
 
-        public async Task<List<NotificationListDto>> GetNotificationList(int page = 1, int pageSize = 10, NotificationSearchParams searchParams = null)
-        {
+        public async Task<List<NotificationListDto>> GetNotificationList(int page = 1, int pageSize = 10, NotificationSearchParams searchParams = null) {
             var query = _context.Notifications.AsQueryable();
 
             // 应用搜索条件
@@ -39,6 +38,9 @@ namespace Preferred.Api.Services
                 if (searchParams.NotifyStatus.HasValue)
                     query = query.Where(x => x.NotifyStatus == searchParams.NotifyStatus.Value);
                     
+                if (searchParams.SendStatus.HasValue)
+                    query = query.Where(x => x.SendStatus == searchParams.SendStatus.Value);
+                    
                 if (!string.IsNullOrEmpty(searchParams.SendUser))
                     query = query.Where(x => x.SendUser.Contains(searchParams.SendUser));
                     
@@ -47,6 +49,8 @@ namespace Preferred.Api.Services
                     
                 if (searchParams.IsRead.HasValue)
                     query = query.Where(x => x.IsRead == searchParams.IsRead.Value);
+                if (searchParams.SendStatus.HasValue)
+                    query = query.Where(x => x.SendStatus == searchParams.SendStatus.Value);
             }
 
             return await query
@@ -61,6 +65,7 @@ namespace Preferred.Api.Services
                     Content = x.Content,
                     NotifyType = x.NotifyType,
                     NotifyStatus = x.NotifyStatus,
+                    SendStatus = x.SendStatus,
                     SendTime = x.SendTime,
                     SendUser = x.SendUser,
                     Receiver = x.Receiver,
@@ -72,8 +77,7 @@ namespace Preferred.Api.Services
                 .ToListAsync();
         }
 
-        public async Task<int> GetNotificationCount(NotificationSearchParams searchParams = null)
-        {
+        public async Task<int> GetNotificationCount(NotificationSearchParams searchParams = null) {
             var query = _context.Notifications.AsQueryable();
 
             // 应用搜索条件
@@ -90,6 +94,9 @@ namespace Preferred.Api.Services
                     
                 if (searchParams.NotifyStatus.HasValue)
                     query = query.Where(x => x.NotifyStatus == searchParams.NotifyStatus.Value);
+
+                if (searchParams.SendStatus.HasValue)
+                    query = query.Where(x => x.SendStatus == searchParams.SendStatus.Value);
                     
                 if (!string.IsNullOrEmpty(searchParams.SendUser))
                     query = query.Where(x => x.SendUser.Contains(searchParams.SendUser));
@@ -116,6 +123,7 @@ namespace Preferred.Api.Services
                     Content = x.Content,
                     NotifyType = x.NotifyType,
                     NotifyStatus = x.NotifyStatus,
+                    SendStatus = x.SendStatus,
                     SendTime = x.SendTime,
                     SendUser = x.SendUser,
                     Receiver = x.Receiver,
@@ -147,6 +155,7 @@ namespace Preferred.Api.Services
                     Content = notificationDto.Content,
                     NotifyType = notificationDto.NotifyType,
                     NotifyStatus = notificationDto.NotifyStatus,
+                    SendStatus = notificationDto.SendStatus,
                     SendTime = notificationDto.SendTime,
                     SendUser = notificationDto.SendUser,
                     Receiver = notificationDto.Receiver,
@@ -198,6 +207,9 @@ namespace Preferred.Api.Services
                     
                 if (notificationDto.NotifyStatus.HasValue)
                     notification.NotifyStatus = notificationDto.NotifyStatus.Value;
+                    
+                if (notificationDto.SendStatus.HasValue)
+                    notification.SendStatus = notificationDto.SendStatus.Value;
                     
                 if (notificationDto.SendTime.HasValue)
                     notification.SendTime = notificationDto.SendTime.Value;
@@ -296,6 +308,124 @@ namespace Preferred.Api.Services
             }
         }
 
+       
+        public async Task<int> GetUnreadCount(string receiver)
+        {
+            if (string.IsNullOrWhiteSpace(receiver))
+                return 0;
+                
+            return await _context.Notifications
+                .Where(x => x.Receiver == receiver && x.IsRead == 0)
+                .CountAsync();
+        }
+
+        public async Task<ApiResponse<bool>> SendRegisterMessagesAsync(string receiver, string sender = "管理员")
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(receiver))
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "接收人不能为空", Data = false };
+                }
+                var now = DateTime.UtcNow;
+
+                var r1 = await CreateNotification(new NotificationCreateDto
+                {
+                    Name = "欢迎加入绿色健身",
+                    Content = "欢迎新用户加入绿色健身！祝您运动愉快。",
+                    NotifyType = "通知",
+                    NotifyStatus = 0,
+                    SendStatus = 1,
+                    SendTime = now,
+                    SendUser = sender,
+                    Receiver = receiver,
+                    Remark = "注册欢迎",
+                    SeqNo = 0
+                });
+
+                var r2 = await CreateNotification(new NotificationCreateDto
+                {
+                    Name = "绑定提醒",
+                    Content = "刚注册的会员需要联系教练进行绑定。",
+                    NotifyType = "提醒",
+                    NotifyStatus = 0,
+                    SendStatus = 1,
+                    SendTime = now,
+                    SendUser = sender,
+                    Receiver = receiver,
+                    Remark = "注册后绑定提醒",
+                    SeqNo = 0
+                });
+
+                var ok = (r1.Success && r2.Success);
+                var msg = ok ? "通知发送成功" : $"通知发送失败：{(r1.Success ? string.Empty : r1.Message)} {(r2.Success ? string.Empty : r2.Message)}".Trim();
+                return new ApiResponse<bool> { Success = ok, Message = msg, Data = ok };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<bool> { Success = false, Message = $"通知发送异常：{ex.Message}", Data = false };
+            }
+        }
+        public async Task<ApiResponse<bool>> SendNotification(int id, string sendUser)
+        {
+            try
+            {
+                var notification = await _context.Notifications.FindAsync(id);
+                if (notification == null)
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "通知不存在", Data = false };
+                }
+
+                notification.SendStatus = 1; // 已发送
+                notification.SendTime = DateTime.UtcNow;
+                if (string.IsNullOrWhiteSpace(notification.SendUser))
+                    notification.SendUser = sendUser;
+                notification.UpdTime = DateTime.UtcNow;
+
+                await _context.SaveChangesAsync();
+                return new ApiResponse<bool> { Success = true, Message = "发送成功", Data = true };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<bool> { Success = false, Message = $"发送失败：{ex.Message}", Data = false };
+            }
+        }
+        public async Task<ApiResponse<bool>> BatchSendNotifications(List<int> ids, string sendUser)
+        {
+            try
+            {
+                if (ids == null || ids.Count == 0)
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "通知ID列表不能为空", Data = false };
+                }
+
+                var notifications = await _context.Notifications
+                    .Where(x => ids.Contains(x.Id))
+                    .ToListAsync();
+
+                if (notifications.Count == 0)
+                {
+                    return new ApiResponse<bool> { Success = true, Message = "没有需要发送的通知", Data = true };
+                }
+
+                var now = DateTime.UtcNow;
+                foreach (var n in notifications)
+                {
+                    n.SendStatus = 1;
+                    n.SendTime = now;
+                    if (string.IsNullOrWhiteSpace(n.SendUser))
+                        n.SendUser = sendUser;
+                    n.UpdTime = now;
+                }
+
+                await _context.SaveChangesAsync();
+                return new ApiResponse<bool> { Success = true, Message = "批量发送成功", Data = true };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<bool> { Success = false, Message = $"批量发送失败：{ex.Message}", Data = false };
+            }
+        }
         public async Task<ApiResponse<bool>> BatchMarkAsRead(List<int> ids)
         {
             try
@@ -329,14 +459,51 @@ namespace Preferred.Api.Services
             }
         }
 
-        public async Task<int> GetUnreadCount(string receiver)
+        public async Task<ApiResponse<bool>> SendBookingCreatedToCoachAsync(int coachId, int memberId, DateTime bookDate, List<TimeSlotItem> timeSlots)
         {
-            if (string.IsNullOrWhiteSpace(receiver))
-                return 0;
-                
-            return await _context.Notifications
-                .Where(x => x.Receiver == receiver && x.IsRead == 0)
-                .CountAsync();
+            try
+            {
+                if (timeSlots == null || timeSlots.Count == 0)
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "预约时间段不能为空", Data = false };
+                }
+
+                var coach = await _context.Users.FindAsync(coachId);
+                var member = await _context.Users.FindAsync(memberId);
+                if (coach == null || member == null)
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "教练或会员不存在", Data = false };
+                }
+
+                var slotText = string.Join(", ", timeSlots.Select(s => $"{s.StartTime}-{s.EndTime}"));
+                var now = DateTime.UtcNow;
+
+                var create = await CreateNotification(new NotificationCreateDto
+                {
+                    Name = "会员预约提醒",
+                    Content = $"会员 {member.UserName} 于 {bookDate:yyyy-MM-dd} 提交预约，时段：{slotText}。",
+                    NotifyType = "提醒",
+                    NotifyStatus = 0,
+                    SendStatus = 1,
+                    SendTime = now,
+                    SendUser = "管理员",
+                    Receiver = coach.UserName,
+                    Remark = "会员预约成功后系统推送给教练",
+                    SeqNo = 0
+                });
+
+                var ok = create.Success;
+                return new ApiResponse<bool>
+                {
+                    Success = ok,
+                    Message = ok ? "通知发送成功" : $"通知发送失败：{create.Message}",
+                    Data = ok
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<bool> { Success = false, Message = $"发送预约提醒失败：{ex.Message}", Data = false };
+            }
         }
     }
 }

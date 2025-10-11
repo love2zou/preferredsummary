@@ -16,13 +16,12 @@
         <!-- 资料卡片 -->
         <section class="mini-card profile-card">
           <div class="profile-header">
-            <div class="avatar" v-if="profile?.profilePictureUrl">
-              <img :src="profile?.profilePictureUrl" alt="avatar" />
-            </div>
-            <div class="avatar" v-else>
-              <el-icon><User /></el-icon>
-            </div>
-            <!-- template：username 右侧显示用户类型标签，并使用返回的颜色 -->
+            <el-upload class="avatar-uploader" :show-file-list="false" accept="image/*" :before-upload="validateAvatar" :http-request="handleAvatarUpload">
+              <div class="avatar" role="button" aria-label="上传头像">
+                <img v-if="profile?.profilePictureUrl" :src="profile?.profilePictureUrl" alt="avatar" />
+                <div v-else class="avatar-placeholder"><span class="avatar-tip">上传头像</span></div>
+              </div>
+            </el-upload>
             <div class="user-info">
               <!-- template：username 右侧显示用户类型标签，并使用返回的颜色 -->
               <div class="name-row">
@@ -109,6 +108,7 @@ import { userService, type AdminUser } from '@/services/userService'
 import { useUserStore } from '@/stores/user'
 import { ArrowLeft, EditPen, Message, Phone, User } from '@element-plus/icons-vue'
 import { ElForm, ElMessage } from 'element-plus'
+import type { UploadRequestOptions } from 'element-plus'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -228,6 +228,37 @@ const userTypeTagType = computed(() => {
   return key === 'trainer' ? 'warning' : key === 'admin' ? 'danger' : 'success'
 })
 onMounted(fetchProfile)
+const uploadingAvatar = ref(false)
+
+function validateAvatar(file: File) {
+  const isImage = file.type.startsWith('image/')
+  const isLt2M = file.size / 1024 / 1024 < 2
+  if (!isImage) ElMessage.error('请上传图片文件')
+  if (!isLt2M) ElMessage.error('图片大小需小于2MB')
+  return isImage && isLt2M
+}
+
+const handleAvatarUpload = async (options: UploadRequestOptions) => {
+  uploadingAvatar.value = true
+  try {
+    const userIdVal = profile.value?.id
+    if (!userIdVal) {
+      ElMessage.error('用户信息缺失，无法上传头像')
+      return
+    }
+    const res = await userService.uploadAvatar(userIdVal, options.file as File)
+    const url = res?.data?.url
+    const safeUrl = url ? encodeURI(url) : ''
+    if (safeUrl && profile.value) {
+      profile.value.profilePictureUrl = safeUrl
+    }
+    ElMessage.success('头像上传成功')
+  } catch (e) {
+    ElMessage.error('头像上传失败')
+  } finally {
+    uploadingAvatar.value = false
+  }
+}
 </script>
 
 <style scoped>
@@ -283,4 +314,9 @@ onMounted(fetchProfile)
 
 .name-row { display: flex; align-items: center; gap: 8px; }
 .user-type-tag { transform: translateY(-1px); }
+.avatar-uploader { display: inline-block; cursor: pointer; }
+.avatar { width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 1px solid #eee; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-placeholder { width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; background: #f5f5f7; color: #999; }
+.avatar-tip { font-size: 12px; color: #666; }
 </style>

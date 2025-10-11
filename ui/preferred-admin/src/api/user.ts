@@ -29,7 +29,7 @@ export interface UserCreateParams {
   username: string
   email: string
   password: string
-  phoneNumber?: string
+  phoneNumber: string
   bio?: string
   userTypeCode?: string            // 改名：code
   userToSystemCode?: string        // 改名：code

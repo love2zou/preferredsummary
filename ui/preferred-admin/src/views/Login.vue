@@ -18,7 +18,7 @@
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
-            placeholder="用户名"
+            placeholder="用户名/手机号"
             prefix-icon="User"
           />
         </el-form-item>
@@ -75,7 +75,17 @@ const loginForm = reactive({
 
 const loginRules = {
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' }
+    { required: true, message: '请输入用户名或手机号', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
+        const v = (value || '').trim()
+        const phoneRe = /^1[3-9]\d{9}$/
+        // 手机号合规 或 用户名长度≥3 即通过
+        if (phoneRe.test(v) || v.length >= 3) return callback()
+        callback(new Error('请输入至少3位用户名或正确的手机号'))
+      },
+      trigger: 'blur'
+    }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -121,15 +131,14 @@ const handleLoginError = (error: any) => {
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-
-  // 先清除之前可能存在的错误提示
+  // 先清除可能存在的提示
   ElMessage.closeAll()
-  
   await loginFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
       try {
-        await authStore.login(loginForm)
+        const account = loginForm.username.trim()
+        await authStore.login({ username: account, password: loginForm.password })
       } catch (error) {
         console.error('登录失败:', error)
         handleLoginError(error)

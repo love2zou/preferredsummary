@@ -35,7 +35,7 @@ namespace Preferred.Api.Models
         /// </summary>
         /// <example>john_doe</example>
         [Required(ErrorMessage = "用户名不能为空")]
-        [StringLength(50, MinimumLength = 3, ErrorMessage = "用户名长度必须在3-50个字符之间")]
+        [StringLength(20, ErrorMessage = "用户名长度不能超过20个字符")]
         public string Username { get; set; } = string.Empty;
 
         /// <summary>

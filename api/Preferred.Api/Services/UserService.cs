@@ -31,13 +31,16 @@ namespace Preferred.Api.Services
         }
 
         // 注册
+        // 方法：Register(UserDto userDto)
         public async Task<bool> Register(UserDto userDto)
         {
             if (await _context.Users.AnyAsync(u => u.UserName == userDto.Username))
             {
                 return false;
             }
-            if (!string.IsNullOrEmpty(userDto.Email) && await _context.Users.AnyAsync(u => u.Email == userDto.Email))
+            // 新增：手机号唯一校验（不为空时才校验）
+            if (!string.IsNullOrWhiteSpace(userDto.PhoneNumber) &&
+                await _context.Users.AnyAsync(u => u.PhoneNumber == userDto.PhoneNumber))
             {
                 return false;
             }
@@ -66,10 +69,11 @@ namespace Preferred.Api.Services
             return true;
         }
 
-        // 登录
+        // 登录：支持用户名或手机号
         public async Task<LoginResult> Login(string username, string password)
         {
-            var user = await GetUserByUsername(username);
+            var user = await _context.Users
+                .FirstOrDefaultAsync(u => u.UserName == username || u.PhoneNumber == username);
             if (user == null)
             {
                 return new LoginResult { ResultType = LoginResultType.UserNotFound, Message = "账号不存在" };
@@ -78,17 +82,17 @@ namespace Preferred.Api.Services
             {
                 return new LoginResult { ResultType = LoginResultType.UserDisabled, Message = "账号已被禁用，请联系管理员" };
             }
-
+        
             var passwordHash = HashPassword(password, user.Salt);
             if (passwordHash != user.PasswordHash)
             {
                 return new LoginResult { ResultType = LoginResultType.PasswordIncorrect, Message = "密码错误" };
             }
-
+        
             user.LastLoginTime = DateTime.UtcNow;
             user.UpdTime = DateTime.UtcNow;
             await _context.SaveChangesAsync();
-
+        
             var token = GenerateJwtToken(user);
             return new LoginResult
             {
@@ -96,10 +100,10 @@ namespace Preferred.Api.Services
                 Data = new LoginResponseDto
                 {
                     Token = token,
-                    UserId = user.Id,   
+                    UserId = user.Id,
                     UserName = user.UserName,
-                    UserTypeCode = user.UserTypeCode,
-                    Email = user.Email
+                    UserTypeCode = user.UserTypeCode ?? string.Empty,
+                    Email = user.Email ?? string.Empty
                 },
                 Message = "登录成功"
             };

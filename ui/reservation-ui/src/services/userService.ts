@@ -32,5 +32,13 @@ export const userService = {
     // 获取用户列表（分页），用于筛选教练候选
     list(page = 1, size = 100, params?: { username?: string; email?: string; isActive?: boolean }) {
         return adminApi.get('/user/list', { params: { page, size, ...(params || {}) } })
+    },
+    uploadAvatar(id: number, file: File) {
+        const form = new FormData()
+        form.append('file', file)            // 后端 PictureController 要求字段名为 file
+        form.append('aspectRatio', '1:1')    // 可选：示例宽高比
+        return adminApi.post('/picture/upload', form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        })
     }
 }

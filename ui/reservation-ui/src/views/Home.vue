@@ -283,10 +283,14 @@ const isTrainerUI = computed(() => {
 .hero-card { padding: 0; overflow: hidden; }
 .hero-banner {
   height: 240px;
-  background: linear-gradient(135deg, var(--primary-color), var(--primary-color-600));
   position: relative;
+  /* 使用 src/images 下的相对路径 */
+  background: linear-gradient(135deg, rgba(0,0,0,0.35), rgba(0,0,0,0.35)), url('../images/home.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
-.hero-text { position: absolute; left: 16px; bottom: 16px; color: #fff; }
+.hero-text { position: absolute; left: 16px; bottom: 16px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.25); }
 .hero-text h2 { margin: 0; font-size: 22px; font-weight: 700; }
 .hero-text p { margin: 6px 0 0; font-size: 13px; opacity: .95; }
 .section-divider { height: 1px; background: var(--border-color); margin: 0 16px; opacity: .6; }

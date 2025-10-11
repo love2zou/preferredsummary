@@ -65,8 +65,8 @@
             <!-- 图片预览区域 -->
             <div class="image-preview">
               <el-image
-                :src="getImageUrl(item.imagePath)"
-                :preview-src-list="[getImageUrl(item.imagePath)]"
+                :src="item.imagePath"
+                :preview-src-list="[item.imagePath]"
                 fit="cover"
                 class="card-image"
                 :preview-teleported="true"
@@ -212,7 +212,7 @@
               <!-- 如果没有裁剪图片，显示服务器图片（仅编辑模式） -->
               <img 
                 v-else-if="formData.imagePath" 
-                :src="getImageUrl(formData.imagePath)" 
+                :src="formData.imagePath" 
                 class="uploaded-image" 
               />
               <div class="image-actions">
@@ -339,26 +339,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Refresh, Picture as PictureIcon } from '@element-plus/icons-vue'
 import { pictureApi, type Picture, type PictureDto } from '@/api/picture'
 import { tagApi } from '@/api/tag'
-
-// 添加API基础URL配置
-const API_BASE_URL = 'http://localhost:5000'
-
-// 添加图片URL处理函数
-const getImageUrl = (imagePath: string) => {
-  console.log('处理图片路径:', imagePath)
-  if (!imagePath) return ''
-  if (imagePath.startsWith('http')) {
-    return imagePath // 已经是完整URL
-  }
-  const fullUrl = `${API_BASE_URL}${imagePath}`
-  console.log('生成的完整URL:', fullUrl)
-  return fullUrl // 拼接基础URL
-}
+import { toServerPath } from '@/utils/url'
+import { Picture as PictureIcon, Plus, Refresh, Search } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 
 // 创建表单专用接口
 interface PictureFormData {
@@ -953,6 +939,8 @@ const handleAdd = () => {
 // 编辑图片
 const handleEdit = (row: Picture) => {
   isEdit.value = true
+  // 关键：先清理上一次的临时裁剪预览，避免旧 blob URL 覆盖真实图片
+  cleanupTempImage()
   originalImagePath.value = row.imagePath // 保存原始图片路径
   Object.assign(formData, { ...row })
   dialogVisible.value = true
@@ -991,7 +979,7 @@ const loadImageList = async () => {
     console.log('图片列表数据:', imageList.value)
     if (imageList.value.length > 0) {
       console.log('第一张图片原始路径:', imageList.value[0].imagePath)
-      console.log('第一张图片完整URL:', getImageUrl(imageList.value[0].imagePath))
+      console.log('第一张图片完整URL:', imageList.value[0].imagePath)
     }
   } catch (error) {
     console.error('加载图片列表失败:', error)
@@ -1042,8 +1030,9 @@ const handleSubmit = async () => {
         if (isEdit.value && croppedImageBlob.value && originalImagePath.value) {
           try {
             console.log('编辑模式：准备删除旧图片:', originalImagePath.value)
-            // 使用原始图片路径删除旧图片
-            await pictureApi.deleteImageFile(originalImagePath.value)
+            // 关键：将完整 URL 规范为后端识别的相对路径
+            const pathForDelete = toServerPath(originalImagePath.value)
+            await pictureApi.deleteImageFile(pathForDelete)
             console.log('旧图片删除成功')
           } catch (deleteError) {
             console.warn('删除旧图片失败，但继续上传新图片:', deleteError)

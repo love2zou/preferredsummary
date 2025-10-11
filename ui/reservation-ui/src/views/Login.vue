@@ -75,9 +75,19 @@ const loginForm = reactive({
   password: ''
 })
 
+// 新增：用户名/手机号校验（支持手机号或≥3位用户名）
 const rules = {
   username: [
-    { required: true, message: '请输入用户名或手机号', trigger: 'blur' }
+    { required: true, message: '请输入用户名或手机号', trigger: 'blur' },
+    {
+      validator: (_rule: any, value: string, callback: (err?: Error) => void) => {
+        const v = (value || '').trim()
+        const phoneRe = /^1[3-9]\d{9}$/
+        if (phoneRe.test(v) || v.length >= 3) return callback()
+        callback(new Error('请输入至少3位用户名或正确的手机号'))
+      },
+      trigger: 'blur'
+    }
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
@@ -93,8 +103,12 @@ const handleLogin = async () => {
     await formRef.value.validate()
     loading.value = true
 
+    const raw = (loginForm.username || '').trim()
+    const phoneRe = /^1[3-9]\d{9}$/
+    const standardizedUsername = phoneRe.test(raw) ? raw : raw // 后端已支持手机号按 username 字段登录
+
     const resp = await authService.login({
-      username: loginForm.username,
+      username: standardizedUsername,
       password: loginForm.password
     })
 

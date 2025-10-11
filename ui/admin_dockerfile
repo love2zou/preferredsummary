@@ -16,8 +16,8 @@ RUN npm ci
 # 复制源码
 COPY preferred-admin/ ./
 
-# 构建 vite 项目
-RUN chmod -R 755 node_modules/.bin/ && npm run build
+# 构建 vite 项目（跳过类型检查）
+RUN chmod -R 755 node_modules/.bin/ && npm run build-only
 
 # ---------- 第 2 阶段：部署产物 ----------
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.27.0

@@ -1,0 +1,24 @@
+# 通用忽略
+**/node_modules
+**/dist
+**/dist-ssr
+**/.git
+**/.gitignore
+**/.DS_Store
+**/coverage
+**/logs
+
+# 测试相关（不参与镜像构建）
+**/cypress
+**/__tests__
+
+# 仅保留 admin 构建必需文件
+!admin_dockerfile
+!admin_nginx.conf
+!preferred-admin/**
+
+# 在 preferred-admin 下仍需忽略不必要内容
+preferred-admin/node_modules
+preferred-admin/dist
+preferred-admin/coverage
+preferred-admin/cypress

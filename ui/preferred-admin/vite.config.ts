@@ -1,5 +1,4 @@
 import { fileURLToPath, URL } from 'node:url'
-
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueJsx from '@vitejs/plugin-vue-jsx'
@@ -8,9 +7,10 @@ import vueJsx from '@vitejs/plugin-vue-jsx'
 export default defineConfig({
   plugins: [vue()],
   build: {
-    sourcemap: false,           // 不生成 map，加快打包
-    minify: 'esbuild',          // 使用 esbuild（默认也用）
-    cssCodeSplit: true,         // 拆分 css
+    sourcemap: false,
+    minify: 'esbuild',
+    cssCodeSplit: true,
+    reportCompressedSize: false, // 新增：不计算 gzip/br 体积，加快打包
   },
   resolve: {
     alias: {

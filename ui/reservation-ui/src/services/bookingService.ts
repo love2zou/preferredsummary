@@ -3,6 +3,7 @@ import api from '@/api'
 export interface BoundCoach {
   coachId: number
   coachName: string
+  avatarUrl?: string | null
 }
 
 export interface AvailableSlot {

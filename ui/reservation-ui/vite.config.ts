@@ -29,7 +29,9 @@ export default defineConfig(({ mode }) => {
       force: true
     },
     build: {
-      sourcemap: true
+      // 生产环境关闭 source map、压缩体积报告以提升速度
+      sourcemap: false,
+      reportCompressedSize: false
     }
   }
 })
