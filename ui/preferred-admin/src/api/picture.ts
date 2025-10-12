@@ -105,10 +105,11 @@ export const pictureApi = {
     })
   },
 
-  // 删除图片文件
-  deleteImageFile(imagePath: string) {
+  // 删除图片文件（新增可选参数 forceLocal）
+  deleteImageFile(imagePath: string, opts?: { forceLocal?: boolean }) {
+    const url = `/api/picture/file?imagePath=${encodeURIComponent(imagePath)}${opts?.forceLocal ? '&forceLocal=true' : ''}`
     return request({
-      url: `/api/picture/file?imagePath=${encodeURIComponent(imagePath)}`,
+      url,
       method: 'delete'
     })
   }

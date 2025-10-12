@@ -165,49 +165,83 @@ namespace Preferred.Api.Controllers
         [HttpPost("upload")]
         [ProducesResponseType(typeof(ApiResponse<UploadResponse>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        // class PictureController
         public async Task<IActionResult> UploadImage(IFormFile file, [FromForm] string aspectRatio)
         {
-            // 当使用远程访问时，优先代理到生产环境上传
-            if (_fileStorageConfig.UseRemoteAccess)
+            // 当使用远程访问时，优先代理到生产环境上传，但避免“自我代理”
+            var currentHost = Request.Host.Host;
+            var currentPort = Request.Host.Port ?? (Request.Scheme == "https" ? 443 : 80);
+            var remoteHost = _fileStorageConfig.ServerHost;
+            var remotePort = 0;
+            int.TryParse(_fileStorageConfig.ServerPort, out remotePort);
+            var isSelf = string.Equals(remoteHost, currentHost, StringComparison.OrdinalIgnoreCase)
+                         && (remotePort == 0 ? currentPort == currentPort : remotePort == currentPort);
+        
+            if (_fileStorageConfig.UseRemoteAccess && !isSelf)
             {
                 try
                 {
                     var remoteBase = $"http://{_fileStorageConfig.ServerHost}:{_fileStorageConfig.ServerPort}";
                     var remoteUploadUrl = $"{remoteBase}/api/picture/upload";
-            
-                    using var client = new HttpClient();
-                    if (Request.Headers.TryGetValue("Authorization", out var auth))
+                    using (var client = new HttpClient())
                     {
-                        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", auth.ToString());
-                    }
-            
-                    using var content = new MultipartFormDataContent();
-                    using var stream = file.OpenReadStream();
-                    var streamContent = new StreamContent(stream);
-                    streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(file.ContentType);
-                    content.Add(streamContent, "file", file.FileName);
-                    if (!string.IsNullOrEmpty(aspectRatio))
-                    {
-                        content.Add(new StringContent(aspectRatio), "aspectRatio");
-                    }
-            
-                    var resp = await client.PostAsync(remoteUploadUrl, content);
-                    if (resp.IsSuccessStatusCode)
-                    {
-                        var json = await resp.Content.ReadAsStringAsync();
-                        // 反序列化为统一响应返回
-                        var result = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<UploadResponse>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                        if (result != null)
+                        client.Timeout = TimeSpan.FromSeconds(30);
+                        client.DefaultRequestHeaders.ExpectContinue = false;
+                        if (Request.Headers.TryGetValue("Authorization", out var auth))
                         {
-                            return Ok(result);
+                            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", auth.ToString());
                         }
-                        return Content(json, "application/json");
+                        using (var content = new MultipartFormDataContent())
+                        {
+                            using (var stream = file.OpenReadStream())
+                            {
+                                var fileContent = new StreamContent(stream);
+                                fileContent.Headers.ContentType = new MediaTypeHeaderValue(string.IsNullOrEmpty(file.ContentType) ? "application/octet-stream" : file.ContentType);
+                                var originalNoExt = Path.GetFileNameWithoutExtension(string.IsNullOrEmpty(file.FileName) ? "upload" : file.FileName);
+                                var safeName = new string(originalNoExt.Select(ch => char.IsLetterOrDigit(ch) ? ch : '_').ToArray());
+                                if (string.IsNullOrWhiteSpace(safeName)) safeName = "image";
+                                var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+                                var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+                                var desiredFileName = $"{safeName}{timestamp}{ext}";
+                                fileContent.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data")
+                                {
+                                    Name = "file",
+                                    FileName = desiredFileName,
+                                    FileNameStar = desiredFileName // RFC 5987, UTF-8 文件名
+                                };
+                                content.Add(fileContent);
+                                if (!string.IsNullOrEmpty(aspectRatio))
+                                {
+                                    content.Add(new StringContent(aspectRatio, Encoding.UTF8), "aspectRatio");
+                                }
+                                var resp = await client.PostAsync(remoteUploadUrl, content);
+                                if (resp == null)
+                                {
+                                    return StatusCode(502, new ApiErrorResponse { Message = "远程上传未返回响应" });
+                                }
+                                if (resp.IsSuccessStatusCode)
+                                {
+                                    var json = await resp.Content.ReadAsStringAsync();
+                                    var result = System.Text.Json.JsonSerializer.Deserialize<ApiResponse<UploadResponse>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    if (result != null)
+                                    {
+                                        return Ok(result);
+                                    }
+                                    return Content(json, "application/json");
+                                }
+                                else
+                                {
+                                    var err = await resp.Content.ReadAsStringAsync();
+                                    Console.WriteLine($"Remote upload failed: {(int)resp.StatusCode} {err}");
+                                    // 回退到本地
+                                }
+                            }
+                        }
                     }
-                    // 远程失败则回退到本地保存
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Remote upload failed: {ex.Message}");
+                    Console.WriteLine($"Remote upload exception: {ex.Message}");
                     // 回退到本地保存逻辑
                 }
             }
@@ -233,9 +267,11 @@ namespace Preferred.Api.Controllers
                 }
 
                 // 使用GUID生成URL安全文件名，避免中文与特殊字符
-                var fileName = $"{Guid.NewGuid()}{fileExtension}";
-                var filePath = Path.Combine(_uploadPath, fileName);
-                var accessUrl = _fileStorageConfig.GetImageUrl(fileName);
+                var fileName = Path.GetFileNameWithoutExtension(file.FileName);
+                var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+                var desiredFileName = $"{fileName}{timestamp}{fileExtension}";
+                var filePath = Path.Combine(_uploadPath, desiredFileName);
+                var accessUrl = _fileStorageConfig.GetImageUrl(desiredFileName);
 
                 // 保存文件
                 using (var stream = new FileStream(filePath, FileMode.Create))
@@ -424,46 +460,81 @@ namespace Preferred.Api.Controllers
         [HttpDelete("file")]
         [ProducesResponseType(typeof(ApiResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        public async Task<IActionResult> DeleteImageFile([FromQuery] string imagePath)
+        public async Task<IActionResult> DeleteImageFile([FromQuery] string imagePath, [FromQuery] bool forceLocal = false)
         {
-            // 兼容完整URL：取 pathname 作为后端识别的相对路径
-            string normalizedPath = imagePath;
-            if (Uri.TryCreate(imagePath, UriKind.Absolute, out var uri))
+            if (string.IsNullOrWhiteSpace(imagePath))
             {
-                normalizedPath = uri.AbsolutePath;
+                return BadRequest(new ApiErrorResponse { Message = "图片路径不能为空" });
             }
-        
-            if (_fileStorageConfig.UseRemoteAccess)
+
+            // 当强制本地删除时，直接在当前服务删除物理文件（供远端调用时使用）
+            if (forceLocal)
             {
                 try
                 {
-                    var remoteBase = $"http://{_fileStorageConfig.ServerHost}:{_fileStorageConfig.ServerPort}";
-                    var remoteDeleteUrl = $"{remoteBase}/api/picture/file?imagePath={Uri.EscapeDataString(normalizedPath)}";
-        
-                    using var client = new HttpClient();
-                    if (Request.Headers.TryGetValue("Authorization", out var auth))
+                    var decoded = Uri.UnescapeDataString(imagePath);
+                    Uri.TryCreate(decoded, UriKind.Absolute, out var imageUri);
+                    var fileName = imageUri != null ? Path.GetFileName(imageUri.LocalPath) : Path.GetFileName(decoded);
+                    if (string.IsNullOrWhiteSpace(fileName))
                     {
-                        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", auth.ToString());
+                        return BadRequest(new ApiErrorResponse { Message = "无法解析图片文件名" });
                     }
-        
-                    var resp = await client.DeleteAsync(remoteDeleteUrl);
-                    var body = await resp.Content.ReadAsStringAsync();
-                    return StatusCode((int)resp.StatusCode, body);
+
+                    var physicalPath = Path.Combine(_uploadPath, fileName);
+                    if (System.IO.File.Exists(physicalPath))
+                    {
+                        System.IO.File.Delete(physicalPath);
+                        return Ok(new ApiResponse { Success = true, Message = "图片文件删除成功" });
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Remote delete failed: {ex.Message}");
-                    // 转本地删除作为回退
+                    return StatusCode(500, new ApiErrorResponse { Message = "本地删除失败", Details = ex.Message });
                 }
             }
-        
-            // 本地删除回退
-            var result = await _pictureService.DeleteImageFile(normalizedPath);
-            if (!result)
+
+            // 远程删除（避免自我代理）
+            var currentHost = Request.Host.Host;
+            var currentPort = Request.Host.Port ?? (Request.Scheme == "https" ? 443 : 80);
+            Uri.TryCreate(imagePath, UriKind.Absolute, out var imageUri2);
+            var remoteHost = imageUri2?.Host ?? _fileStorageConfig.ServerHost;
+            int.TryParse(_fileStorageConfig.ServerPort, out var cfgPort);
+            var remotePort = imageUri2 != null && !imageUri2.IsDefaultPort ? imageUri2.Port : (cfgPort > 0 ? cfgPort : -1);
+            var scheme = imageUri2?.Scheme ?? Request.Scheme ?? "http";
+
+            var defaultPort = scheme == "https" ? 443 : 80;
+            var isSelf = string.Equals(remoteHost, currentHost, StringComparison.OrdinalIgnoreCase)
+                         && ((remotePort == -1 && (defaultPort == currentPort)) || (remotePort == currentPort));
+            if (isSelf)
             {
-                return BadRequest(new ApiErrorResponse { Message = "图片文件不存在或删除失败" });
+                return BadRequest(new ApiErrorResponse { Message = "远程地址即当前服务，已阻止循环删除。请在远端调用并传入 forceLocal=true。" });
             }
-            return Ok(new ApiResponse { Message = "图片文件删除成功" });
+
+            try
+            {
+                using var client = new HttpClient();
+                if (Request.Headers.TryGetValue("Authorization", out var auth))
+                {
+                    client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", auth.ToString());
+                }
+
+                var portPart = (remotePort > 0 && remotePort != defaultPort) ? $":{remotePort}" : string.Empty;
+                var remoteBase = $"{scheme}://{remoteHost}{portPart}";
+                var remoteDeleteUrl = $"{remoteBase}/api/picture/file?imagePath={Uri.EscapeDataString(imagePath)}&forceLocal=true";
+
+                using var resp = await client.DeleteAsync(remoteDeleteUrl);
+                var body = await resp.Content.ReadAsStringAsync();
+                if (resp.IsSuccessStatusCode)
+                {
+                    return Ok(new ApiResponse { Success = true, Message = "图片文件删除成功" });
+                }
+                return StatusCode((int)resp.StatusCode, string.IsNullOrWhiteSpace(body) ? new ApiErrorResponse { Message = "远程删除失败" } : (object)body);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Remote delete failed: {ex.Message}");
+                return StatusCode(502, new ApiErrorResponse { Message = "远程删除失败", Details = ex.Message });
+            }
         }
 
         /// <summary>

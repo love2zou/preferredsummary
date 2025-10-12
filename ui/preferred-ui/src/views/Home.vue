@@ -14,6 +14,10 @@
           />
         </div>
       </div>
+      <!-- 将按钮替换为纯图标，固定右上角 -->
+      <el-icon class="admin-login-icon" @click="openAdminLogin">
+        <User />
+      </el-icon>
     </div>
 
     <!-- 主要内容区域 -->
@@ -112,16 +116,15 @@
 </template>
 
 <script setup lang="ts">
+import { getIconClass, getIconComponent, isElementIcon } from '@/data/iconLibrary'
 import { API_CONFIG } from '@/services/api'
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Search, Link, Folder, Setting, House, Star, Grid, Document, Menu, More, Management, Files, DataBoard } from '@element-plus/icons-vue'
-import { getIconComponent, getIconClass, isElementIcon } from '@/data/iconLibrary'
+import AutoLoginService from '@/services/autoLoginService'
 import { categoryService, type Category } from '@/services/categoryService'
 import { networkUrlService, type NetworkUrlListDto, type TagInfo } from '@/services/networkUrlService'
-import { pictureService, type Picture } from '@/services/pictureService'
 import { tagService, type Tag } from '@/services/tagService'
-import AutoLoginService from '@/services/autoLoginService'
+import { Link, User } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
 
 // 移除临时定义的 TagInfo 接口
 // interface TagInfo {
@@ -456,7 +459,13 @@ onMounted(async () => {
 watch(activeTab, () => {
   loadWebsites()
 })
+const ADMIN_LOGIN_URL = (import.meta.env.VITE_ADMIN_BASE_URL
+  ? `${import.meta.env.VITE_ADMIN_BASE_URL}/login`
+  : `${window.location.protocol}//${window.location.hostname}:8081/login`)
 
+const openAdminLogin = (): void => {
+  window.open(ADMIN_LOGIN_URL, '_blank')
+}
 // // 图标组件处理
 // const isElementIcon = (iconName: string): boolean => {
 //   const elementIcons = ['Folder', 'Setting', 'House', 'Star', 'Grid', 'Document', 'Menu', 'More', 'Management', 'Files', 'DataBoard']
@@ -499,6 +508,7 @@ watch(activeTab, () => {
   margin: 0 auto;
   display: flex;
   justify-content: center;
+  align-items: center;
 }
 
 .search-container {
@@ -509,6 +519,20 @@ watch(activeTab, () => {
   border-radius: 20px;
 }
 
+.top-header {
+  position: relative; /* 使右上角定位生效 */
+}
+.admin-login-icon {
+  position: absolute;
+  top: 10px;
+  right: 16px;
+  font-size: 20px; /* 图标大小 */
+  color: var(--el-color-primary);
+  cursor: pointer;
+}
+.admin-login-icon:hover {
+  filter: brightness(1.1);
+}
 .main-content {
   max-width: 1200px;
   margin: 0 auto;

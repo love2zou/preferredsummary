@@ -1229,7 +1229,7 @@
             <param name="id">图片ID</param>
             <returns>删除结果</returns>
         </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.DeleteImageFile(System.String)">
+        <member name="M:Preferred.Api.Controllers.PictureController.DeleteImageFile(System.String,System.Boolean)">
             <summary>
             删除图片文件
             </summary>

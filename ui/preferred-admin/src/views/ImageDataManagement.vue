@@ -341,7 +341,6 @@
 <script setup lang="ts">
 import { pictureApi, type Picture, type PictureDto } from '@/api/picture'
 import { tagApi } from '@/api/tag'
-import { toServerPath } from '@/utils/url'
 import { Picture as PictureIcon, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
@@ -1029,10 +1028,7 @@ const handleSubmit = async () => {
         // 如果是编辑模式且有新图片，先删除旧图片
         if (isEdit.value && croppedImageBlob.value && originalImagePath.value) {
           try {
-            console.log('编辑模式：准备删除旧图片:', originalImagePath.value)
-            // 关键：将完整 URL 规范为后端识别的相对路径
-            const pathForDelete = toServerPath(originalImagePath.value)
-            await pictureApi.deleteImageFile(pathForDelete)
+            await pictureApi.deleteImageFile(originalImagePath.value, { forceLocal: true })
             console.log('旧图片删除成功')
           } catch (deleteError) {
             console.warn('删除旧图片失败，但继续上传新图片:', deleteError)
