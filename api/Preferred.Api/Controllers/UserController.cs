@@ -295,6 +295,31 @@ namespace Preferred.Api.Controllers
                 return StatusCode(500, new ApiErrorResponse { Message = "修改密码失败", Details = ex.Message });
             }
         }
-         
+
+        /// <summary>
+        /// 生成用户名和姓名对
+        /// </summary>
+        [HttpGet("generate-name-pair")]
+        public async Task<ActionResult<ApiResponse<UserNamePair>>> GenerateUserNamePair()
+        {
+            try
+            {
+                var namePair = await _userService.GenerateUserNamePair();
+                return Ok(new ApiResponse<UserNamePair> 
+                { 
+                    Data = namePair, 
+                    Success = true,
+                    Message = "用户名和姓名生成成功"
+                });
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new ApiResponse<UserNamePair> 
+                { 
+                    Success = false, 
+                    Message = $"生成失败: {ex.Message}" 
+                });
+            }
+        }
     }
 }

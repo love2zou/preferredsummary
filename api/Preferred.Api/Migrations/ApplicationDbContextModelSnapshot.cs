@@ -599,6 +599,11 @@ namespace Preferred.Api.Migrations
                         .HasColumnType("varchar(100) CHARACTER SET utf8mb4")
                         .HasMaxLength(100);
 
+                    // 新增：FullName 字段配置
+                    b.Property<string>("FullName")
+                        .HasColumnType("varchar(100) CHARACTER SET utf8mb4")
+                        .HasMaxLength(100);
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("tinyint(1)");
 

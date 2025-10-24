@@ -14,6 +14,8 @@ namespace Preferred.Api.Models
         public string? PhoneNumber { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public string? Bio { get; set; }
+        // 新增：昵称或姓名
+        public string? FullName { get; set; }
         public bool IsActive { get; set; } = true;
         public bool IsEmailVerified { get; set; } = false;
         public DateTime CrtTime { get; set; }
@@ -54,6 +56,10 @@ namespace Preferred.Api.Models
         [StringLength(100, ErrorMessage = "邮箱长度不能超过100个字符")]
         public string? Email { get; set; }
         
+        // 新增：昵称或姓名（可选）
+        [StringLength(100, ErrorMessage = "昵称或姓名长度不能超过100个字符")]
+        public string? FullName { get; set; }
+
         /// <summary>
         /// 电话号码
         /// </summary>
@@ -142,6 +148,8 @@ namespace Preferred.Api.Models
         public int Id { get; set; }
         public string UserName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
+        // 新增：昵称或姓名
+        public string? FullName { get; set; }
         public string? PhoneNumber { get; set; }
         public string? Bio { get; set; }
         public bool IsActive { get; set; }
@@ -167,19 +175,17 @@ namespace Preferred.Api.Models
         [StringLength(100, ErrorMessage = "邮箱长度不能超过100个字符")]
         [EmailAddress(ErrorMessage = "邮箱格式不正确")]
         public string? Email { get; set; }
-        
+        // 新增：昵称或姓名（与数据库约束一致）
+        [StringLength(100, ErrorMessage = "昵称或姓名长度不能超过100个字符")]
+        public string? FullName { get; set; }
         [StringLength(20, ErrorMessage = "电话号码长度不能超过20个字符")]
         public string? PhoneNumber { get; set; }
-        
         [StringLength(500, ErrorMessage = "个人简介长度不能超过500个字符")]
         public string? Bio { get; set; }
-        
         public bool? IsActive { get; set; }
-        
         public bool? IsEmailVerified { get; set; }
         [StringLength(50, ErrorMessage = "用户类型长度不能超过50个字符")]
         public string UserTypeCode { get; set; }
-    
         [StringLength(100, ErrorMessage = "所属系统长度不能超过100个字符")]
         public string UserToSystemCode { get; set; }
         [StringLength(200, ErrorMessage = "头像地址长度不能超过200个字符")]
@@ -205,6 +211,9 @@ namespace Preferred.Api.Models
         /// 用户状态筛选
         /// </summary>
         public bool? IsActive { get; set; }
+
+        // 新增：FullName 搜索
+        public string? FullName { get; set; }
     }
 
     /// <summary>

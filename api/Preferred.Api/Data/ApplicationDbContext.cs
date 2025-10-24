@@ -34,6 +34,9 @@ namespace Preferred.Api.Data
                 entity.HasKey(e => e.Id);
 
                 entity.Property(e => e.UserName).IsRequired().HasMaxLength(50);
+                // 新增：FullName 字段映射
+                entity.Property(e => e.FullName).HasMaxLength(100)
+                      .HasComment("昵称或姓名");
                 entity.Property(e => e.Email).IsRequired().HasMaxLength(100);
                 entity.Property(e => e.CrtTime);
                 entity.Property(e => e.UpdTime);

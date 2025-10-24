@@ -550,6 +550,12 @@
             批量删除结果
             </summary>
         </member>
+        <member name="M:Preferred.Api.Services.IUserService.GenerateUserNamePair">
+            <summary>
+            生成用户名和姓名对
+            </summary>
+            <returns>包含英文用户名和中文姓名的对象</returns>
+        </member>
         <member name="T:Preferred.Api.Services.NetworkUrlService">
             <summary>
             访问地址服务实现
@@ -831,6 +837,16 @@
             </summary>
             <param name="ids">标签ID数组</param>
             <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Services.UserService.GenerateUserNamePair">
+            <summary>
+            生成用户名和姓名对
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.UserService.CombineChineseName(System.String,System.String,System.String,System.Random)">
+            <summary>
+            组合中文姓名，确保流畅性和意境
+            </summary>
         </member>
         <member name="T:Preferred.Api.Controllers.AuthController">
             <summary>
@@ -1511,6 +1527,11 @@
             <param name="changePasswordDto">修改密码信息</param>
             <returns>操作结果</returns>
         </member>
+        <member name="M:Preferred.Api.Controllers.UserController.GenerateUserNamePair">
+            <summary>
+            生成用户名和姓名对
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
             API响应基础模型
@@ -1536,6 +1557,21 @@
         <member name="P:Preferred.Api.Models.ApiResponse`1.ErrorCode">
             <summary>
             错误代码（可选）
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.UserNamePair">
+            <summary>
+            用户名和姓名对
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.UserNamePair.UserName">
+            <summary>
+            英文用户名
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.UserNamePair.FullName">
+            <summary>
+            中文姓名
             </summary>
         </member>
         <member name="T:Preferred.Api.Models.ApiResponse">

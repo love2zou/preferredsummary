@@ -10,28 +10,38 @@
       
       <!-- 搜索和操作区域 -->
       <div class="search-section">
-        <el-row :gutter="20">
-          <el-col :span="5">
+        <el-row :gutter="16">
+          <el-col :span="4">
             <el-input
-            v-model="searchForm.username"
-            placeholder="搜索用户名"
-            :prefix-icon="Search"
-            clearable
-          />
+              v-model="searchForm.username"
+              placeholder="搜索用户名"
+              :prefix-icon="Search"
+              clearable
+            />
           </el-col>
-          <el-col :span="5">
+          <!-- 新增：按 FullName 搜索 -->
+          <el-col :span="4">
             <el-input
-            v-model="searchForm.email"
-            placeholder="搜索邮箱"
-            :prefix-icon="Message"
-            clearable
-          />
+              v-model="searchForm.fullName"
+              placeholder="搜索姓名"
+              :prefix-icon="User"
+              clearable
+            />
           </el-col>
           <el-col :span="4">
+            <el-input
+              v-model="searchForm.email"
+              placeholder="搜索邮箱"
+              :prefix-icon="Message"
+              clearable
+            />
+          </el-col>
+          <el-col :span="3">
             <el-select
               v-model="searchForm.isActive"
               placeholder="用户状态"
               clearable
+              style="width: 100%"
             >
               <el-option label="激活" :value="true" />
               <el-option label="禁用" :value="false" />
@@ -47,7 +57,7 @@
               重置
             </el-button>
           </el-col>
-          <el-col :span="5" style="text-align: right">
+          <el-col :span="4" style="text-align: right">
             <el-button type="success" @click="handleAdd">
               <el-icon><Plus /></el-icon>
               新增
@@ -79,21 +89,16 @@
             </template>
           </el-table-column>
           <el-table-column prop="userName" label="用户名" width="100" />
+          <!-- 新增：FullName 列，显示在用户名后 -->
+          <el-table-column prop="fullName" label="姓名" width="140">
+            <template #default="scope">
+              {{ scope.row.fullName || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="email" label="邮箱" min-width="120" />
           <el-table-column prop="phoneNumber" label="电话号码" width="120">
             <template #default="scope">
               {{ scope.row.phoneNumber || '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="bio" label="个人简介" min-width="180">
-            <template #default="scope">
-              <el-tooltip 
-                :content="scope.row.bio || '暂无简介'" 
-                placement="top"
-                :disabled="!scope.row.bio"
-              >
-                <span class="bio-text">{{ scope.row.bio || '-' }}</span>
-              </el-tooltip>
             </template>
           </el-table-column>
           <!-- 新增：用户类型 -->
@@ -175,20 +180,41 @@
         label-width="80px"
       >
         <el-form-item label="用户名" prop="username">
-          <el-input
-            v-model="userForm.username"
-            placeholder="请输入用户名"
-            :disabled="isEdit"
-          />
+          <div class="username-input-group">
+            <el-input
+              v-model="userForm.username"
+              placeholder="请输入用户名"
+              :disabled="isEdit || generatingNames"
+            />
+            <el-button 
+              type="primary" 
+              :icon="Refresh" 
+              @click="generateUserNames"
+              :loading="generatingNames"
+              size="small"
+              v-if="!isEdit"
+            >
+              {{ generatingNames ? '生成中...' : '自动生成' }}
+            </el-button>
+          </div>
         </el-form-item>
         
+        <el-form-item label="姓名" prop="fullName">
+          <el-input
+            v-model="userForm.fullName"
+            placeholder="请输入姓名"
+            maxlength="100"
+            :disabled="generatingNames"
+          />
+        </el-form-item>
+
         <el-form-item label="邮箱" prop="email">
           <el-input
             v-model="userForm.email"
             placeholder="请输入邮箱"
           />
         </el-form-item>
-        
+
         <el-form-item label="电话号码" prop="phoneNumber">
           <el-input
             v-model="userForm.phoneNumber"
@@ -326,8 +352,8 @@
 
 <script setup lang="ts">
 import { tagApi, type Tag } from '@/api/tag'
-import { userApi, type ChangePasswordParams, type UserCreateParams, type UserListParams, type User as UserType, type UserUpdateParams } from '@/api/user'
-import { Message, Plus, Refresh, Search, User } from '@element-plus/icons-vue'
+import { userApi, type ChangePasswordParams, type PagedResponse, type UserCreateParams, type UserListParams, type User as UserType, type UserUpdateParams, type UserNamePair } from '@/api/user'
+import { Message, Plus, Refresh, Search, User, InfoFilled } from '@element-plus/icons-vue'
 import { ElForm, ElMessage, ElMessageBox, type FormRules } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
@@ -340,11 +366,14 @@ const submitLoading = ref(false)
 const dialogVisible = ref(false)
 const isEdit = ref(false)
 const userFormRef = ref<InstanceType<typeof ElForm>>()
+const generatingNames = ref(false) // 生成用户名状态
   // 新增：对话框标题（编辑/新增自动切换）
 const dialogTitle = computed(() => (isEdit.value ? '编辑用户' : '新增用户'))
 // 搜索表单
 const searchForm = reactive({
   username: '',
+  // 新增：FullName 搜索字段
+  fullName: '',
   email: '',
   isActive: undefined as boolean | undefined
 })
@@ -359,10 +388,12 @@ const pagination = reactive({
   total: 0
 })
 
-// 用户表单数据
+// 用户表单数据：新增 fullName
 const userForm = reactive({
   id: null as number | null,
   username: '',
+  // 新增：姓名/昵称
+  fullName: '',
   email: '',
   phoneNumber: '',
   bio: '',
@@ -373,18 +404,22 @@ const userForm = reactive({
   isActive: true
 })
 
-// 表单验证规则
-const userRules = computed<FormRules>(() => ({
+// 表单验证规则（邮箱、电话非必填；新增 fullName 校验）
+const userRules: FormRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, message: '用户名长度不能少于3位', trigger: 'blur' }
   ],
+  // 去掉邮箱必填，仅格式校验
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '请输入正确的邮箱格式', trigger: 'blur' }
   ],
+  // FullName 非必填，长度限制
+  fullName: [
+    { max: 100, message: '长度不能超过100个字符', trigger: 'blur' }
+  ],
+  // 去掉电话号码必填，仅格式校验
   phoneNumber: [
-    { required: true, message: '请输入电话号码', trigger: 'blur' },
     { pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号码', trigger: 'blur' }
   ],
   password: [
@@ -394,37 +429,24 @@ const userRules = computed<FormRules>(() => ({
   isActive: [
     { required: true, message: '请选择状态', trigger: 'change' }
   ]
-}))
+}
 
-// 方法
+
 const loadUserList = async () => {
   loading.value = true
   try {
-    console.log('Loading user list...', {
-      page: pagination.currentPage,
-      size: pagination.pageSize,
-      ...searchForm
-    })
-    
     const params: UserListParams = {
       page: pagination.currentPage,
       size: pagination.pageSize,
       username: searchForm.username || undefined,
+      fullName: searchForm.fullName || undefined,
       email: searchForm.email || undefined,
       isActive: searchForm.isActive
     }
 
-    const response = await userApi.getUserList(params)
-    console.log('User list response:', response)
-    
-    // 修复：正确处理响应数据
-    if (response) {
-      userList.value = response.data || []
-      pagination.total = response.total || 0
-    } else {
-      userList.value = []
-      pagination.total = 0
-    }
+    const response: PagedResponse<UserType> = await userApi.getUserList(params)
+    userList.value = Array.isArray(response.data) ? response.data : []
+    pagination.total = typeof response.total === 'number' ? response.total : 0
   } catch (error) {
     console.error('Load user list error:', error)
     ElMessage.error('加载用户列表失败')
@@ -444,10 +466,12 @@ const handleSubmit = async () => {
       try {
         if (isEdit.value && userForm.id) {
           // 编辑用户
-          const updateData: UserUpdateParams = {
-            email: userForm.email,
-            phoneNumber: userForm.phoneNumber,
-            bio: userForm.bio,
+          const updateData: (UserUpdateParams & { fullName?: string }) = {
+            email: userForm.email || undefined,
+            // 新增：传递 FullName
+            fullName: userForm.fullName || undefined,
+            phoneNumber: userForm.phoneNumber || undefined,
+            bio: userForm.bio || undefined,
             isActive: userForm.isActive,
             userTypeCode: userForm.userTypeCode || undefined,       // 改为 code
             userToSystemCode: userForm.userToSystemCode || undefined, // 改为 code
@@ -457,11 +481,13 @@ const handleSubmit = async () => {
           ElMessage.success('编辑成功')
         } else {
           // 新增用户
-          const createData: UserCreateParams = {
+          const createData: (UserCreateParams & { fullName?: string }) = {
             username: userForm.username,
-            email: userForm.email,
+            email: userForm.email || undefined,
             password: userForm.password,
-            phoneNumber: userForm.phoneNumber,
+            // 新增：传递 FullName（接口已为可选）
+            fullName: userForm.fullName || undefined,
+            phoneNumber: userForm.phoneNumber || undefined,
             bio: userForm.bio || undefined,
             userTypeCode: userForm.userTypeCode || undefined,        // 改为 code
             userToSystemCode: userForm.userToSystemCode || undefined, // 改为 code
@@ -480,6 +506,27 @@ const handleSubmit = async () => {
       }
     }
   })
+}
+
+// 生成用户名和姓名
+const generateUserNames = async () => {
+  try {
+    generatingNames.value = true
+    const response = await userApi.generateUserNamePair()
+    
+    if (response.success && response.data) {
+      userForm.username = response.data.userName
+      userForm.fullName = response.data.fullName
+      ElMessage.success('用户名和姓名生成成功！')
+    } else {
+      ElMessage.error(response.message || '生成失败')
+    }
+  } catch (error) {
+    console.error('生成用户名失败:', error)
+    ElMessage.error('生成用户名失败，请重试')
+  } finally {
+    generatingNames.value = false
+  }
 }
 
 const resetUserForm = () => {
@@ -561,6 +608,8 @@ const handleSearch = () => {
 const resetSearch = () => {
   console.log('Resetting search')
   searchForm.username = ''
+  // 新增：清空 FullName 搜索字段
+  searchForm.fullName = ''
   searchForm.email = ''
   searchForm.isActive = undefined
   pagination.currentPage = 1
@@ -572,6 +621,10 @@ const handleAdd = () => {
   isEdit.value = false
   resetUserForm()
   dialogVisible.value = true
+
+  // 自动生成用户名和姓名
+  generateUserNames()
+
   loadUserTypeOptions()
   loadSystemOptions()
 }
@@ -582,12 +635,14 @@ const handleEdit = (row: UserType) => {
   Object.assign(userForm, {
     id: row.id,
     username: row.userName,
+    // 新增：从列表回填 FullName
+    fullName: (row as any).fullName || '',
     email: row.email,
     phoneNumber: row.phoneNumber || '',
     bio: row.bio || '',
     userTypeCode: row.userTypeCode || '',
     userToSystemCode: row.userToSystemCode || '',
-    profilePictureUrl: row.profilePictureUrl || '', // 优化：编辑时回填绝对URL
+    profilePictureUrl: row.profilePictureUrl || '',
     password: '',
     isActive: row.isActive
   })
@@ -831,6 +886,20 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.username-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.username-input-group .el-input {
+  flex: 1;
+}
+
+.username-input-group .el-button {
+  flex-shrink: 0;
 }
 
 </style>

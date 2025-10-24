@@ -27,7 +27,24 @@ namespace Preferred.Api.Models
         /// <summary>
         /// 错误代码（可选）
         /// </summary>
-        public string ErrorCode { get; set; }
+        public string? ErrorCode { get; set; }
+}
+
+/// <summary>
+/// 用户名和姓名对
+/// </summary>
+public class UserNamePair
+{
+    /// <summary>
+    /// 英文用户名
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// 中文姓名
+    /// </summary>
+    public string FullName { get; set; } = string.Empty;
+
     }
     
     /// <summary>

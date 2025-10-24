@@ -381,7 +381,7 @@ const fileInput = ref<HTMLInputElement>()
 const cropCanvas = ref<HTMLCanvasElement>()
 const previewCanvas = ref<HTMLCanvasElement>()
 
-const appTypeOptions = ref<string[]>(['访问地址']) // 应用类型选项
+const appTypeOptions = ref<string[]>(['访问地址-标签类型']) // 应用类型选项
 
 // 添加裁剪后的图片数据存储
 const croppedImageBlob = ref<Blob | null>(null)
@@ -424,7 +424,7 @@ const pagination = reactive({
 
 // 表单数据
 const formData = reactive<PictureFormData>({
-  appType: '访问地址', // 默认选择"访问地址"
+  appType: '访问地址-标签类型', // 默认选择"访问地址"
   imageCode: '',
   imageName: '',
   imagePath: '',
@@ -907,10 +907,10 @@ const reSelectImage = () => {
 const loadAppTypeOptions = async () => {
   try {
     const modules = await tagApi.getParNameList()
-    appTypeOptions.value = modules.length > 0 ? modules : ['访问地址']
+    appTypeOptions.value = modules.length > 0 ? modules : ['访问地址-标签类型']
   } catch (error) {
     console.error('Load app type options error:', error)
-    appTypeOptions.value = ['访问地址']
+    appTypeOptions.value = ['访问地址-标签类型']
   }
 }
 
@@ -921,7 +921,7 @@ const handleAdd = () => {
   
   // 重置表单数据
   Object.assign(formData, {
-    appType: '访问地址', // 默认选择"访问地址"
+    appType: '访问地址-标签类型', // 默认选择"访问地址"
     imageCode: generateGUID32(), // 预生成GUID32位
     imageName: '',
     imagePath: '',

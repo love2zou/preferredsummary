@@ -4,6 +4,8 @@ import request from '@/utils/request'
 export interface User {
   id: number
   userName: string
+  // 新增：FullName
+  fullName?: string | null
   email: string
   phoneNumber?: string | null
   profilePictureUrl?: string | null
@@ -21,19 +23,25 @@ export interface UserListParams {
   page?: number
   size?: number
   username?: string
+  // 新增：支持 FullName 搜索
+  fullName?: string
   email?: string
   isActive?: boolean
 }
 
 export interface UserCreateParams {
   username: string
-  email: string
+  // 改为可选
+  email?: string
   password: string
-  phoneNumber: string
+  // 改为可选
+  phoneNumber?: string
   bio?: string
   userTypeCode?: string            // 改名：code
   userToSystemCode?: string        // 改名：code
   profilePictureUrl?: string       // 新增：头像URL
+  // 新增：FullName
+  fullName?: string
 }
 
 export interface UserUpdateParams {
@@ -44,6 +52,8 @@ export interface UserUpdateParams {
   userTypeCode?: string            // 改名：code
   userToSystemCode?: string        // 改名：code
   profilePictureUrl?: string       // 新增：头像URL
+  // 新增：FullName
+  fullName?: string
 }
 
 export interface PagedResponse<T> {
@@ -76,7 +86,6 @@ export const userApi = {
     return request.post('/api/user/create', data)
   },
 
-  // 更新用户
   updateUser(id: number, data: UserUpdateParams): Promise<User> {
     return request.put(`/api/user/update/${id}`, data)
   },
@@ -99,5 +108,23 @@ export const userApi = {
   // 修改用户密码
   changePassword(data: ChangePasswordParams): Promise<void> {
     return request.post('/api/user/change-password', data)
+  },
+
+  // 生成用户名和姓名对
+  generateUserNamePair(): Promise<ApiResponse<UserNamePair>> {
+    return request.get('/api/user/generate-name-pair')
   }
+}
+
+// 新增：通用响应类型
+export interface ApiResponse<T> {
+  success: boolean
+  message: string
+  data: T
+}
+
+// 用户名和姓名对接口
+export interface UserNamePair {
+  userName: string
+  fullName: string
 }
