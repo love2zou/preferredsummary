@@ -215,6 +215,44 @@
           />
         </el-form-item>
 
+        <!-- 头像上传 -->
+        <el-form-item label="头像上传" prop="profilePictureUrl">
+          <div class="avatar-upload-container">
+            <div v-if="!userForm.profilePictureUrl && !uploadedAvatarUrl" class="avatar-upload-area">
+              <input
+                ref="avatarFileInput"
+                type="file"
+                accept="image/*"
+                style="display: none"
+                @change="handleAvatarFileSelect"
+              />
+              <div class="avatar-upload-placeholder" @click="selectAvatarFile">
+                <el-icon class="avatar-upload-icon"><Plus /></el-icon>
+                <div class="avatar-upload-text">点击上传头像</div>
+                <div class="avatar-upload-tip">支持 jpg、png、gif 格式，文件大小不超过 5MB</div>
+              </div>
+            </div>
+           
+            <div v-else class="avatar-uploaded-preview">
+              <!-- 优先显示新上传的头像 -->
+              <img 
+                v-if="uploadedAvatarUrl" 
+                :src="uploadedAvatarUrl" 
+                class="avatar-uploaded-image" 
+              />
+              <!-- 如果没有新上传的头像，显示服务器头像（仅编辑模式） -->
+              <img 
+                v-else-if="userForm.profilePictureUrl" 
+                :src="userForm.profilePictureUrl" 
+                class="avatar-uploaded-image" 
+              />
+              <div class="avatar-image-actions">
+                <el-button size="small" @click="reSelectAvatarImage">重新选择</el-button>
+              </div>
+            </div>
+          </div>
+        </el-form-item>
+
         <el-form-item label="电话号码" prop="phoneNumber">
           <el-input
             v-model="userForm.phoneNumber"
@@ -353,6 +391,7 @@
 <script setup lang="ts">
 import { tagApi, type Tag } from '@/api/tag'
 import { userApi, type ChangePasswordParams, type PagedResponse, type UserCreateParams, type UserListParams, type User as UserType, type UserUpdateParams, type UserNamePair } from '@/api/user'
+import { pictureApi } from '@/api/picture'
 import { Message, Plus, Refresh, Search, User, InfoFilled } from '@element-plus/icons-vue'
 import { ElForm, ElMessage, ElMessageBox, type FormRules } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
@@ -367,6 +406,9 @@ const dialogVisible = ref(false)
 const isEdit = ref(false)
 const userFormRef = ref<InstanceType<typeof ElForm>>()
 const generatingNames = ref(false) // 生成用户名状态
+const avatarFileInput = ref<HTMLInputElement>()
+const uploadedAvatarUrl = ref<string>('')
+const uploadedAvatarBlob = ref<Blob | null>(null)
   // 新增：对话框标题（编辑/新增自动切换）
 const dialogTitle = computed(() => (isEdit.value ? '编辑用户' : '新增用户'))
 // 搜索表单
@@ -464,6 +506,20 @@ const handleSubmit = async () => {
     if (valid) {
       submitLoading.value = true
       try {
+        // 如果有新上传的头像，先上传到服务器
+        let avatarUrl = userForm.profilePictureUrl
+        if (uploadedAvatarBlob.value) {
+          try {
+            const file = new File([uploadedAvatarBlob.value], 'avatar.jpg', { type: uploadedAvatarBlob.value.type })
+            const uploadResponse = await pictureApi.uploadImage(file, '1:1')
+            avatarUrl = uploadResponse.data.url
+          } catch (uploadError) {
+            console.error('头像上传失败:', uploadError)
+            ElMessage.error('头像上传失败，请重试')
+            return
+          }
+        }
+
         if (isEdit.value && userForm.id) {
           // 编辑用户
           const updateData: (UserUpdateParams & { fullName?: string }) = {
@@ -475,7 +531,7 @@ const handleSubmit = async () => {
             isActive: userForm.isActive,
             userTypeCode: userForm.userTypeCode || undefined,       // 改为 code
             userToSystemCode: userForm.userToSystemCode || undefined, // 改为 code
-            profilePictureUrl: userForm.profilePictureUrl || undefined // 新增：头像
+            profilePictureUrl: avatarUrl || undefined // 使用上传后的URL
           }
           await userApi.updateUser(userForm.id, updateData)
           ElMessage.success('编辑成功')
@@ -491,7 +547,7 @@ const handleSubmit = async () => {
             bio: userForm.bio || undefined,
             userTypeCode: userForm.userTypeCode || undefined,        // 改为 code
             userToSystemCode: userForm.userToSystemCode || undefined, // 改为 code
-            profilePictureUrl: userForm.profilePictureUrl || undefined // 新增：头像
+            profilePictureUrl: avatarUrl || undefined // 使用上传后的URL
           }
           await userApi.createUser(createData)
           ElMessage.success('新增成功')
@@ -533,6 +589,7 @@ const resetUserForm = () => {
   Object.assign(userForm, {
     id: null,
     username: '',
+    fullName: '',
     email: '',
     phoneNumber: '',
     bio: '',
@@ -542,6 +599,8 @@ const resetUserForm = () => {
     password: '',
     isActive: true
   })
+  // 清理头像上传相关数据
+  cleanupAvatarTempData()
   userFormRef.value?.clearValidate()
 }
 
@@ -581,6 +640,61 @@ const calculateTableHeight = () => {
   })
 }
 
+// 头像上传相关方法
+// 选择头像文件
+const selectAvatarFile = () => {
+  avatarFileInput.value?.click()
+}
+
+// 头像文件选择处理
+const handleAvatarFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  
+  if (!file) return
+  
+  // 验证文件类型
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件！')
+    return
+  }
+  
+  // 验证文件大小（5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('头像文件大小不能超过 5MB！')
+    return
+  }
+  
+  // 读取文件并创建预览
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const result = e.target?.result as string
+    uploadedAvatarUrl.value = result
+    
+    // 将文件转换为Blob存储
+    file.arrayBuffer().then(buffer => {
+      uploadedAvatarBlob.value = new Blob([buffer], { type: file.type })
+    })
+  }
+  reader.readAsDataURL(file)
+}
+
+// 重新选择头像
+const reSelectAvatarImage = () => {
+  cleanupAvatarTempData()
+  userForm.profilePictureUrl = ''
+  selectAvatarFile()
+}
+
+// 清理头像临时数据
+const cleanupAvatarTempData = () => {
+  if (uploadedAvatarUrl.value && uploadedAvatarUrl.value.startsWith('blob:')) {
+    URL.revokeObjectURL(uploadedAvatarUrl.value)
+  }
+  uploadedAvatarBlob.value = null
+  uploadedAvatarUrl.value = ''
+}
+
 // 生命周期
 onMounted(async () => {
   console.log('UserManagement component mounted')
@@ -595,6 +709,8 @@ onMounted(async () => {
 // 组件卸载时移除事件监听
 onUnmounted(() => {
   window.removeEventListener('resize', calculateTableHeight)
+  // 清理头像临时数据
+  cleanupAvatarTempData()
 })
 
 // 在 loadUserList 方法后添加以下缺失的方法
@@ -900,6 +1016,71 @@ onMounted(() => {
 
 .username-input-group .el-button {
   flex-shrink: 0;
+}
+
+/* 头像上传样式 */
+.avatar-upload-container {
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  padding: 15px;
+  background-color: #fafafa;
+}
+
+.avatar-upload-area {
+  width: 100%;
+}
+
+.avatar-upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  border: 2px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.avatar-upload-placeholder:hover {
+  border-color: #409eff;
+}
+
+.avatar-upload-icon {
+  font-size: 32px;
+  color: #c0c4cc;
+  margin-bottom: 8px;
+}
+
+.avatar-upload-text {
+  color: #606266;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.avatar-upload-tip {
+  color: #909399;
+  font-size: 12px;
+}
+
+.avatar-uploaded-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.avatar-uploaded-image {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-bottom: 10px;
+  border: 2px solid #e4e7ed;
+}
+
+.avatar-image-actions {
+  display: flex;
+  gap: 10px;
 }
 
 </style>
