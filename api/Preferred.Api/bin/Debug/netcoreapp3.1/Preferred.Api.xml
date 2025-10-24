@@ -550,6 +550,13 @@
             批量删除结果
             </summary>
         </member>
+        <member name="M:Preferred.Api.Services.IUserService.GetUserById(System.Int32)">
+            <summary>
+            获取用户详情
+            </summary>
+            <param name="id">用户ID</param>
+            <returns>用户详情DTO</returns>
+        </member>
         <member name="M:Preferred.Api.Services.IUserService.GenerateUserNamePair">
             <summary>
             生成用户名和姓名对

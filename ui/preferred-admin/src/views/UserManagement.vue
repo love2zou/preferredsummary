@@ -508,8 +508,15 @@ const handleSubmit = async () => {
       try {
         // 如果有新上传的头像，先上传到服务器
         let avatarUrl = userForm.profilePictureUrl
+        let oldAvatarUrl = ''
+        
         if (uploadedAvatarBlob.value) {
           try {
+            // 在编辑模式下，记录旧头像URL用于后续删除
+            if (isEdit.value && userForm.profilePictureUrl) {
+              oldAvatarUrl = userForm.profilePictureUrl
+            }
+            
             const file = new File([uploadedAvatarBlob.value], 'avatar.jpg', { type: uploadedAvatarBlob.value.type })
             const uploadResponse = await pictureApi.uploadImage(file, '1:1')
             avatarUrl = uploadResponse.data.url
@@ -534,6 +541,18 @@ const handleSubmit = async () => {
             profilePictureUrl: avatarUrl || undefined // 使用上传后的URL
           }
           await userApi.updateUser(userForm.id, updateData)
+          
+          // 如果用户信息更新成功且有旧头像需要删除，则删除旧头像
+          if (oldAvatarUrl && avatarUrl !== oldAvatarUrl) {
+            try {
+              await pictureApi.deleteImageFile(oldAvatarUrl)
+              console.log('旧头像删除成功:', oldAvatarUrl)
+            } catch (deleteError) {
+              console.warn('删除旧头像失败:', deleteError)
+              // 不影响主流程，只记录警告
+            }
+          }
+          
           ElMessage.success('编辑成功')
         } else {
           // 新增用户

@@ -253,9 +253,24 @@ namespace Preferred.Api.Services
 
             try
             {
+                string relativePath;
+                
+                // 判断是否为HTTP URL
+                if (imagePath.StartsWith("http://") || imagePath.StartsWith("https://"))
+                {
+                    // 从HTTP URL中提取相对路径
+                    var uri = new Uri(imagePath);
+                    relativePath = uri.AbsolutePath; // 例如：/upload/images/avatar20251024235833.jpg
+                }
+                else
+                {
+                    // 已经是相对路径
+                    relativePath = imagePath;
+                }
+                
                 // 构建完整的文件路径
                 var webRootPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                var filePath = Path.Combine(webRootPath, imagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                var filePath = Path.Combine(webRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
                 
                 // 检查文件是否存在并删除
                 if (File.Exists(filePath))

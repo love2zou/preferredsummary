@@ -18,7 +18,12 @@ namespace Preferred.Api.Services
         Task<bool> UpdateUser(int id, UserUpdateDto userDto);
         Task<bool> DeleteUser(int id);
         Task<bool> ChangePassword(int userId, string newPassword);
-    
+        /// <summary>
+        /// 获取用户详情
+        /// </summary>
+        /// <param name="id">用户ID</param>
+        /// <returns>用户详情DTO</returns>
+        Task<User> GetUserById(int id);
         /// <summary>
         /// 生成用户名和姓名对
         /// </summary>

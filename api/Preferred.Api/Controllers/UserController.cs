@@ -19,11 +19,13 @@ namespace Preferred.Api.Controllers
     {
         private readonly IUserService _userService;
         private readonly ITagService _tagService;
+        private readonly IPictureService _pictureService;
 
-        public UserController(IUserService userService, ITagService tagService)
+        public UserController(IUserService userService, ITagService tagService, IPictureService pictureService)
         {
             _userService = userService;
             _tagService = tagService;
+            _pictureService = pictureService;
         }
 
         /// <summary>
@@ -122,10 +124,38 @@ namespace Preferred.Api.Controllers
                     return BadRequest(new ApiErrorResponse { Message = "请求数据不能为空" });
                 }
                 
+                // 在更新用户信息之前，先获取旧的头像URL用于后续删除
+                string oldProfilePictureUrl = null;
+                if (!string.IsNullOrEmpty(userDto.ProfilePictureUrl))
+                {
+                    var existingUser = await _userService.GetUserById(id);
+                    if (existingUser != null && !string.IsNullOrEmpty(existingUser.ProfilePictureUrl))
+                    {
+                        oldProfilePictureUrl = existingUser.ProfilePictureUrl;
+                    }
+                }
+                
                 var result = await _userService.UpdateUser(id, userDto);
                 if (!result)
                 {
                     return NotFound(new ApiErrorResponse { Message = "用户不存在或邮箱已被使用" });
+                }
+                
+                // 如果更新成功且有新头像，删除旧头像文件
+                if (!string.IsNullOrEmpty(oldProfilePictureUrl) && 
+                    !string.IsNullOrEmpty(userDto.ProfilePictureUrl) && 
+                    oldProfilePictureUrl != userDto.ProfilePictureUrl)
+                {
+                    try
+                    {
+                        await _pictureService.DeleteImageFile(oldProfilePictureUrl);
+                        Console.WriteLine($"已删除旧头像文件: {oldProfilePictureUrl}");
+                    }
+                    catch (Exception ex)
+                    {
+                        // 删除旧头像失败不影响主流程，只记录日志
+                        Console.WriteLine($"删除旧头像文件失败: {ex.Message}");
+                    }
                 }
                 
                 return Ok(new ApiResponse { Message = "用户信息更新成功" });

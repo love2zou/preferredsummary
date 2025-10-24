@@ -51,10 +51,14 @@ export interface PagedResponse<T> {
 }
 
 export interface UploadResponse {
+  success: boolean
+  message: string
   data: {
     url: string
-    width: number
-    height: number
+    fileName: string
+    size: number
+    width: number | null
+    height: number | null
     aspectRatio: string
   }
 }
