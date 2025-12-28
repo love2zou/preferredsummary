@@ -8,6 +8,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using System.IO;
+using System.Text;
 
 namespace Preferred.Api
 {
@@ -15,6 +16,8 @@ namespace Preferred.Api
     {
         public static void Main(string[] args)
         {
+            // 注册 CodePagesEncodingProvider 以支持更多编码（如 GB18030）
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             // 配置 Serilog
             var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "logs");
             if (!Directory.Exists(logDirectory))

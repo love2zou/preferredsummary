@@ -44,6 +44,8 @@ namespace Preferred.Api
                 {
                     // 配置JSON序列化为camelCase
                     options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+                    // 配置日期时间格式为ISO 8601
+                    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                     // 如果 JsonNumberHandling 不可用，可以注释掉这行
                     // options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString;
                     // 如果 JsonIgnoreCondition 不可用，可以注释掉这行

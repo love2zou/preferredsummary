@@ -34,6 +34,81 @@
             分类服务实现
             </summary>
         </member>
+        <member name="T:Preferred.Api.Services.DataParserService">
+            <summary>
+            数据解析服务实现
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.StartParseAsync(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            开始解析文件
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.GetParseStatusAsync(System.String)">
+            <summary>
+            获取解析状态
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.ExportToExcelAsync(System.String,System.String)">
+            <summary>
+            导出为 Excel 文件
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.CleanupExpiredTasksAsync">
+            <summary>
+            清理过期的解析任务
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.ProcessFileAsync(System.String,Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            处理文件解析
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.ReadFileWithEncodingDetection(System.Byte[],Preferred.Api.Models.DataParseResponse)">
+            <summary>
+            读取文件并检测编码
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.DetectEncoding(System.Byte[])">
+            <summary>
+            检测文件编码
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.ParseDataAsync(System.String,Preferred.Api.Models.DataParseResponse)">
+            <summary>
+            解析数据内容
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.AnalyzeHeader(System.Collections.Generic.List{System.String},System.String,Preferred.Api.Models.DataParseResponse)">
+            <summary>
+            分析是否有表头
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.IsNumeric(System.String)">
+            <summary>
+            判断字符串是否为数字
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.DetectSeparator(System.String,Preferred.Api.Models.DataParseResponse)">
+            <summary>
+            检测分隔符
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.ParseHeaders(System.String,System.String,Preferred.Api.Models.DataParseResponse)">
+            <summary>
+            解析表头
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.ParseDataRowsAsync(System.Collections.Generic.List{System.String},System.Collections.Generic.List{System.String},System.String,Preferred.Api.Models.DataParseResponse,System.Boolean)">
+            <summary>
+            解析数据行
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.DataParserService.AddLog(Preferred.Api.Models.DataParseResponse,System.String,Preferred.Api.Models.LogType)">
+            <summary>
+            添加日志
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Services.FileService">
             <summary>
             文件服务实现
@@ -117,6 +192,39 @@
             <param name="id">分类ID</param>
             <param name="seqNo">新的排序号</param>
             <returns>是否成功</returns>
+        </member>
+        <member name="T:Preferred.Api.Services.IDataParserService">
+            <summary>
+            数据解析服务接口
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IDataParserService.StartParseAsync(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            开始解析文件
+            </summary>
+            <param name="file">上传的文件</param>
+            <returns>解析任务ID</returns>
+        </member>
+        <member name="M:Preferred.Api.Services.IDataParserService.GetParseStatusAsync(System.String)">
+            <summary>
+            获取解析状态
+            </summary>
+            <param name="taskId">任务ID</param>
+            <returns>解析状态和结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Services.IDataParserService.ExportToExcelAsync(System.String,System.String)">
+            <summary>
+            导出为 Excel 文件
+            </summary>
+            <param name="taskId">任务ID</param>
+            <param name="fileName">文件名</param>
+            <returns>Excel 文件流</returns>
+        </member>
+        <member name="M:Preferred.Api.Services.IDataParserService.CleanupExpiredTasksAsync">
+            <summary>
+            清理过期的解析任务
+            </summary>
+            <returns></returns>
         </member>
         <member name="T:Preferred.Api.Services.IFileService">
             <summary>
@@ -855,6 +963,16 @@
             组合中文姓名，确保流畅性和意境
             </summary>
         </member>
+        <member name="M:Preferred.Api.Services.ZwavAnalysisAppService.CreateAnalysisAsync(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            上传并创建解析任务：写 Tb_ZwavFile + Tb_ZwavAnalysis，然后入队后台解析
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavAnalysisAppService.GetStatusAsync(System.String)">
+            <summary>
+            查询任务状态（直接查 Tb_ZwavAnalysis）
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Controllers.AuthController">
             <summary>
             用户认证控制器
@@ -990,6 +1108,39 @@
             <summary>
             新的排序号
             </summary>
+        </member>
+        <member name="T:Preferred.Api.Controllers.DataParserController">
+            <summary>
+            数据解析控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.UploadFile(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            上传并解析 DAT 文件
+            </summary>
+            <param name="file">DAT 文件</param>
+            <returns>解析任务ID</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.GetParseStatus(System.String)">
+            <summary>
+            获取解析状态和结果
+            </summary>
+            <param name="taskId">任务ID</param>
+            <returns>解析状态和结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.ExportToExcel(System.String,System.String)">
+            <summary>
+            导出解析结果为 Excel 文件
+            </summary>
+            <param name="taskId">任务ID</param>
+            <param name="fileName">文件名（可选）</param>
+            <returns>Excel 文件</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.CleanupExpiredTasks">
+            <summary>
+            清理过期的解析任务
+            </summary>
+            <returns>清理结果</returns>
         </member>
         <member name="T:Preferred.Api.Controllers.FileController">
             <summary>
@@ -1539,6 +1690,32 @@
             生成用户名和姓名对
             </summary>
         </member>
+        <member name="T:Preferred.Api.Controllers.ZwavAnalysesController">
+            <summary>
+            录波文件解析控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.Create(Microsoft.AspNetCore.Http.IFormFile,System.Threading.CancellationToken)">
+            <summary>上传ZWAV/ZIP并创建解析任务</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetStatus(System.String)">
+            <summary>查询任务状态</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetMeta(System.String)">
+            <summary>获取meta（文件+CFG+HDR+DAT概览+通道列表）</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetSamples(System.String,System.Int64,System.Int32,System.String)">
+            <summary>分页获取样本表格数据</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetWave(System.String,System.Int64,System.Int64,System.String,System.Int32,System.String)">
+            <summary>获取波形下采样数据</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportCsv(System.String,System.Int64,System.Int64,System.String)">
+            <summary>导出CSV（占位：你后续可做真正的流式导出）</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.Delete(System.String)">
+            <summary>删除任务（占位：会同时清理缓存/文件）</summary>
+        </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
             API响应基础模型
@@ -1748,6 +1925,166 @@
             要删除的ID列表
             </summary>
         </member>
+        <member name="T:Preferred.Api.Models.DataParseRequest">
+            <summary>
+            数据解析请求模型
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseRequest.FileName">
+            <summary>
+            文件名
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseRequest.FileSize">
+            <summary>
+            文件大小（字节）
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.DataParseResponse">
+            <summary>
+            数据解析响应模型
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseResponse.TaskId">
+            <summary>
+            解析任务ID
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseResponse.Status">
+            <summary>
+            解析状态
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseResponse.Progress">
+            <summary>
+            解析进度（0-100）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseResponse.Logs">
+            <summary>
+            解析日志
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.DataParseResponse.Result">
+            <summary>
+            解析结果数据
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ParseLog">
+            <summary>
+            解析日志模型
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseLog.Timestamp">
+            <summary>
+            时间戳
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseLog.Message">
+            <summary>
+            日志消息
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseLog.Type">
+            <summary>
+            日志类型
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ParseResult">
+            <summary>
+            解析结果模型
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseResult.Headers">
+            <summary>
+            表头信息
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseResult.Data">
+            <summary>
+            数据行
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseResult.TotalRecords">
+            <summary>
+            总记录数
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseResult.Separator">
+            <summary>
+            检测到的分隔符
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ParseResult.Encoding">
+            <summary>
+            检测到的编码格式
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ExcelExportRequest">
+            <summary>
+            Excel 导出请求模型
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ExcelExportRequest.TaskId">
+            <summary>
+            解析任务ID
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ExcelExportRequest.FileName">
+            <summary>
+            导出文件名（可选）
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ParseStatus">
+            <summary>
+            解析状态枚举
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.ParseStatus.Pending">
+            <summary>
+            等待中
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.ParseStatus.Processing">
+            <summary>
+            解析中
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.ParseStatus.Completed">
+            <summary>
+            已完成
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.ParseStatus.Failed">
+            <summary>
+            失败
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.LogType">
+            <summary>
+            日志类型枚举
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.LogType.Info">
+            <summary>
+            信息
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.LogType.Success">
+            <summary>
+            成功
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.LogType.Warning">
+            <summary>
+            警告
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Models.LogType.Error">
+            <summary>
+            错误
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Models.FileRecord">
             <summary>
             文件记录实体模型
@@ -1886,6 +2223,11 @@
         <member name="P:Preferred.Api.Models.FileStorageConfig.UseRemoteAccess">
             <summary>
             是否使用远程访问
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.FileStorageConfig.ZwavRootPath">
+            <summary>
+            Zwav 存储根路径
             </summary>
         </member>
         <member name="M:Preferred.Api.Models.FileStorageConfig.GetImageUrl(System.String)">
@@ -2923,6 +3265,42 @@
         <member name="P:Preferred.Api.Models.ChangePasswordDto.NewPassword">
             <summary>
             新密码
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ZwavData">
+            <summary>
+            录波数据
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ZwavFileRow">
+            <summary>
+            文件记录实体模型
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.InspectDat(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            等价于 inspectDat(buf, A, D)
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.ParseDatAllChannels(System.Byte[],Zwav.Application.Parsing.CfgParseResult,System.Int32,System.Boolean)">
+            <summary>
+            .NET Core 3.1：解析 DAT 前 N 条记录，但解析“全部模拟通道”（不限制前三路）。
+            可选 includeDigitals=true 则返回每条记录的数字字（ushort[]）。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.HdrParser.Parse(System.String,System.String@)">
+            <summary>
+            解析 HDR XML 文本。遇到不规范 XML（前导控制字符/多根/片段）会自动容错。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.HdrParser.ParseAsFragment(System.String)">
+            <summary>
+            将不严格 XML 当片段解析（容错多根、前后杂质等）
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.ZwavZipHelper.DetectXmlEncoding(System.Byte[])">
+            <summary>
+            根据 BOM / XML 声明智能检测编码（等价 JS detectXmlEncoding）
             </summary>
         </member>
     </members>

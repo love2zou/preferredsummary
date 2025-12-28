@@ -1,7 +1,10 @@
 {
   "omnisharp.enableEditorConfigSupport": true,
   "omnisharp.enableRoslynAnalyzers": true,
-  "omnisharp.useModernNet": true,
+  "omnisharp.useModernNet": false,
+  "omnisharp.path": "latest",
+  "omnisharp.waitForDebugger": false,
+  "omnisharp.loggingLevel": "information",
   "dotnet.defaultSolution": "api/Preferred.Api/Preferred.Api.csproj",
   "files.exclude": {
     "**/bin": true,

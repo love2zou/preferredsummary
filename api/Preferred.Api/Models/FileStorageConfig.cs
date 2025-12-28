@@ -31,7 +31,10 @@ namespace Preferred.Api.Models
         /// 是否使用远程访问
         /// </summary>
         public bool UseRemoteAccess { get; set; } = true;
-        
+        /// <summary>
+        /// Zwav 存储根路径
+        /// </summary>
+        public string ZwavRootPath { get; set; } = "/upload/zwav";
         /// <summary>
         /// 获取完整的服务器图片URL
         /// </summary>

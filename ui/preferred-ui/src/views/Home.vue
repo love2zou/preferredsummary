@@ -3,6 +3,10 @@
     <!-- 顶部导航栏 -->
     <div class="top-header">
       <div class="header-content">
+        <div class="nav-links">
+          <router-link to="/" class="nav-link">首页</router-link>
+          <router-link to="/algorithm-planning" class="nav-link">AI算法规划</router-link>
+        </div>
         <div class="search-container">
           <el-input
             v-model="searchKeyword"
@@ -507,8 +511,32 @@ const openAdminLogin = (): void => {
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
+}
+
+.nav-links {
+  display: flex;
+  gap: 24px;
+}
+
+.nav-link {
+  color: #606266;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+  color: var(--el-color-primary);
+  background: rgba(64, 158, 255, 0.1);
+}
+
+.nav-link.router-link-active {
+  color: var(--el-color-primary);
+  background: rgba(64, 158, 255, 0.15);
 }
 
 .search-container {

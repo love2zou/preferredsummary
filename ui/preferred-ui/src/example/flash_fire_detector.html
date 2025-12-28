@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>本地视频闪光/火光检测（局部闪光优化 · Top命中 · ZIP/CSV · 帮助说明）</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#0f172a; --muted:#94a3b8; --text:#e2e8f0;
+    --accent:#60a5fa; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --card:#0b1324;
+    --chip:#1f2937;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#0b1220,#0e1527 30%,#0b1220);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue","PingFang SC","Noto Sans CJK SC",sans-serif}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px 16px 32px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  header h1{font-size:20px;margin:0;font-weight:700;letter-spacing:.3px}
+  header .badge{font-size:12px;background:var(--chip);padding:4px 8px;border-radius:999px;color:var(--muted)}
+  header .help-btn{margin-left:auto;background:linear-gradient(180deg,#334155,#1f2937);border:1px solid #334155;color:#e5e7eb;padding:6px 10px;border-radius:10px;cursor:pointer}
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:16px}
+  .panel{background:var(--panel);border:1px solid #172033;border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.28);padding:14px}
+  .panel h2{margin:0 0 10px;font-size:15px;color:#cbd5e1}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .row > *{flex:0 0 auto}
+  .btn{background:linear-gradient(180deg,#17253b,#0e1729);border:1px solid #1e2a3f;color:#dbeafe;padding:8px 12px;border-radius:10px;cursor:pointer;transition:transform .05s ease,opacity .2s}
+  .btn:hover{opacity:.95}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(180deg,#2563eb,#1d4ed8);border-color:#1e40af;color:white}
+  .btn.ghost{background:transparent;border:1px dashed #334155;color:#93c5fd}
+  .file{display:inline-block;position:relative}
+  .file input{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .slider{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+  .slider label{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:#cbd5e1}
+  .slider input[type="range"], .slider select {width:100%}
+  .hint{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.45}
+  .switch{display:flex;align-items:center;gap:8px;font-size:13px;color:#cbd5e1;flex-wrap:wrap}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:6px}
+  .kpi .card{background:var(--card);border:1px solid #182133;border-radius:12px;padding:10px}
+  .kpi .card .v{font-size:18px;font-weight:700}
+  .kpi .card .t{font-size:12px;color:var(--muted)}
+  .stage{display:grid;grid-template-rows:auto 1fr;gap:8px}
+  .canvas-wrap{position:relative;background:#020617;border:1px solid #152036;border-radius:10px;overflow:hidden;min-height:260px}
+  canvas{display:block;width:100%;height:auto}
+  .overlay{position:absolute;inset:0;pointer-events:none}
+  #thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .thumb{background:var(--card);border:1px solid #152036;border-radius:12px;overflow:hidden;cursor:pointer}
+  .thumb img{display:block;width:100%;height:auto}
+  .thumb .meta{padding:8px;font-size:12px;color:#cbd5e1;display:flex;justify-content:space-between;align-items:center;gap:6px}
+  .chip{background:var(--chip);border:1px solid #263246;color:#cbd5e1;padding:2px 6px;border-radius:999px;font-size:11px}
+  .tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .log{background:#071120;border:1px solid #152036;border-radius:10px;padding:10px;white-space:pre-wrap;max-height:180px;overflow:auto;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;color:#cbd5e1}
+  .sep{height:1px;background:#1a2438;margin:12px 0}
+  .footer{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .small{font-size:12px;color:#94a3b8}
+  .ok{color:#bbf7d0}
+
+  /* Lightbox */
+  .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.75);display:none;align-items:center;justify-content:center;z-index:9999}
+  .lightbox.open{display:flex}
+  .lb-inner{position:relative;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .lb-toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  .lb-btn{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:#e5e7eb;padding:8px 10px;border-radius:10px;cursor:pointer}
+  .lb-btn:hover{background:rgba(255,255,255,.12)}
+  .lb-img-wrap{position:relative;max-width:90vw;max-height:78vh;display:flex;align-items:center;justify-content:center}
+  .lb-img{max-width:90vw;max-height:78vh;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+  .lb-caption{font-size:13px;color:#e5e7eb}
+
+  /* Help modal */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:9999}
+  .modal.open{display:flex}
+  .modal-card{width:min(820px,92vw);max-height:90vh;overflow:auto;background:#0f172a;border:1px solid #1f2a44;border-radius:14px;padding:16px 18px;color:#e2e8f0}
+  .modal-card h3{margin:0 0 8px;font-size:18px}
+  .modal-card p{margin:6px 0;color:#cbd5e1;line-height:1.6}
+  .modal-card ul{margin:8px 0 0 18px;color:#cbd5e1}
+  .modal-close{margin-left:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>本地视频闪光 / 火光检测</h1>
+    <span class="badge">局部闪光优化 · Top命中筛选 · 分析耗时 · 预览/下载 · ZIP/CSV导出</span>
+    <button id="helpBtn" class="help-btn">提示</button>
+  </header>
+
+  <div class="grid">
+    <!-- 控制面板 -->
+    <div class="panel">
+      <h2>操作与参数</h2>
+      <div class="row">
+        <label class="file btn primary">📤 选择视频 (mp4)
+          <input id="file" type="file" accept="video/mp4">
+        </label>
+        <button id="startBtn" class="btn">▶️ 开始检测</button>
+        <button id="stopBtn" class="btn ghost">⏹ 停止</button>
+        <button id="clearBtn" class="btn ghost">X 清空结果</button>
+      </div>
+
+      <div class="row">
+        <button id="defaultsBtn" class="btn">恢复默认</button>
+        <button id="exportBtn" class="btn">导出参数</button>
+        <label class="file btn">导入参数
+          <input id="importFile" type="file" accept="application/json">
+        </label>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="switch">
+        <label title="是否启用基于暖色和亮度的火光检测"><input type="checkbox" id="chkFire" checked> 检测火光</label>
+        <label title="是否启用基于亮度突增与白光特征的闪光检测（局部优化）"><input type="checkbox" id="chkFlash" checked> 检测闪光</label>
+        <label title="调试用可视化：显示候选区域的热力/二值图"><input type="checkbox" id="chkHeat"> 显示候选热力/二值图</label>
+      </div>
+
+      <div class="slider">
+        <label>处理画布宽度（降采样）<span><span id="vWidth">640</span> px</span></label>
+        <input type="range" id="slWidth" min="320" max="960" step="40" value="640">
+        <div class="hint">控制算法输入分辨率，越小越快。仅影响分析，不改动原视频。</div>
+      </div>
+
+      <div class="slider">
+        <label>像素采样步长<span><span id="vStep">1</span></span></label>
+        <input type="range" id="slStep" min="1" max="4" step="1" value="1">
+        <div class="hint">步长=2 表示每隔 1 像素取样一次，速度更快但精度略降。</div>
+      </div>
+
+      <div class="slider">
+        <label>帧跳过（每 N 帧分析 1 帧）<span><span id="vSkip">0</span></span></label>
+        <input type="range" id="slSkip" min="0" max="4" step="1" value="0">
+        <div class="hint">牺牲时序分辨率换取性能，适合长视频快速粗检。</div>
+      </div>
+
+      <div class="slider">
+        <label>时间窗口长度（秒）<span><span id="vWin">1.0</span>s</span></label>
+        <input type="range" id="slWin" min="0.3" max="3.0" step="0.1" value="1.0">
+        <div class="hint">将时间划分为窗口，每窗口只保留 Top-N 张命中图，避免重复。</div>
+      </div>
+
+      <div class="slider">
+        <label>Top-N（每窗口最多保留几张）</label>
+        <select id="selTopN">
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+        <div class="hint">控制每个时间窗口中最多保留的命中缩略图数量。</div>
+      </div>
+
+      <div class="slider">
+        <label>最小命中分数阈值<span><span id="vMinScore">0.80</span></span></label>
+        <input type="range" id="slMinScore" min="0" max="2" step="0.05" value="0.80">
+        <div class="hint">基于 “spike（亮度突增）+ 连通域面积 + 类型加权” 的综合得分，低于该值的命中将被过滤。</div>
+      </div>
+
+      <div class="sep"></div>
+      <div class="slider">
+        <label>火光：最低亮度 Y<span><span id="vFireY">90</span></span></label>
+        <input type="range" id="slFireY" min="40" max="160" step="1" value="90">
+        <div class="hint">提高可减少暗部误报；常见范围 80~120。</div>
+      </div>
+
+      <div class="slider">
+        <label>火光：红-绿差阈值 (R-G)<span><span id="vRG">40</span></span></label>
+        <input type="range" id="slRG" min="10" max="100" step="1" value="40">
+        <div class="hint">增大可抑制普通暖光或红色物体带来的误报。</div>
+      </div>
+
+      <div class="slider">
+        <label>火光：绿-蓝差阈值 (G-B)<span><span id="vGB">10</span></span></label>
+        <input type="range" id="slGB" min="0" max="60" step="1" value="10">
+        <div class="hint">区分偏黄橙（火焰）与纯红/粉色光源。</div>
+      </div>
+
+      <div class="sep"></div>
+      <!-- 新增：局部闪光检测专用参数 -->
+      <div class="slider">
+        <label>闪光：局部 spike 阈值<span><span id="vLocalSpike">0.55</span></span></label>
+        <input type="range" id="slLocalSpike" min="0.20" max="1.20" step="0.05" value="0.55">
+        <div class="hint">局部 (Y-bg)/bg 的下限，更关注局部亮度相对自身背景的突增。</div>
+      </div>
+
+      <div class="slider">
+        <label>闪光：局部最低亮度 Y<span><span id="vFlashMinY">140</span></span></label>
+        <input type="range" id="slFlashMinY" min="60" max="220" step="5" value="140">
+        <div class="hint">过滤暗部噪声的局部阈值；越高越保守。</div>
+      </div>
+
+      <div class="slider">
+        <label>闪光：白画面上限（全局）<span><span id="vWhiteCap">0.25</span></span></label>
+        <input type="range" id="slWhiteCap" min="0.05" max="0.80" step="0.01" value="0.25">
+        <div class="hint">若全帧“近白像素”比例超过该值，则判为曝光/切镜并压制闪光。</div>
+      </div>
+
+      <div class="slider">
+        <label>闪光：时间去抖帧数<span><span id="vPersist">2</span></span></label>
+        <input type="range" id="slPersist" min="1" max="5" step="1" value="2">
+        <div class="hint">近几帧内与当前 bbox IoU≥0.3 的命中计数门槛，≥该值才判定为闪光。</div>
+      </div>
+
+      <div class="slider">
+        <label>闪光：面积上限占比<span><span id="vAreaMaxRatio">0.10</span></span></label>
+        <input type="range" id="slAreaMaxRatio" min="0.02" max="0.50" step="0.01" value="0.10">
+        <div class="hint">限制单个连通域面积不超过全图的该比例，防止整帧曝光造成误报。</div>
+      </div>
+
+      <div class="slider">
+        <label>闪光：白光最低通道值<span><span id="vWhite">210</span></span></label>
+        <input type="range" id="slWhite" min="160" max="255" step="1" value="210">
+        <div class="hint">用于统计“近白像素”的阈值，也用于旧版白光掩码。</div>
+      </div>
+
+      <div class="slider">
+        <label>连通域最小像素数（去噪）<span><span id="vArea">80</span></span></label>
+        <input type="range" id="slArea" min="20" max="600" step="10" value="80">
+        <div class="hint">过滤小面积噪点，强调空间一致性（同时用于火光与闪光）。</div>
+      </div>
+
+      <div class="slider">
+        <label>EMA 平滑系数 α<span><span id="vAlpha">0.08</span></span></label>
+        <input type="range" id="slAlpha" min="0.02" max="0.4" step="0.01" value="0.08">
+        <div class="hint">背景亮度 EMA；用于全局状态显示和旧逻辑兼容。</div>
+      </div>
+
+      <div class="kpi">
+        <div class="card">
+          <div class="v" id="kpiFps">—</div>
+          <div class="t">处理 FPS</div>
+        </div>
+        <div class="card">
+          <div class="v" id="kpiCand">—</div>
+          <div class="t">候选占比</div>
+        </div>
+        <div class="card">
+          <div class="v" id="kpiArea">—</div>
+          <div class="t">最大连通域</div>
+        </div>
+        <div class="card">
+          <div class="v" id="kpiElapsed">—</div>
+          <div class="t">分析耗时(秒)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 画布与结果 -->
+    <div class="stage">
+      <div class="panel">
+        <h2>检测预览</h2>
+        <div class="canvas-wrap">
+          <canvas id="canvas"></canvas>
+          <canvas id="overlay" class="overlay"></canvas>
+        </div>
+        
+        <div class="small" id="statusLine">未加载视频</div>
+        <div id="progressWrap" style="margin-top:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span class="small">分析进度</span>
+            <span class="small" id="progressText">0%</span>
+          </div>
+          <div style="height:10px;background:#0b1324;border:1px solid #182133;border-radius:999px;overflow:hidden;">
+            <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#22c55e,#60a5fa)"></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="panel">
+        <div class="tools">
+          <h2 style="margin:0">命中缩略图（时间窗口 Top-N）</h2>
+          <button id="exportZipBtn" class="btn">导出全部命中为 ZIP</button>
+          <button id="exportCsvBtn" class="btn">导出命中清单 CSV</button>
+        </div>
+        <div id="thumbs"></div>
+      </div>
+
+      <div class="panel">
+        <h2>日志</h2>
+        <div id="log" class="log"></div>
+        <div class="footer">
+          <div class="small">参数与统计将记录于此，可复制保存。</div>
+          <button id="clearLog" class="btn ghost">清空日志</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox Viewer -->
+<div id="lightbox" class="lightbox" role="dialog" aria-modal="true" aria-label="命中图片预览">
+  <div class="lb-inner">
+    <div class="lb-toolbar">
+      <button class="lb-btn" id="lbPrev" title="上一张（←）">⟨ 上一张</button>
+      <button class="lb-btn" id="lbNext" title="下一张（→）">下一张 ⟩</button>
+      <button class="lb-btn" id="lbDownload" title="下载本张（Enter）">下载本张 ⤓</button>
+      <button class="lb-btn" id="lbClose" title="关闭（Esc）">关闭 ✕</button>
+    </div>
+    <div class="lb-img-wrap">
+      <img id="lbImg" class="lb-img" alt="命中图预览"/>
+    </div>
+    <div class="lb-caption" id="lbCaption">—</div>
+  </div>
+</div>
+
+<!-- Help Modal -->
+<div id="helpModal" class="modal" role="dialog" aria-modal="true" aria-label="设计思路与功能说明">
+  <div class="modal-card">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h3>设计思路 & 主要功能</h3>
+      <button id="helpClose" class="btn ghost modal-close">关闭</button>
+    </div>
+    <p>本工具用于离线分析本地视频中的 <b>闪光/火光</b> 事件，完全在浏览器内侧执行，不上传文件。</p>
+    <ul>
+      <li><b>检测策略</b>：
+        <ul>
+          <li><b>闪光（优化）</b>：<i>局部亮度 EMA 背景</i> + <i>局部 spike</i> + <i>连通域面积</i> + <i>时间去抖</i> + <i>全局白画面拦截</i>。</li>
+          <li><b>火光</b>：R&gt;G&gt;B + (R-G)/(G-B) 阈值 + 最低亮度 + 连通域。</li>
+          <li><b>Top-N</b>：按时间窗口保留得分最高的命中。</li>
+        </ul>
+      </li>
+      <li><b>性能可调</b>：处理分辨率、像素步长、帧跳过均可调；KPI 显示处理 FPS、候选占比、最大连通域面积与分析耗时。</li>
+      <li><b>可视化</b>：热力/二值图叠加，红框标注最大连通域；命中缩略图点击放大，支持上一张/下一张/下载/关闭。</li>
+      <li><b>导出</b>：导出参数、导入参数、导出全部命中 ZIP（含 manifest.csv）与仅导出 CSV 清单。</li>
+    </ul>
+  </div>
+</div>
+
+<video id="video" preload="metadata" style="display:none"></video>
+
+<script>
+(function(){
+  const el = id => document.getElementById(id);
+
+  const $file = el('file'), $video = el('video'), $canvas = el('canvas'), $overlay = el('overlay');
+  const ctx = $canvas.getContext('2d', { willReadFrequently:true });
+  const octx = $overlay.getContext('2d');
+  const $thumbs = el('thumbs'), $log = el('log'), $status = el('statusLine');
+  const $pText = el('progressText'), $pBar = el('progressBar');
+
+  // Lightbox refs
+  const $lightbox = el('lightbox'), $lbImg = el('lbImg'), $lbCaption = el('lbCaption');
+  const $lbPrev = el('lbPrev'), $lbNext = el('lbNext'), $lbClose = el('lbClose'), $lbDownload = el('lbDownload');
+
+  // Help modal
+  const $helpBtn = el('helpBtn'), $helpModal = el('helpModal'), $helpClose = el('helpClose');
+
+  const kFps = el('kpiFps'), kCand = el('kpiCand'), kArea = el('kpiArea'), kElapsed = el('kpiElapsed');
+
+  const num = x => (typeof x === 'string' ? (x.includes('.')?parseFloat(x):parseInt(x)) : x);
+  const bindRange = (rid, vid, key, toFixed=null) => {
+    const r = el(rid), v = el(vid);
+    r.addEventListener('input', () => { 
+      v.textContent = toFixed ? Number(r.value).toFixed(toFixed) : r.value; 
+      params[key] = num(r.value); 
+      persistParams(); 
+    });
+    v.textContent = toFixed ? Number(r.value).toFixed(toFixed) : r.value; 
+    params[key] = num(r.value);
+  };
+
+  // 原参数 + 新增局部闪光参数
+  const paramsDefault = {
+    width:640, step:1, skip:0,
+    windowSec:1.0, topN:1, minScore:0.80,
+    fireY:90, rg:40, gb:10,              // fire
+    spike:0.28, white:210, area:80,      // 旧的全局 spike/白光/面积（仍用于可视化与兼容）
+    alpha:0.08,
+    detectFire:true, detectFlash:true, showHeat:false,
+    // 新增（局部闪光优化）
+    localSpike:0.55, flashMinY:140, whiteCap:0.25, persist:2, areaMaxRatio:0.10
+  };
+  let params = loadParams() || {...paramsDefault};
+
+  bindRange('slWidth','vWidth','width');
+  bindRange('slStep','vStep','step');
+  bindRange('slSkip','vSkip','skip');
+  bindRange('slWin','vWin','windowSec',1);
+  bindRange('slMinScore','vMinScore','minScore',2);
+  bindRange('slFireY','vFireY','fireY');
+  bindRange('slRG','vRG','rg');
+  bindRange('slGB','vGB','gb');
+  bindRange('slWhite','vWhite','white');
+  bindRange('slArea','vArea','area');
+  bindRange('slAlpha','vAlpha','alpha',2);
+
+  // 新增绑定
+  bindRange('slLocalSpike','vLocalSpike','localSpike',2);
+  bindRange('slFlashMinY','vFlashMinY','flashMinY');
+  bindRange('slWhiteCap','vWhiteCap','whiteCap',2);
+  bindRange('slPersist','vPersist','persist');
+  bindRange('slAreaMaxRatio','vAreaMaxRatio','areaMaxRatio',2);
+
+  const $selTopN = el('selTopN'); $selTopN.value = String(params.topN||1);
+  $selTopN.addEventListener('change',()=>{ params.topN = parseInt($selTopN.value)||1; persistParams(); });
+
+  const $chkFire = el('chkFire'), $chkFlash = el('chkFlash'), $chkHeat = el('chkHeat');
+  $chkFire.checked = !!params.detectFire; $chkFlash.checked = !!params.detectFlash; $chkHeat.checked = !!params.showHeat;
+  $chkFire.addEventListener('change',()=>{ params.detectFire = $chkFire.checked; persistParams(); });
+  $chkFlash.addEventListener('change',()=>{ params.detectFlash = $chkFlash.checked; persistParams(); });
+  $chkHeat.addEventListener('change',()=>{ params.showHeat = $chkHeat.checked; persistParams(); });
+
+  // 按钮
+  el('defaultsBtn').onclick = ()=>{ params = {...paramsDefault}; applyParamsToUI(); log('已恢复默认参数'); persistParams(); };
+  el('exportBtn').onclick = ()=>{
+    const blob = new Blob([JSON.stringify(params,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href=url; a.download='flash_fire_params.json'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  };
+  el('importFile').onchange = (e)=>{
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{ const p = JSON.parse(reader.result); params = {...params, ...p}; applyParamsToUI(); log('已导入参数：\n'+JSON.stringify(params,null,2)); persistParams(); }
+      catch(err){ log('导入失败：'+err, 'danger'); }
+    };
+    reader.readAsText(f);
+  };
+  el('clearBtn').onclick = clearThumbs;
+  el('clearLog').onclick = ()=>{ $log.textContent=''; };
+
+  // 帮助按钮
+  $helpBtn.addEventListener('click', ()=>{ $helpModal.classList.add('open'); });
+  $helpClose.addEventListener('click', ()=>{ $helpModal.classList.remove('open'); });
+  $helpModal.addEventListener('click', (e)=>{ if (e.target === $helpModal) $helpModal.classList.remove('open'); });
+
+  // 文件选择
+  $file.onchange = (e)=>{
+    const f = e.target.files[0];
+    if(!f){ return; }
+    if ($video.src) URL.revokeObjectURL($video.src);
+    $video.src = URL.createObjectURL(f);
+    $video.load();
+    $video.onloadedmetadata = ()=>{
+      $status.textContent = `已加载：${f.name}，时长 ${( $video.duration || 0 ).toFixed(2)}s，尺寸 ${$video.videoWidth}×${$video.videoHeight}`;
+      resizeCanvas();
+      log('—— 参数快照 ——\n'+JSON.stringify(params,null,2));
+    };
+  };
+
+  // 开/停 & 耗时统计
+  let running = false, frameHandle = null, fpsEMA = 0;
+  let analysisStartMs = null, analysisEndMs = null;
+  $video.onended = ()=>{ stop(true); };
+
+  el('startBtn').onclick = ()=>{ if(!$video.src){ alert('请先选择本地视频'); return;} start(); };
+  el('stopBtn').onclick = ()=> stop(false);
+
+  function resizeCanvas(){
+    const W = params.width|0;
+    if(!$video.videoWidth){ return; }
+    const ratio = $video.videoHeight / $video.videoWidth;
+    const H = Math.round(W * ratio);
+    $canvas.width = W; $canvas.height = H;
+    $overlay.width = W; $overlay.height = H;
+  }
+
+  function applyParamsToUI(){
+    el('slWidth').value = params.width; el('vWidth').textContent = params.width;
+    el('slStep').value = params.step; el('vStep').textContent = params.step;
+    el('slSkip').value = params.skip; el('vSkip').textContent = params.skip;
+    el('slWin').value = params.windowSec; el('vWin').textContent = params.windowSec.toFixed(1);
+    el('slMinScore').value = params.minScore; el('vMinScore').textContent = params.minScore.toFixed(2);
+    el('slFireY').value = params.fireY; el('vFireY').textContent = params.fireY;
+    el('slRG').value = params.rg; el('vRG').textContent = params.rg;
+    el('slGB').value = params.gb; el('vGB').textContent = params.gb;
+    el('slWhite').value = params.white; el('vWhite').textContent = params.white;
+    el('slArea').value = params.area; el('vArea').textContent = params.area;
+    el('slAlpha').value = params.alpha; el('vAlpha').textContent = params.alpha.toFixed(2);
+    el('slLocalSpike').value = params.localSpike; el('vLocalSpike').textContent = params.localSpike.toFixed(2);
+    el('slFlashMinY').value = params.flashMinY; el('vFlashMinY').textContent = params.flashMinY;
+    el('slWhiteCap').value = params.whiteCap; el('vWhiteCap').textContent = params.whiteCap.toFixed(2);
+    el('slPersist').value = params.persist; el('vPersist').textContent = params.persist;
+    el('slAreaMaxRatio').value = params.areaMaxRatio; el('vAreaMaxRatio').textContent = params.areaMaxRatio.toFixed(2);
+    $selTopN.value = String(params.topN||1);
+    $chkFire.checked = params.detectFire; $chkFlash.checked = params.detectFlash; $chkHeat.checked = params.showHeat;
+    resizeCanvas();
+  }
+  applyParamsToUI();
+
+  function persistParams(){ try{ localStorage.setItem('ff_params_v7_localflash', JSON.stringify(params)); }catch{} }
+  function loadParams(){ try{ const s = localStorage.getItem('ff_params_v7_localflash'); return s?JSON.parse(s):null; }catch{ return null; } }
+
+  // —— 简易 ZIP 生成（STORE，无压缩） ——（保持原功能）
+  function crc32(buf){
+    let c = ~0>>>0;
+    for (let i=0;i<buf.length;i++){
+      c = (c ^ buf[i])>>>0;
+      for(let k=0;k<8;k++){
+        c = (c & 1) ? ((c>>>1) ^ 0xEDB88320)>>>0 : (c>>>1)>>>0;
+      }
+    }
+    return (~c)>>>0;
+  }
+  function dosDateTime(d=new Date()){
+    const year = d.getFullYear();
+    const dt = ((year-1980)<<9) | ((d.getMonth()+1)<<5) | d.getDate();
+    const tm = (d.getHours()<<11) | (d.getMinutes()<<5) | (Math.floor(d.getSeconds()/2));
+    return {date:dt, time:tm};
+  }
+  function strToUtf8Bytes(str){ return new TextEncoder().encode(str); }
+  function u32le(n){ return [n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]; }
+  function u16le(n){ return [n&255,(n>>>8)&255]; }
+  async function makeZip(entries){
+    let localParts = [], centralParts = []; let offset = 0;
+    const {date,time} = dosDateTime(new Date());
+    for (let e of entries){
+      const nameBytes = strToUtf8Bytes(e.name);
+      const buf = new Uint8Array(await e.blob.arrayBuffer());
+      const crc = crc32(buf), size = buf.length;
+      const localHeader = [
+        ...u32le(0x04034b50), ...u16le(20), ...u16le(0x0800), ...u16le(0),
+        ...u16le(time), ...u16le(date), ...u32le(crc), ...u32le(size), ...u32le(size),
+        ...u16le(nameBytes.length), ...u16le(0)
+      ];
+      localParts.push(new Uint8Array(localHeader)); localParts.push(nameBytes); localParts.push(buf);
+      const centralHeader = [
+        ...u32le(0x02014b50), ...u16le(20), ...u16le(20), ...u16le(0x0800), ...u16le(0),
+        ...u16le(time), ...u16le(date), ...u32le(crc), ...u32le(size), ...u32le(size),
+        ...u16le(nameBytes.length), ...u16le(0), ...u16le(0), ...u16le(0), ...u16le(0),
+        ...u32le(0), ...u32le(offset)
+      ];
+      centralParts.push(new Uint8Array(centralHeader)); centralParts.push(nameBytes);
+      offset += localHeader.length + nameBytes.length + size;
+    }
+    const centralSize = centralParts.reduce((s,a)=>s+a.length,0);
+    const centralOffset = offset;
+    const eocd = [
+      ...u32le(0x06054b50), ...u16le(0), ...u16le(0),
+      ...u16le(entries.length), ...u16le(entries.length),
+      ...u32le(centralSize), ...u32le(centralOffset), ...u16le(0)
+    ];
+    const parts = [...localParts, ...centralParts, new Uint8Array(eocd)];
+    const total = parts.reduce((s,a)=>s+a.length,0);
+    const out = new Uint8Array(total);
+    let p=0; for (let a of parts){ out.set(a,p); p+=a.length; }
+    return new Blob([out], {type:'application/zip'});
+  }
+
+  // —— 导出：ZIP（含 manifest.csv） ——（保持原功能）
+  const gallery = []; // {url,type,time,score,w,h}
+  async function exportAllAsZip(){
+    if (gallery.length === 0){ alert('没有可导出的命中图片'); return; }
+    const entries = [];
+    const lines = ['index,type,time_sec,score,resolution'];
+    for (let i=0;i<gallery.length;i++){
+      const it = gallery[i];
+      try{
+        const res = await fetch(it.url);
+        const blob = await res.blob();
+        const idx = String(gallery.length - i).padStart(4,'0');
+        const t = it.time.toFixed(2);
+        const tSafe = t.replace('.','_');
+        const typeDir = it.type === 'flash' ? 'flash' : 'fire';
+        const name = `${typeDir}/hit_${idx}_${it.type}_${tSafe}s_sc${it.score.toFixed(2)}_${it.w}x${it.h}.jpg`;
+        entries.push({name, blob});
+        lines.push(`${idx},${it.type},${t},${it.score.toFixed(4)},${it.w}x${it.h}`);
+      }catch{}
+    }
+    const csvBlob = new Blob([lines.join('\n')], {type:'text/csv'});
+    entries.push({name:'manifest.csv', blob:csvBlob});
+
+    const zipBlob = await makeZip(entries);
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a'); a.href = url; a.download = 'hits.zip'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  }
+  function exportCsvOnly(){
+    if (gallery.length === 0){ alert('没有数据可导出'); return; }
+    const lines = ['index,type,time_sec,score,resolution'];
+    for (let i=0;i<gallery.length;i++){
+      const it = gallery[i];
+      const idx = String(gallery.length - i).padStart(4,'0');
+      const t = it.time.toFixed(2);
+      lines.push(`${idx},${it.type},${t},${it.score.toFixed(4)},${it.w}x${it.h}`);
+    }
+    const blob = new Blob([lines.join('\n')], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'hits.csv'; a.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  }
+  el('exportZipBtn').addEventListener('click', exportAllAsZip);
+  el('exportCsvBtn').addEventListener('click', exportCsvOnly);
+
+  // —— 缩略图/画廊（保持原功能） ——
+  function appendThumb(url, type, timeSec, score){
+    const div = document.createElement('div');
+    div.className='thumb';
+    const img = document.createElement('img');
+    img.src = url; img.alt = `${type} @ ${timeSec.toFixed(2)}s`;
+    const meta = document.createElement('div');
+    meta.className='meta';
+    const t = document.createElement('div');
+    t.textContent = `${type==='flash'?'⚡ 闪光':'🔥 火光'}  @ ${timeSec.toFixed(2)}s  sc=${score.toFixed(2)}`;
+    const chip = document.createElement('span');
+    chip.className='chip';
+    chip.textContent = `${$canvas.width}×${$canvas.height}`;
+    meta.appendChild(t); meta.appendChild(chip);
+    div.appendChild(img); div.appendChild(meta);
+    const item = {url, type, time: timeSec, score:score, w:$canvas.width, h:$canvas.height};
+    gallery.unshift(item);
+    const myIndex = 0;
+    div.addEventListener('click', ()=> openLightbox(myIndex));
+    $thumbs.prepend(div);
+
+    const MAX = 60;
+    const items = $thumbs.querySelectorAll('.thumb');
+    if (items.length > MAX){
+      const last = items[items.length-1];
+      const lastImg = last.querySelector('img');
+      if (lastImg){ try{ URL.revokeObjectURL(lastImg.src); }catch{} }
+      last.remove();
+      gallery.pop();
+    }
+  }
+
+  function clearThumbs(){
+    const imgs = $thumbs.querySelectorAll('img');
+    imgs.forEach(x=>{ try{ URL.revokeObjectURL(x.src); }catch{} });
+    $thumbs.innerHTML='';
+    gallery.splice(0, gallery.length);
+  }
+
+  // —— Lightbox ——
+  let lbIndex = -1;
+  function openLightbox(index){
+    if (gallery.length === 0) return;
+    lbIndex = Math.max(0, Math.min(index, gallery.length - 1));
+    updateLightbox();
+    $lightbox.classList.add('open');
+  }
+  function closeLightbox(){ $lightbox.classList.remove('open'); }
+  function prevLightbox(){ if (gallery.length === 0) return; lbIndex = (lbIndex - 1 + gallery.length) % gallery.length; updateLightbox(); }
+  function nextLightbox(){ if (gallery.length === 0) return; lbIndex = (lbIndex + 1) % gallery.length; updateLightbox(); }
+  function downloadCurrent(){
+    const it = gallery[lbIndex]; if (!it) return;
+    const a = document.createElement('a');
+    const tSafe = it.time.toFixed(2).replace('.','_');
+    a.href = it.url; a.download = `hit_${String(gallery.length-lbIndex).padStart(4,'0')}_${it.type}_${tSafe}s_sc${it.score.toFixed(2)}_${it.w}x${it.h}.jpg`;
+    a.click();
+  }
+  function updateLightbox(){
+    const it = gallery[lbIndex];
+    if (!it) return;
+    $lbImg.src = it.url;
+    $lbCaption.textContent = `${it.type==='flash'?'⚡ 闪光':'🔥 火光'}  @ ${it.time.toFixed(2)}s  （${lbIndex+1}/${gallery.length}）  sc=${it.score.toFixed(2)}  ${it.w}×${it.h}`;
+  }
+  $lbPrev.addEventListener('click', prevLightbox);
+  $lbNext.addEventListener('click', nextLightbox);
+  $lbClose.addEventListener('click', closeLightbox);
+  $lbDownload.addEventListener('click', downloadCurrent);
+  $lightbox.addEventListener('click', (e)=>{ if (e.target === $lightbox) closeLightbox(); });
+  window.addEventListener('keydown', (e)=>{
+    if ($helpModal.classList.contains('open')){ if (e.key === 'Escape') $helpModal.classList.remove('open'); return; }
+    if (!$lightbox.classList.contains('open')) return;
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') prevLightbox();
+    else if (e.key === 'ArrowRight') nextLightbox();
+    else if (e.key === 'Enter') downloadCurrent();
+  });
+
+  // —— Top-N 命中筛选（时间窗口聚合） ——（保持原逻辑与打分函数）
+  let currentWindowIdx = -1;
+  let buffer = [];
+  function scoreHit(r){
+    const areaScore = Math.log(1 + (r.area||0));
+    const spikeScore = Math.max(0, Math.min(1.5, r.spike));
+    const typeBonus = (r.type==='flash') ? 0.6 : 0.3;
+    return areaScore*0.6 + spikeScore*1.4 + typeBonus;
+  }
+  async function considerHit(r){
+    const sc = scoreHit(r);
+    if (sc < params.minScore){ return; }
+    const timeSec = $video.currentTime || 0;
+    const widx = Math.floor(timeSec / Math.max(0.1, params.windowSec));
+
+    if (currentWindowIdx !== -1 && widx !== currentWindowIdx){
+      await flushWindow();
+    }
+    currentWindowIdx = widx;
+
+    const url = await renderThumb(r.type, r.bbox);
+    buffer.push({score:sc, url, type:r.type, time:timeSec});
+
+    const keep = Math.max(1, params.topN|0) + 2;
+    if (buffer.length > keep){
+      buffer.sort((a,b)=>b.score-a.score);
+      const dropped = buffer.splice(keep);
+      dropped.forEach(x=>{ try{ URL.revokeObjectURL(x.url); }catch{} });
+    }
+  }
+  async function flushWindow(){
+    if (buffer.length === 0) return;
+    buffer.sort((a,b)=> b.score - a.score);
+    const n = Math.min(buffer.length, Math.max(1, params.topN|0));
+    for (let i=0; i<n; i++){
+      const it = buffer[i];
+      appendThumb(it.url, it.type, it.time, it.score);
+    }
+    for (let i=n;i<buffer.length;i++){
+      try{ URL.revokeObjectURL(buffer[i].url); }catch{}
+    }
+    buffer.length = 0;
+  }
+
+  // 状态/日志/KPI
+  function log(s, level){
+    const ts = new Date().toLocaleTimeString();
+    const line = level==='danger' ? '❌ ' : level==='warn' ? '⚠️ ' : '📝 ';
+    $log.textContent += `[${ts}] ${line}${s}\n`;
+    $log.scrollTop = $log.scrollHeight;
+  }
+
+  // —— 新增：基于网格的 EMA 背景（局部） ——
+  let emaY = null;                  // 全局均值 EMA（用于展示）
+  let bgYGrid = null;               // 局部网格 EMA
+  let gridW = 0, gridH = 0;
+  let hitQueue = [];                // 时间去抖队列（闪光）
+
+  function updateEMA(v, a){ if(emaY==null) emaY=v; else emaY = emaY + a*(v-emaY); return emaY; }
+  function ensureGridBuffers(W, H, step){
+    const gw = Math.floor(W / step);
+    const gh = Math.floor(H / step);
+    if (gw !== gridW || gh !== gridH || !bgYGrid){
+      gridW = gw; gridH = gh;
+      bgYGrid = new Float32Array(gridW * gridH);
+      bgYGrid.fill(0);
+      hitQueue = [];
+    }
+  }
+  function YfromRGB(r,g,b){ return ( (r*77 + g*150 + b*29) ) >> 8; }
+
+  // 网格连通域（4 邻域）
+  function ccOnGrid(mask, gw, gh){
+    const visited = new Uint8Array(mask.length);
+    const comps = [];
+    const qx = new Int16Array(mask.length);
+    const qy = new Int16Array(mask.length);
+    for (let y=0; y<gh; y++){
+      for (let x=0; x<gw; x++){
+        const i = y*gw + x;
+        if (!mask[i] || visited[i]) continue;
+        let head=0, tail=0;
+        qx[tail]=x; qy[tail]=y; tail++;
+        visited[i]=1;
+        let minx=x, miny=y, maxx=x, maxy=y, area=0;
+        while(head<tail){
+          const cx=qx[head], cy=qy[head]; head++;
+          area++;
+          if (cx<minx)minx=cx; if(cx>maxx)maxx=cx;
+          if (cy<miny)miny=cy; if(cy>maxy)maxy=cy;
+          if (cx>0){ const ni=cy*gw + (cx-1); if(mask[ni] && !visited[ni]){visited[ni]=1; qx[tail]=cx-1; qy[tail]=cy; tail++;} }
+          if (cx<gw-1){ const ni=cy*gw + (cx+1); if(mask[ni] && !visited[ni]){visited[ni]=1; qx[tail]=cx+1; qy[tail]=cy; tail++;} }
+          if (cy>0){ const ni=(cy-1)*gw + cx; if(mask[ni] && !visited[ni]){visited[ni]=1; qx[tail]=cx; qy[tail]=cy-1; tail++;} }
+          if (cy<gh-1){ const ni=(cy+1)*gw + cx; if(mask[ni] && !visited[ni]){visited[ni]=1; qx[tail]=cx; qy[tail]=cy+1; tail++;} }
+        }
+        comps.push({minx,miny,maxx,maxy,area});
+      }
+    }
+    return comps;
+  }
+  function iou(a,b){
+    const x1=Math.max(a.x,b.x), y1=Math.max(a.y,b.y);
+    const x2=Math.min(a.x+a.w,b.x+b.w), y2=Math.min(a.y+a.h,b.y+b.h);
+    const iw=Math.max(0,x2-x1), ih=Math.max(0,y2-y1);
+    const inter=iw*ih, union=a.w*a.h + b.w*b.h - inter;
+    return union>0 ? inter/union : 0;
+  }
+
+  // 闪光：构建局部掩码 + 白画面统计
+  function buildFlashLocalMask(imageData, W, H, step){
+    const p = params;
+    const data = imageData.data;
+    const mask = new Uint8Array(gridW*gridH);
+    let whiteCount = 0, ones = 0;
+
+    for (let gy=0,y=0; gy<gridH; gy++, y+=step){
+      for (let gx=0,x=0; gx<gridW; gx++, x+=step){
+        const idx = (y*W + x)*4;
+        const r=data[idx], g=data[idx+1], b=data[idx+2];
+        const Y = YfromRGB(r,g,b);
+        if (r>=p.white && g>=p.white && b>=p.white) whiteCount++;
+
+        const gi = gy*gridW + gx;
+        const bg = bgYGrid[gi] || Y;
+        const denom = bg>20?bg:20;
+        const spikeLocal = (Y - bg) / denom;
+        const on = (Y >= p.flashMinY && spikeLocal >= p.localSpike) ? 1 : 0;
+        mask[gi] = on; ones += on;
+      }
+    }
+    const whiteRatio = whiteCount / (gridW*gridH);
+    return {mask, ones, whiteRatio};
+  }
+
+  // 火光：构建暖色掩码（沿用你原来的判定）
+  function buildFireMask(imageData, W, H, step){
+    const p = params;
+    const data = imageData.data;
+    const mask = new Uint8Array(gridW*gridH);
+    let ones = 0;
+    for (let gy=0,y=0; gy<gridH; gy++, y+=step){
+      for (let gx=0,x=0; gx<gridW; gx++, x+=step){
+        const idx = (y*W + x)*4;
+        const r=data[idx], g=data[idx+1], b=data[idx+2];
+        const Y = YfromRGB(r,g,b);
+        let on = 0;
+        if (Y>=p.fireY && r>g && g>b && (r-g)>=p.rg && (g-b)>=p.gb){
+          const warm = r / Math.max(1, (r+g+b));
+          if (warm > 0.40) on = 1;
+        }
+        const gi = gy*gridW + gx;
+        mask[gi] = on; ones += on;
+      }
+    }
+    return {mask, ones};
+  }
+
+  // 将网格 bbox 转像素 bbox
+  function gridBBoxToPixelBox(c){
+    return { x1: c.minx*params.step, y1: c.miny*params.step, x2: (c.maxx+1)*params.step, y2: (c.maxy+1)*params.step, area: c.area*params.step*params.step };
+  }
+
+  // 可视化（热力 + 框）
+  function drawVizCombined(bbox, maskGrid){
+    octx.clearRect(0,0,$overlay.width,$overlay.height);
+    if (params.showHeat && maskGrid){
+      const W = $canvas.width, H = $canvas.height, s = params.step;
+      octx.save();
+      octx.globalAlpha = .35;
+      octx.fillStyle = 'rgba(255,120,0,0.9)';
+      for (let gy=0; gy<gridH; gy++){
+        for (let gx=0; gx<gridW; gx++){
+          const gi = gy*gridW + gx;
+          if (!maskGrid[gi]) continue;
+          octx.fillRect(gx*s, gy*s, s, s);
+        }
+      }
+      octx.restore();
+    }
+    if (bbox){
+      octx.save();
+      octx.strokeStyle='#ef4444';
+      octx.lineWidth = Math.max(2, Math.round(Math.min($overlay.width,$overlay.height)*0.005));
+      octx.strokeRect(bbox.x1, bbox.y1, bbox.x2-bbox.x1, bbox.y2-bbox.y1);
+      octx.restore();
+    }
+  }
+
+  // 旧版像素级连通域用于显示（保留以兼容）
+  function largestBBox(mask, W, H, minArea){
+    const n = W*H;
+    const vis = new Uint8Array(n);
+    let best = null, bestArea = 0;
+    const qx = new Int32Array(n), qy = new Int32Array(n);
+    const idx = (x,y)=>y*W+x;
+    for(let y=0;y<H;y++){
+      const base = y*W;
+      for(let x=0;x<W;x++){
+        const i = base+x;
+        if (!mask[i] || vis[i]) continue;
+        let head=0, tail=0;
+        qx[tail]=x; qy[tail]=y; tail++;
+        vis[i]=1;
+        let x1=x,x2=x,y1=y,y2=y, area=0;
+        while(head<tail){
+          const cx=qx[head], cy=qy[head]; head++;
+          area++;
+          if (cx<x1) x1=cx; if (cx>x2) x2=cx;
+          if (cy<y1) y1=cy; if (cy>y2) y2=cy;
+          if (cx+1<W){ const j=idx(cx+1,cy); if(mask[j]&&!vis[j]){vis[j]=1; qx[tail]=cx+1; qy[tail]=cy; tail++;} }
+          if (cx-1>=0){ const j=idx(cx-1,cy); if(mask[j]&&!vis[j]){vis[j]=1; qx[tail]=cx-1; qy[tail]=cy; tail++;} }
+          if (cy+1<H){ const j=idx(cx,cy+1); if(mask[j]&&!vis[j]){vis[j]=1; qx[tail]=cx; qy[tail]=cy+1; tail++;} }
+          if (cy-1>=0){ const j=idx(cx,cy-1); if(mask[j]&&!vis[j]){vis[j]=1; qx[tail]=cx; qy[tail]=cy-1; tail++;} }
+        }
+        if (area>bestArea && area>=minArea){ bestArea = area; best = {x1,y1,x2,y2,area}; }
+      }
+    }
+    return best;
+  }
+
+  // 主循环 / 帧分析 —— 用“局部闪光 + 火光”并行检测，输出兼容对象
+  let lastFpsTs = performance.now(), frames=0;
+  let skipCounter = 0;
+  function loop(ts){
+    if (!running) return;
+
+    frames++;
+    if (ts - lastFpsTs >= 500){
+      const fps = frames * 1000 / (ts - lastFpsTs);
+      fpsEMA = fpsEMA? (fpsEMA*0.6 + fps*0.4) : fps;
+      kFps.textContent = fpsEMA.toFixed(1);
+      frames = 0; lastFpsTs = ts;
+    }
+
+    const r = analyzeFrame();
+    if (r){
+      kCand.textContent = isFinite(r.candPct)? r.candPct.toFixed(1)+'%':'—';
+      kArea.textContent = r.area? r.area.toString() : '0';
+      $status.innerHTML = `Y=${r.meanY.toFixed(1)} 背景=${r.bgY.toFixed(1)} <span class="${r.spike>=params.spike?'ok':''}">spike=${r.spike.toFixed(3)}</span>`;
+
+      drawVizCombined(r.bbox, r.maskGrid);
+
+      if (isFinite($video.duration) && $video.duration > 0){
+        const pct = Math.max(0, Math.min(100, ($video.currentTime / $video.duration) * 100));
+        $pText.textContent = pct.toFixed(0) + '%';
+        $pBar.style.width = pct + '%';
+      }
+
+      if (r.hit){
+        considerHit(r).then(()=>{
+          const sc = scoreHit(r);
+          if (sc >= params.minScore){
+            log(`${r.type==='flash'?'⚡ 闪光':'🔥 火光'} 命中；score=${sc.toFixed(2)} spike=${r.spike.toFixed(3)} area=${r.area||0}`);
+          }
+        });
+      }
+    }
+
+    frameHandle = ( 'requestVideoFrameCallback' in $video )
+      ? $video.requestVideoFrameCallback(()=>{ if(running) requestAnimationFrame(loop); })
+      : requestAnimationFrame(loop);
+  }
+
+  function analyzeFrame(){
+    const W = $canvas.width, H = $canvas.height;
+    if (!W||!H) return { hit:false };
+
+    if (skipCounter++ % (Math.max(1, (params.skip|0)+1)) !== 0){
+      ctx.drawImage($video, 0, 0, W, H);
+      return { hit:false, meanY:0, bgY:emaY||0, candPct:0, area:0, bbox:null, spike:0, maskGrid:null };
+    }
+
+    ctx.drawImage($video, 0, 0, W, H);
+    const img = ctx.getImageData(0,0,W,H);
+    const data = img.data;
+    const step = Math.max(1, params.step|0);
+
+    ensureGridBuffers(W, H, step);
+
+    // 统计全局亮度均值（用于展示 & 全局 spike） & 更新局部 EMA
+    let sumY = 0, cnt = 0;
+    for (let gy=0,y=0; gy<gridH; gy++, y+=step){
+      for (let gx=0,x=0; gx<gridW; gx++, x+=step){
+        const idx = (y*W + x)<<2;
+        const r = data[idx], g = data[idx+1], b = data[idx+2];
+        const Y = YfromRGB(r,g,b);
+        sumY += Y; cnt++;
+        const gi = gy*gridW + gx;
+        const prev = bgYGrid[gi] || Y;
+        bgYGrid[gi] = prev + params.alpha * (Y - prev);
+      }
+    }
+    const meanY = sumY / Math.max(1,cnt);
+    const bgY = updateEMA(meanY, params.alpha);
+    const spikeRatioGlobal = (meanY - bgY) / Math.max(1, bgY);
+
+    let finalHit = false, finalType = null, finalBBox = null, finalArea = 0, unionMaskGrid = null;
+
+    // —— 火光检测 ——
+    if (params.detectFire){
+      const {mask: fireMask, ones: fireOnes} = buildFireMask(img, W, H, step);
+      const comps = ccOnGrid(fireMask, gridW, gridH);
+      if (comps.length){
+        comps.sort((a,b)=>b.area-a.area);
+        const c = comps[0];
+        if (c.area >= Math.max(1, Math.round(params.area/(step*step)))){ // 将像素面积阈值按网格换算
+          const bboxPix = gridBBoxToPixelBox(c);
+          finalHit = true; finalType = 'fire'; finalBBox = bboxPix; finalArea = c.area;
+          unionMaskGrid = fireMask;
+        }else{
+          unionMaskGrid = fireMask;
+        }
+      }
+    }
+
+    // —— 闪光（局部）检测 ——
+    if (params.detectFlash){
+      const {mask: flashMask, ones: flashOnes, whiteRatio} = buildFlashLocalMask(img, W, H, step);
+
+      // 白画面拦截
+      if (whiteRatio <= params.whiteCap){
+        const compsF = ccOnGrid(flashMask, gridW, gridH);
+        if (compsF.length){
+          compsF.sort((a,b)=>b.area-a.area);
+          const c = compsF[0];
+          const totalGrid = gridW*gridH;
+          const minAreaGrid = Math.max(1, Math.round(params.area/(step*step)));
+          const maxAreaGrid = Math.floor(params.areaMaxRatio * totalGrid);
+          if (c.area >= minAreaGrid && c.area <= maxAreaGrid){
+            const bboxPix = gridBBoxToPixelBox(c);
+            // 时间去抖
+            hitQueue.push({ bbox: {x:bboxPix.x1, y:bboxPix.y1, w:bboxPix.x2-bboxPix.x1, h:bboxPix.y2-bboxPix.y1}, t: performance.now() });
+            if (hitQueue.length > 5) hitQueue.shift();
+            let count=0;
+            for (let i=0;i<hitQueue.length;i++){
+              const hb = hitQueue[i].bbox;
+              if (iou(hb, {x:bboxPix.x1,y:bboxPix.y1,w:bboxPix.x2-bboxPix.x1,h:bboxPix.y2-bboxPix.y1}) >= 0.3) count++;
+            }
+            const pass = count >= params.persist;
+            if (pass){
+              // 如果此前火光未命中或希望优先闪光，这里覆盖
+              finalHit = true; finalType = 'flash'; finalBBox = bboxPix; finalArea = c.area;
+            }
+          }
+        }
+      }
+      // 合并可视化掩码
+      if (unionMaskGrid){
+        const u = new Uint8Array(unionMaskGrid.length);
+        for (let i=0;i<u.length;i++) u[i] = unionMaskGrid[i] || flashMask[i] ? 1 : 0;
+        unionMaskGrid = u;
+      }else{
+        unionMaskGrid = flashMask;
+      }
+    }
+
+    // 组装兼容返回
+    const r = {
+      hit: finalHit,
+      type: finalType,
+      bbox: finalBBox,
+      spike: Math.max(0, Math.min(1.5, spikeRatioGlobal)), // 继续用于打分展示（不是判闪光的依据）
+      meanY, bgY,
+      candPct: unionMaskGrid ? (unionMaskGrid.reduce((a,c)=>a+c,0) / Math.max(1, gridW*gridH))*100 : 0,
+      area: finalArea,
+      maskGrid: unionMaskGrid
+    };
+    return r;
+  }
+
+  function start(){
+    if (running) return;
+    clearThumbs();
+    resizeCanvas();
+    running = true;
+    emaY = null;
+    analysisStartMs = performance.now();
+    analysisEndMs = null;
+    kElapsed.textContent = '—';
+    if ($pText && $pBar){ $pText.textContent = '0%'; $pBar.style.width = '0%'; }
+    skipCounter = 0;
+    $video.play().catch(()=>{});
+    currentWindowIdx = -1; buffer.length = 0;
+    fpsEMA = 0; frames = 0; lastFpsTs = performance.now();
+    frameHandle = requestAnimationFrame(loop);
+    log('开始检测：' + (document.getElementById('file').files[0]?.name || '（媒体流）'));
+  }
+
+  async function stop(autoEnded){
+    if (!running){
+      await flushWindow();
+      return;
+    }
+    running = false;
+    if (frameHandle){ cancelAnimationFrame(frameHandle); frameHandle = null; }
+    await flushWindow();
+    if (!autoEnded) $video.pause();
+    analysisEndMs = performance.now();
+    const elapsedSec = ((analysisEndMs - analysisStartMs) / 1000);
+    kElapsed.textContent = elapsedSec.toFixed(2);
+    if (autoEnded && $pText && $pBar){ $pText.textContent = '100%'; $pBar.style.width = '100%'; }
+    log(`已停止检测（耗时 ${elapsedSec.toFixed(2)} s）`, 'warn');
+  }
+
+  window.addEventListener('resize', ()=>{ resizeCanvas(); });
+
+  // 渲染命中帧（保持原功能）
+  async function renderThumb(type, bbox){
+    if (bbox){
+      ctx.save();
+      ctx.strokeStyle = 'red';
+      ctx.lineWidth = Math.max(2, Math.round(Math.min($canvas.width,$canvas.height)*0.005));
+      ctx.strokeRect(bbox.x1, bbox.y1, bbox.x2-bbox.x1, bbox.y2-bbox.y1);
+      ctx.restore();
+    }
+    const blob = await new Promise(r=> $canvas.toBlob(r,'image/jpeg',0.92));
+    return URL.createObjectURL(blob);
+  }
+
+})();
+</script>
+</body>
+</html>

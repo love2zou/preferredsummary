@@ -88,12 +88,6 @@ D:\git\preferred\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.dll
 D:\git\preferred\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.xml
 D:\git\preferred\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.pdb
 D:\git\preferred\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.genruntimeconfig.cache
-D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.csprojAssemblyReference.cache
-D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.AssemblyInfoInputs.cache
-D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.AssemblyInfo.cs
-D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.csproj.CoreCompileInputs.cache
-D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.MvcApplicationPartsAssemblyInfo.cs
-D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.MvcApplicationPartsAssemblyInfo.cache
 D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\appsettings.Development.json
 D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\appsettings.json
 D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\package-lock.json
@@ -170,6 +164,12 @@ D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\System.Xml.
 D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win\lib\netcoreapp2.0\System.Diagnostics.PerformanceCounter.dll
 D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win\lib\netstandard2.0\System.Security.Cryptography.ProtectedData.dll
 D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win\lib\netcoreapp2.0\System.Text.Encoding.CodePages.dll
+D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.csprojAssemblyReference.cache
+D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.AssemblyInfoInputs.cache
+D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.AssemblyInfo.cs
+D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.csproj.CoreCompileInputs.cache
+D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.MvcApplicationPartsAssemblyInfo.cs
+D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.MvcApplicationPartsAssemblyInfo.cache
 D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.RazorTargetAssemblyInfo.cache
 D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.csproj.CopyComplete
 D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\staticwebassets\Preferred.Api.StaticWebAssets.Manifest.cache

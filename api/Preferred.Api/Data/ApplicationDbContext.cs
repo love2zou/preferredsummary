@@ -22,7 +22,16 @@ namespace Preferred.Api.Data
         public DbSet<ScheduledTaskLog> ScheduledTaskLogs { get; set; }
         public DbSet<CoachMemberRelation> CoachMemberRelations { get; set; }
         public DbSet<BookTask> BookTasks { get; set; }
-
+        // ====================== ZWAV 录波分析表映射- Start======================
+        public DbSet<ZwavAnalysis> ZwavAnalyses { get; set; }
+        public DbSet<ZwavFile> ZwavFiles { get; set; }
+        public DbSet<ZwavCfg> ZwavCfgs { get; set; }
+        public DbSet<ZwavChannel> ZwavChannels { get; set; }
+        public DbSet<ZwavHdr> ZwavHdrs { get; set; }
+        public DbSet<ZwavWaveCache> ZwavWaveCaches { get; set; }
+        public DbSet<ZwavData> ZwavDatas { get; set; }
+        // ====================== ZWAV 录波分析表映射 - End ======================
+        
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -241,6 +250,302 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.UpdTime).IsRequired();
                 entity.HasIndex(e => new { e.CoachId, e.BookDate, e.BookTimeSlot }).IsUnique();
             });
+
+            // ====================== ZWAV 录波分析表映射 ======================
+            modelBuilder.Entity<ZwavFile>(entity =>
+            {
+                entity.ToTable("Tb_ZwavFile");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.OriginalName).IsRequired().HasMaxLength(255);
+                entity.Property(e => e.FileSize).IsRequired();
+                entity.Property(e => e.Sha256).IsRequired().HasMaxLength(64);
+                entity.Property(e => e.StorageType).IsRequired().HasMaxLength(16);
+                entity.Property(e => e.StoragePath).IsRequired().HasMaxLength(1024);
+                entity.Property(e => e.ExtractPath).HasMaxLength(1024);
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => e.Sha256).IsUnique();
+            });
+
+            modelBuilder.Entity<ZwavAnalysis>(entity =>
+            {
+                entity.ToTable("Tb_ZwavAnalysis");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisGuid).IsRequired().HasMaxLength(36);
+                entity.Property(e => e.Status).IsRequired().HasMaxLength(16);
+                entity.Property(e => e.Progress).HasDefaultValue(0);
+                entity.Property(e => e.ErrorMessage).HasColumnType("TEXT");
+
+                entity.Property(e => e.FileId).IsRequired();
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => e.AnalysisGuid).IsUnique();
+                entity.HasIndex(e => new { e.Status, e.CrtTime });
+
+                // 可选：外键导航
+                entity.HasOne(e => e.File)
+                    .WithMany()
+                    .HasForeignKey(e => e.FileId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ZwavCfg>(entity =>
+            {
+                entity.ToTable("Tb_ZwavCfg");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.FullCfgText).HasColumnType("TEXT"); 
+                entity.Property(e => e.StationName).HasMaxLength(128);
+                entity.Property(e => e.DeviceId).HasMaxLength(128);
+                entity.Property(e => e.Revision).HasMaxLength(64);
+
+                entity.Property(e => e.FrequencyHz).HasColumnType("decimal(10,3)");
+                entity.Property(e => e.TimeMul).HasColumnType("decimal(18,8)");
+
+                entity.Property(e => e.StartTimeRaw).HasMaxLength(64);
+                entity.Property(e => e.TriggerTimeRaw).HasMaxLength(64);
+
+                entity.Property(e => e.FormatType).HasMaxLength(16);
+                entity.Property(e => e.DataType).HasMaxLength(16);
+
+                entity.Property(e => e.SampleRateJson).HasColumnType("JSON");
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => e.AnalysisId).IsUnique();
+            });
+
+            modelBuilder.Entity<ZwavHdr>(entity =>
+            {
+                entity.ToTable("Tb_ZwavHdr");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.FaultStartTime).HasMaxLength(50);
+                entity.Property(e => e.FaultKeepingTime).HasMaxLength(50);
+
+                entity.Property(e => e.DeviceInfoJson).HasColumnType("JSON");
+                entity.Property(e => e.TripInfoJSON).HasColumnType("JSON");
+                entity.Property(e => e.FaultInfoJson).HasColumnType("JSON");
+                entity.Property(e => e.DigitalStatusJson).HasColumnType("JSON");
+                entity.Property(e => e.DigitalEventJson).HasColumnType("JSON");
+                entity.Property(e => e.SettingValueJson).HasColumnType("JSON");
+                entity.Property(e => e.RelayEnaValueJSON).HasColumnType("JSON");
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => e.AnalysisId).IsUnique();
+            });
+
+            modelBuilder.Entity<ZwavChannel>(entity =>
+            {
+                entity.ToTable("Tb_ZwavChannel");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.ChannelIndex).IsRequired();
+                entity.Property(e => e.ChannelType).IsRequired().HasMaxLength(16);
+
+                entity.Property(e => e.ChannelCode).HasMaxLength(64);
+                entity.Property(e => e.ChannelName).HasMaxLength(128);
+                entity.Property(e => e.Phase).HasMaxLength(16);
+                entity.Property(e => e.Unit).HasMaxLength(32);
+
+                entity.Property(e => e.RatioA).HasColumnType("decimal(18,8)");
+                entity.Property(e => e.OffsetB).HasColumnType("decimal(18,8)");
+                entity.Property(e => e.Skew).HasColumnType("decimal(18,8)");
+
+                entity.Property(e => e.IsEnable).HasDefaultValue(1);
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => new { e.AnalysisId, e.ChannelType, e.ChannelIndex }).IsUnique();
+                entity.HasIndex(e => new { e.AnalysisId, e.ChannelType });
+            });
+
+            modelBuilder.Entity<ZwavWaveCache>(entity =>
+            {
+                entity.ToTable("Tb_ZwavWaveCache");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.CacheKey).IsRequired().HasMaxLength(64);
+
+                entity.Property(e => e.Channels).IsRequired().HasMaxLength(512);
+                entity.Property(e => e.SampleMode).IsRequired().HasMaxLength(16);
+                entity.Property(e => e.PayloadJson).HasColumnType("JSON");
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => e.CacheKey).IsUnique();
+                entity.HasIndex(e => new { e.AnalysisId, e.StartIndex, e.EndIndex });
+            });
+
+            modelBuilder.Entity<ZwavData>(entity =>
+            {
+                // 指定表名
+                entity.ToTable("Tb_ZwavData");
+
+                // 设置主键
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.AnalysisId).IsRequired();
+                // 设置 SampleNo 和 TimeRaw 为必填字段
+                entity.Property(e => e.SampleNo).IsRequired();
+                entity.Property(e => e.TimeRaw).IsRequired();
+
+                // 设置模拟量通道（最多70个，示例只显示几个，您可以根据需要继续扩展）
+                entity.Property(e => e.Channel1).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel2).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel3).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel4).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel5).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel6).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel7).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel8).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel9).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel10).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel11).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel12).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel13).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel14).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel15).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel16).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel17).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel18).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel19).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel20).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel21).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel22).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel23).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel24).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel25).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel26).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel27).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel28).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel29).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel30).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel31).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel32).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel33).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel34).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel35).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel36).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel37).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel38).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel39).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel40).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel41).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel42).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel43).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel44).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel45).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel46).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel47).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel48).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel49).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel50).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel51).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel52).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel53).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel54).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel55).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel56).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel57).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel58).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel59).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel60).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel61).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel62).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel63).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel64).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel65).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel66).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel67).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel68).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel69).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel70).HasColumnType("DOUBLE");
+
+                // 设置数字量通道（最多50个，示例显示几个，您可以根据需要继续扩展）
+                entity.Property(e => e.Digital1).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital2).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital3).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital4).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital5).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital6).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital7).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital8).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital9).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital10).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital11).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital12).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital13).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital14).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital15).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital16).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital17).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital18).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital19).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital20).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital21).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital22).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital23).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital24).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital25).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital26).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital27).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital28).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital29).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital30).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital31).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital32).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital33).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital34).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital35).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital36).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital37).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital38).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital39).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital40).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital41).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital42).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital43).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital44).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital45).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital46).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital47).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital48).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital49).HasColumnType("SMALLINT");
+                entity.Property(e => e.Digital50).HasColumnType("SMALLINT");
+
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+            });
+
         }
     }
 }
