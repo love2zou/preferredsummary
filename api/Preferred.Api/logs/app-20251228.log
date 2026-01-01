@@ -247,3 +247,12 @@ Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException: Database operation e
 [2025-12-28 22:05:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.14秒 {}
 [2025-12-28 22:05:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
 [2025-12-28 22:05:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2025-12-28 22:10:00 执行 {}
+[2025-12-28 23:27:23 INF]  应用程序启动中... {}
+[2025-12-28 23:27:24 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2025-12-28 23:27:24 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2025-12-28 23:27:25 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2025-12-28 23:27:25 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2025-12-28 23:27:25 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2025-12-28 23:27:25 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2025-12-28 23:27:25 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2025-12-28 23:27:25 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2025-12-28 23:30:00 执行 {}

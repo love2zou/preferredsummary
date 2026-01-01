@@ -193,6 +193,19 @@ CREATE TABLE IF NOT EXISTS Tb_BookTask (
 )ENGINE=INNODB DEFAULT CHARSET=utf8;
 
 /*==============================================================*/
+/* 录波分析: Tb_ZwavFile  ZWAV原始文件表                          */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ZwavFile (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   OriginalName 	 	VARCHAR(255)         NOT NULL COMMENT '原始文件名',
+   StoragePath          VARCHAR(1024)        NOT NULL COMMENT '文件存储路径',
+   ExtractPath          VARCHAR(1024)        NOT NULL COMMENT '解压路径',
+   FileSize             BIGINT                NOT NULL COMMENT '文件大小(b)',
+   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV文件信息表';
+/*==============================================================*/
 /* 录波分析: Tb_ZwavAnalysis  ZWAV解析任务表                      */
 /*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_ZwavAnalysis (
@@ -211,21 +224,6 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavAnalysis (
    CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV解析任务主表';
-/*==============================================================*/
-/* 录波分析: Tb_ZwavFile  ZWAV原始文件表                          */
-/*==============================================================*/
-CREATE TABLE IF NOT EXISTS Tb_ZwavFile (
-   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-   OriginalName          VARCHAR(255)        NOT NULL COMMENT '原始文件名',
-   FileSize              BIGINT              NOT NULL COMMENT '文件大小(字节)',
-   Sha256                CHAR(64)             NOT NULL COMMENT '文件SHA256摘要',
-   StorageType           VARCHAR(16)          NOT NULL COMMENT '存储类型(Local/OSS/S3)',
-   StoragePath           VARCHAR(1024)        NOT NULL COMMENT '文件存储路径',
-   ExtractPath           VARCHAR(1024)        NULL COMMENT '解压目录路径',
-   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
-   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
-   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV文件信息表';
 /*==============================================================*/
 /* 录波分析: Tb_ZwavCfg  CFG配置解析表                            */
 /*==============================================================*/
@@ -288,24 +286,6 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavHdr (
    CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='HDR解析结果表';
-/*==============================================================*/
-/* 录波分析: Tb_ZwavWaveCache  波形下采样缓存表                   */
-/*==============================================================*/
-CREATE TABLE IF NOT EXISTS Tb_ZwavWaveCache (
-   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-   AnalysisId           INT              NOT NULL COMMENT '解析任务ID',
-   CacheKey             CHAR(64)             NOT NULL COMMENT '缓存Key(SHA256)',
-   StartIndex           BIGINT               NOT NULL COMMENT '起始采样点',
-   EndIndex             BIGINT               NOT NULL COMMENT '结束采样点',
-   Channels             VARCHAR(512)         NOT NULL COMMENT '通道集合',
-   MaxPoints            INT                  NOT NULL COMMENT '最大点数',
-   SampleMode           VARCHAR(16)          NOT NULL COMMENT '下采样算法(LTTB/Envelope)',
-   PayloadJson          JSON                 NOT NULL COMMENT '缓存数据(JSON)',
-   ExpireTime           DATETIME             NULL COMMENT '过期时间',
-   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
-   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
-   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV波形下采样缓存表';
 /*==============================================================*/
 /* 录波分析: Tb_ZwavData  波形数据表                   */
 /*==============================================================*/

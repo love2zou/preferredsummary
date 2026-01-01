@@ -28,7 +28,6 @@ namespace Preferred.Api.Data
         public DbSet<ZwavCfg> ZwavCfgs { get; set; }
         public DbSet<ZwavChannel> ZwavChannels { get; set; }
         public DbSet<ZwavHdr> ZwavHdrs { get; set; }
-        public DbSet<ZwavWaveCache> ZwavWaveCaches { get; set; }
         public DbSet<ZwavData> ZwavDatas { get; set; }
         // ====================== ZWAV 录波分析表映射 - End ======================
         
@@ -260,16 +259,12 @@ namespace Preferred.Api.Data
 
                 entity.Property(e => e.OriginalName).IsRequired().HasMaxLength(255);
                 entity.Property(e => e.FileSize).IsRequired();
-                entity.Property(e => e.Sha256).IsRequired().HasMaxLength(64);
-                entity.Property(e => e.StorageType).IsRequired().HasMaxLength(16);
                 entity.Property(e => e.StoragePath).IsRequired().HasMaxLength(1024);
-                entity.Property(e => e.ExtractPath).HasMaxLength(1024);
-
+                entity.Property(e => e.ExtractPath).IsRequired().HasMaxLength(1024);
+                
                 entity.Property(e => e.SeqNo).HasDefaultValue(0);
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
-
-                entity.HasIndex(e => e.Sha256).IsUnique();
             });
 
             modelBuilder.Entity<ZwavAnalysis>(entity =>
@@ -381,27 +376,6 @@ namespace Preferred.Api.Data
 
                 entity.HasIndex(e => new { e.AnalysisId, e.ChannelType, e.ChannelIndex }).IsUnique();
                 entity.HasIndex(e => new { e.AnalysisId, e.ChannelType });
-            });
-
-            modelBuilder.Entity<ZwavWaveCache>(entity =>
-            {
-                entity.ToTable("Tb_ZwavWaveCache");
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd();
-
-                entity.Property(e => e.AnalysisId).IsRequired();
-                entity.Property(e => e.CacheKey).IsRequired().HasMaxLength(64);
-
-                entity.Property(e => e.Channels).IsRequired().HasMaxLength(512);
-                entity.Property(e => e.SampleMode).IsRequired().HasMaxLength(16);
-                entity.Property(e => e.PayloadJson).HasColumnType("JSON");
-
-                entity.Property(e => e.SeqNo).HasDefaultValue(0);
-                entity.Property(e => e.CrtTime).IsRequired();
-                entity.Property(e => e.UpdTime).IsRequired();
-
-                entity.HasIndex(e => e.CacheKey).IsUnique();
-                entity.HasIndex(e => new { e.AnalysisId, e.StartIndex, e.EndIndex });
             });
 
             modelBuilder.Entity<ZwavData>(entity =>

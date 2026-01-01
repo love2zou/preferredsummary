@@ -4,6 +4,7 @@ using System.Linq;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -38,72 +39,98 @@ namespace Zwav.Application.Workers
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                var guid = await _queue.DequeueAsync(stoppingToken);
+                ZwavAnalysisQueueItem item;
 
                 try
                 {
-                    await ProcessOneAsync(guid, stoppingToken);
+                    item = await _queue.DequeueAsync(stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (ChannelClosedException)
+                {
+                    // 写端已完成（应用关闭或队列完成）
+                    break;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Analysis failed. guid={guid}", guid);
+                    _logger.LogError(ex, "Dequeue failed.");
+                    // 避免死循环打日志：短暂让出执行权
+                    await Task.Delay(200, stoppingToken);
+                    continue;
+                }
 
-                    // 失败状态落库
-                    using var scope = _scopeFactory.CreateScope();
-                    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-                    var a = await context.ZwavAnalyses.FirstOrDefaultAsync(x => x.AnalysisGuid == guid, stoppingToken);
-                    if (a != null)
-                    {
-                        a.Status = "Failed";
-                        a.Progress = 100;
-                        a.ErrorMessage = ex.Message;
-                        a.FinishTime = DateTime.UtcNow;
-                        a.UpdTime = DateTime.UtcNow;
-
-                        await context.SaveChangesAsync(stoppingToken);
-                    }
+                try
+                {
+                    await ProcessOneAsync(item, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    // 应用停机，直接退出
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Analysis failed. guid={guid}, fileId={fileId}", item?.AnalysisGuid, item?.FileId);
+                    await MarkFailedAsync(item?.AnalysisGuid, ex, stoppingToken);
                 }
             }
         }
 
-        private async Task ProcessOneAsync(string analysisGuid, CancellationToken ct)
+        private async Task MarkFailedAsync(string analysisGuid, Exception ex, CancellationToken ct)
         {
+            if (string.IsNullOrWhiteSpace(analysisGuid)) return;
+
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-            // 1) 取任务
+            var a = await context.ZwavAnalyses.FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid, ct);
+            if (a == null) return;
+
+            a.Status = "Failed";
+            a.Progress = 100;
+            a.ErrorMessage = ex.Message;
+            a.FinishTime = DateTime.UtcNow;
+            a.UpdTime = DateTime.UtcNow;
+
+            await context.SaveChangesAsync(ct);
+        }
+
+        private async Task ProcessOneAsync(ZwavAnalysisQueueItem item, CancellationToken ct)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+             // 1) 取任务（保留：用于状态更新、保存解析结果等）
             var analysis = await context.ZwavAnalyses
-                .FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid, ct);
+                .FirstOrDefaultAsync(x => x.AnalysisGuid == item.AnalysisGuid, ct);
 
             if (analysis == null) return;
 
-            // 标记 Parsing
-            await UpdateStatusAsync(context, analysis, "Parsing", 5, null, startTime: DateTime.UtcNow, finishTime: null, ct);
+            await UpdateStatusAsync(context, analysis, "Parsing", 5, null, DateTime.UtcNow, null, ct);
 
-            // 2) 取文件
-            var file = await context.ZwavFiles.FirstOrDefaultAsync(x => x.Id == analysis.FileId, ct);
-            if (file == null) throw new Exception("File not found.");
-
-            // 3) 解压
-            var baseDir = Path.GetDirectoryName(file.StoragePath);
-            var extractDir = string.IsNullOrWhiteSpace(file.ExtractPath)
+            // 3) 解压目录逻辑
+            var baseDir = Path.GetDirectoryName(item.StoragePath);
+            var extractDir = string.IsNullOrWhiteSpace(item.ExtractPath)
                 ? Path.Combine(baseDir, "extracted")
-                : file.ExtractPath;
+                : item.ExtractPath;
 
-            ZwavZipHelper.EnsureExtract(file.StoragePath, extractDir);
+            ZwavZipHelper.EnsureExtract(item.StoragePath, extractDir);
 
-            // 若原表 ExtractPath 为空，可回写一次，便于后续复用/排查
-            if (string.IsNullOrWhiteSpace(file.ExtractPath))
+            // 4) 若原 ExtractPath 为空，需要回写 Tb_ZwavFile：用 Attach 更新，避免再查询
+            if (string.IsNullOrWhiteSpace(item.ExtractPath))
             {
-                file.ExtractPath = extractDir;
-                file.UpdTime = DateTime.UtcNow;
+                var stub = new ZwavFile { Id = item.FileId, ExtractPath = extractDir, UpdTime = DateTime.UtcNow };
+                context.ZwavFiles.Attach(stub);
+                context.Entry(stub).Property(x => x.ExtractPath).IsModified = true;
+                context.Entry(stub).Property(x => x.UpdTime).IsModified = true;
                 await context.SaveChangesAsync(ct);
             }
 
             await UpdateStatusAsync(context, analysis, "Parsing", 20, null, null, null, ct);
 
-            // 4) 找核心文件
+            // 4) 后续核心文件查找、CFG/HDR/DAT 解析照旧
             var (cfgPath, hdrPath, datPath) = ZwavZipHelper.FindCoreFiles(extractDir);
             if (string.IsNullOrWhiteSpace(cfgPath)) throw new Exception("CFG not found in archive.");
             if (string.IsNullOrWhiteSpace(datPath)) throw new Exception("DAT not found in archive.");
@@ -142,12 +169,11 @@ namespace Zwav.Application.Workers
             analysis.TotalRecords = (int)Math.Min(totalRecords, int.MaxValue); // 你表是 INT，先保护；建议后面改 BIGINT
             analysis.DigitalWords = digitalWords;
             analysis.UpdTime = DateTime.UtcNow;
-
             await context.SaveChangesAsync(ct);
 
             int maxRows = 50000;
-            var rows = DatMetaCalculator.ParseDatAllChannels(datBuf, cfg, maxRows, true);
-            await UpsertWaveDataAsync(context, analysis.Id, rows, ct);
+            var waveResult = DatMetaCalculator.ParseDatAllChannels(datBuf, cfg, maxRows, true);
+            await UpsertWaveDataAsync(context, analysis.Id, waveResult, ct);
             // 9) 完成
             await UpdateStatusAsync(context, analysis, "Ready", 100, null, null, DateTime.UtcNow, ct);
         }

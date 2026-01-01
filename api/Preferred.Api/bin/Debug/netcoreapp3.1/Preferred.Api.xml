@@ -29,6 +29,16 @@
             执行定时任务
             </summary>
         </member>
+        <member name="M:Preferred.Api.Services.IZwavAnalysisAppService.CreateAnalysisByFileIdAsync(System.Int32,System.Boolean,System.Threading.CancellationToken)">
+            <summary>
+            基于已上传文件(FileId)创建解析任务：读 Tb_ZwavFile -> 写 Tb_ZwavAnalysis -> 入队后台解析
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavAnalysisAppService.GetStatusAsync(System.String,System.Threading.CancellationToken)">
+            <summary>
+            查询任务状态（直接查 Tb_ZwavAnalysis）
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Services.CategoryService">
             <summary>
             分类服务实现
@@ -963,758 +973,41 @@
             组合中文姓名，确保流畅性和意境
             </summary>
         </member>
-        <member name="M:Preferred.Api.Services.ZwavAnalysisAppService.CreateAnalysisAsync(Microsoft.AspNetCore.Http.IFormFile)">
+        <member name="T:Preferred.Api.Models.ZwavData">
             <summary>
-            上传并创建解析任务：写 Tb_ZwavFile + Tb_ZwavAnalysis，然后入队后台解析
+            录波数据
             </summary>
         </member>
-        <member name="M:Preferred.Api.Services.ZwavAnalysisAppService.GetStatusAsync(System.String)">
+        <member name="T:Preferred.Api.Models.PagedResult`1">
             <summary>
-            查询任务状态（直接查 Tb_ZwavAnalysis）
+            分页响应模型
             </summary>
+            <typeparam name="T">数据类型</typeparam>
         </member>
-        <member name="T:Preferred.Api.Controllers.AuthController">
+        <member name="P:Preferred.Api.Models.PagedResult`1.Data">
             <summary>
-            用户认证控制器
+            数据列表
             </summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.AuthController.#ctor(Preferred.Api.Services.IUserService,Preferred.Api.Services.INotificationService)">
+        <member name="P:Preferred.Api.Models.PagedResult`1.Total">
             <summary>
-            构造函数
+            总记录数
             </summary>
-            <param name="userService">用户服务</param>
         </member>
-        <member name="M:Preferred.Api.Controllers.AuthController.Register(Preferred.Api.Models.UserDto)">
+        <member name="P:Preferred.Api.Models.PagedResult`1.Page">
             <summary>
-            用户注册
+            当前页码
             </summary>
-            <param name="userDto">用户注册信息</param>
-            <returns>注册结果</returns>
-            <remarks>
-            示例请求:
-            
-                POST /api/auth/register
-                {
-                    "username": "john_doe",
-                    "password": "123456",
-                    "email": "john@example.com",
-                    "firstName": "John",
-                    "lastName": "Doe"
-                }
-            
-            </remarks>
-            <response code="200">注册成功</response>
-            <response code="400">请求参数错误或用户已存在</response>
         </member>
-        <member name="M:Preferred.Api.Controllers.AuthController.Login(Preferred.Api.Models.LoginDto)">
+        <member name="P:Preferred.Api.Models.PagedResult`1.PageSize">
             <summary>
-            用户登录
+            每页大小
             </summary>
-            <param name="loginDto">用户登录信息</param>
-            <returns>登录结果，包含JWT令牌和用户信息</returns>
-            <remarks>
-            示例请求:
-            
-                POST /api/auth/login
-                {
-                    "username": "john_doe",
-                    "password": "123456"
-                }
-            
-            </remarks>
-            <response code="200">登录成功，返回JWT令牌和用户信息</response>
-            <response code="400">用户名或密码错误</response>
         </member>
-        <member name="T:Preferred.Api.Controllers.CategoryController">
+        <member name="P:Preferred.Api.Models.PagedResult`1.TotalPages">
             <summary>
-            分类管理控制器
+            总页数
             </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.GetCategoryList(System.Int32,System.Int32,System.String,System.String,System.String)">
-            <summary>
-            获取分类列表
-            </summary>
-            <param name="page">页码，默认为1</param>
-            <param name="size">每页数量，默认为10</param>
-            <param name="categoryCode">分类代码搜索</param>
-            <param name="categoryName">分类名称搜索</param>
-            <param name="description">描述搜索</param>
-            <returns>分类列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.GetCategoryById(System.Int32)">
-            <summary>
-            根据ID获取分类详情
-            </summary>
-            <param name="id">分类ID</param>
-            <returns>分类详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.CreateCategory(Preferred.Api.Models.CategoryDto)">
-            <summary>
-            创建新分类
-            </summary>
-            <param name="categoryDto">分类创建信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.UpdateCategory(System.Int32,Preferred.Api.Models.CategoryDto)">
-            <summary>
-            更新分类
-            </summary>
-            <param name="id">分类ID</param>
-            <param name="categoryDto">分类更新信息</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.DeleteCategory(System.Int32)">
-            <summary>
-            删除分类
-            </summary>
-            <param name="id">分类ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.GetCategoryCodes">
-            <summary>
-            获取所有分类代码列表
-            </summary>
-            <returns>分类代码列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.CheckCategoryCodeExists(System.String,System.Nullable{System.Int32})">
-            <summary>
-            检查分类代码是否存在
-            </summary>
-            <param name="categoryCode">分类代码</param>
-            <param name="excludeId">排除的ID</param>
-            <returns>是否存在</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.BatchDeleteCategories(Preferred.Api.Models.BatchDeleteRequest)">
-            <summary>
-            批量删除分类
-            </summary>
-            <param name="request">批量删除请求</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.CategoryController.UpdateCategorySeqNo(System.Int32,Preferred.Api.Controllers.SeqNoUpdateRequest)">
-            <summary>
-            更新分类排序
-            </summary>
-            <param name="id">分类ID</param>
-            <param name="request">排序更新请求</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="T:Preferred.Api.Controllers.SeqNoUpdateRequest">
-            <summary>
-            排序更新请求模型
-            </summary>
-        </member>
-        <member name="P:Preferred.Api.Controllers.SeqNoUpdateRequest.SeqNo">
-            <summary>
-            新的排序号
-            </summary>
-        </member>
-        <member name="T:Preferred.Api.Controllers.DataParserController">
-            <summary>
-            数据解析控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.DataParserController.UploadFile(Microsoft.AspNetCore.Http.IFormFile)">
-            <summary>
-            上传并解析 DAT 文件
-            </summary>
-            <param name="file">DAT 文件</param>
-            <returns>解析任务ID</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.DataParserController.GetParseStatus(System.String)">
-            <summary>
-            获取解析状态和结果
-            </summary>
-            <param name="taskId">任务ID</param>
-            <returns>解析状态和结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.DataParserController.ExportToExcel(System.String,System.String)">
-            <summary>
-            导出解析结果为 Excel 文件
-            </summary>
-            <param name="taskId">任务ID</param>
-            <param name="fileName">文件名（可选）</param>
-            <returns>Excel 文件</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.DataParserController.CleanupExpiredTasks">
-            <summary>
-            清理过期的解析任务
-            </summary>
-            <returns>清理结果</returns>
-        </member>
-        <member name="T:Preferred.Api.Controllers.FileController">
-            <summary>
-            文件管理控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.GetFileList(System.Int32,System.Int32,Preferred.Api.Models.FileSearchParams)">
-            <summary>
-            获取文件列表
-            </summary>
-            <param name="page">页码</param>
-            <param name="size">每页数量</param>
-            <param name="searchParams">搜索参数</param>
-            <returns>文件列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.GetFileById(System.Int32)">
-            <summary>
-            根据ID获取文件详情
-            </summary>
-            <param name="id">文件ID</param>
-            <returns>文件详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.DownloadFile(System.Int32)">
-            <summary>
-            下载文件
-            </summary>
-            <param name="id">文件ID</param>
-            <returns>文件流</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.DeleteFile(System.Int32)">
-            <summary>
-            删除文件
-            </summary>
-            <param name="id">文件ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.BatchDeleteFiles(System.Collections.Generic.List{System.Int32})">
-            <summary>
-            批量删除文件
-            </summary>
-            <param name="ids">文件ID列表</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.CleanExpiredFiles(System.Int32)">
-            <summary>
-            清理过期文件
-            </summary>
-            <param name="days">过期天数</param>
-            <returns>清理结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.UploadFile(Microsoft.AspNetCore.Http.IFormFile,System.String,System.String)">
-            <summary>
-            上传单个文件
-            </summary>
-            <param name="file">上传的文件</param>
-            <param name="description">文件描述</param>
-            <param name="appType">应用类型</param>
-            <returns>上传结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.FileController.BatchUploadFiles(System.Collections.Generic.List{Microsoft.AspNetCore.Http.IFormFile},System.String,System.String)">
-            <summary>
-            批量上传文件
-            </summary>
-            <param name="files">上传的文件列表</param>
-            <param name="description">文件描述</param>
-            <param name="appType">应用类型</param>
-            <returns>批量上传结果</returns>
-        </member>
-        <member name="T:Preferred.Api.Controllers.NetworkUrlController">
-            <summary>
-            访问地址管理控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NetworkUrlController.GetNetworkUrlList(System.Int32,System.Int32,System.String,System.String,System.String,System.Nullable{System.Int64},System.Nullable{System.Int64})">
-            <summary>
-            获取访问地址列表
-            </summary>
-            <param name="page">页码</param>
-            <param name="pageSize">每页数量</param>
-            <param name="name">名称</param>
-            <param name="tagCodeTypes">标签类型列表（逗号分隔）</param>
-            <param name="categoryCode">分类代码</param>
-            <param name="isMark">是否推荐</param>
-            <param name="isAvailable">是否可用</param>
-            <returns>访问地址列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NetworkUrlController.GetNetworkUrlsByTagType(System.String)">
-            <summary>
-            根据标签类型获取访问地址列表
-            </summary>
-            <param name="tagCodeType">标签类型</param>
-            <returns>访问地址列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NetworkUrlController.GetNetworkUrlById(System.Int32)">
-            <summary>
-            根据ID获取访问地址详情
-            </summary>
-            <param name="id">访问地址ID</param>
-            <returns>访问地址详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NetworkUrlController.CreateNetworkUrl(Preferred.Api.Models.NetworkUrlDto)">
-            <summary>
-            创建新访问地址记录
-            </summary>
-            <param name="networkUrlDto">访问地址创建信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NetworkUrlController.UpdateNetworkUrl(System.Int32,Preferred.Api.Models.NetworkUrlDto)">
-            <summary>
-            更新访问地址
-            </summary>
-            <param name="id">访问地址ID</param>
-            <param name="networkUrlDto">访问地址更新信息</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NetworkUrlController.DeleteNetworkUrl(System.Int32)">
-            <summary>
-            删除访问地址
-            </summary>
-            <param name="id">访问地址ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="T:Preferred.Api.Controllers.NotificationController">
-            <summary>
-            通知管理控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.GetNotificationList(System.Int32,System.Int32,System.String,System.String,System.String,System.Nullable{System.Int32},System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Nullable{System.Int32})">
-            <summary>
-            获取通知列表
-            </summary>
-            <param name="page">页码，默认为1</param>
-            <param name="size">每页数量，默认为10</param>
-            <param name="name">标题搜索</param>
-            <param name="content">内容搜索</param>
-            <param name="notifyType">通知类型搜索</param>
-            <param name="notifyStatus">通知状态搜索</param>
-            <param name="isRead">是否已读搜索</param>
-            <param name="sendUser">发送人搜索</param>
-            <param name="receiver">接收人搜索</param>
-            <param name="startTime">开始时间</param>
-            <param name="endTime">结束时间</param>
-            <returns>通知列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.GetNotificationById(System.Int32)">
-            <summary>
-            根据ID获取通知详情
-            </summary>
-            <param name="id">通知ID</param>
-            <returns>通知详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.CreateNotification(Preferred.Api.Models.NotificationCreateDto)">
-            <summary>
-            创建通知
-            </summary>
-            <param name="notificationDto">通知信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.UpdateNotification(Preferred.Api.Models.NotificationUpdateDto)">
-            <summary>
-            更新通知
-            </summary>
-            <param name="notificationDto">通知信息</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.DeleteNotification(System.Int32)">
-            <summary>
-            删除通知
-            </summary>
-            <param name="id">通知ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.BatchDeleteNotifications(System.Collections.Generic.List{System.Int32})">
-            <summary>
-            批量删除通知
-            </summary>
-            <param name="ids">通知ID列表</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.MarkAsRead(System.Int32)">
-            <summary>
-            标记通知为已读
-            </summary>
-            <param name="id">通知ID</param>
-            <returns>操作结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.BatchMarkAsRead(System.Collections.Generic.List{System.Int32})">
-            <summary>
-            批量标记通知为已读
-            </summary>
-            <param name="ids">通知ID列表</param>
-            <returns>操作结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.GetUnreadCount(System.String)">
-            <summary>
-            获取用户未读通知数量
-            </summary>
-            <param name="receiver">接收人</param>
-            <returns>未读数量</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.NotificationController.BatchSendNotifications(System.Collections.Generic.List{System.Int32})">
-            <summary>
-            批量删除通知
-            </summary>
-            <param name="ids">通知ID列表</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.GetPictureList(System.Int32,System.Int32,System.String,System.String,System.String)">
-            <summary>
-            获取图片列表
-            </summary>
-            <param name="page">页码，默认为1</param>
-            <param name="size">每页数量，默认为20</param>
-            <param name="appType">应用类型搜索</param>
-            <param name="imageName">图片名称搜索</param>
-            <param name="imageCode">图片代码搜索</param>
-            <returns>图片列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.GetPicturesByAppType(System.String)">
-            <summary>
-            根据应用类型获取图片列表
-            </summary>
-            <param name="appType">应用类型</param>
-            <returns>图片列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.GetPictureById(System.Int32)">
-            <summary>
-            根据ID获取图片详情
-            </summary>
-            <param name="id">图片ID</param>
-            <returns>图片详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.UploadImage(Microsoft.AspNetCore.Http.IFormFile,System.String)">
-            <summary>
-            上传图片
-            </summary>
-            <param name="file">图片文件</param>
-            <param name="aspectRatio">宽高比</param>
-            <returns>上传结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.CreatePicture(Preferred.Api.Models.PictureDto)">
-            <summary>
-            创建新图片记录
-            </summary>
-            <param name="pictureDto">图片创建信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.UpdatePicture(System.Int32,Preferred.Api.Models.PictureDto)">
-            <summary>
-            更新图片
-            </summary>
-            <param name="id">图片ID</param>
-            <param name="pictureDto">图片更新信息</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.DeletePicture(System.Int32)">
-            <summary>
-            删除图片
-            </summary>
-            <param name="id">图片ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.DeleteImageFile(System.String,System.Boolean)">
-            <summary>
-            删除图片文件
-            </summary>
-            <param name="imagePath">图片路径</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.PictureController.GetGCD(System.Int32,System.Int32)">
-            <summary>
-            计算最大公约数
-            </summary>
-        </member>
-        <member name="T:Preferred.Api.Controllers.ScheduledTaskController">
-            <summary>
-            定时任务控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetAllTasks(System.Int32,System.Int32)">
-            <summary>
-            获取所有定时任务
-            </summary>
-            <returns>定时任务列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetTaskById(System.Int32)">
-            <summary>
-            根据ID获取定时任务
-            </summary>
-            <param name="id">任务ID</param>
-            <returns>定时任务信息</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.CreateTask(Preferred.Api.Models.ScheduledTaskDto)">
-            <summary>
-            创建定时任务
-            </summary>
-            <param name="taskDto">任务信息</param>
-            <returns>创建的任务信息</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.UpdateTask(System.Int32,Preferred.Api.Models.ScheduledTaskDto)">
-            <summary>
-            更新定时任务
-            </summary>
-            <param name="id">任务ID</param>
-            <param name="taskDto">任务信息</param>
-            <returns>更新的任务信息</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.DeleteTask(System.Int32)">
-            <summary>
-            删除定时任务
-            </summary>
-            <param name="id">任务ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.BatchDeleteTasks(Preferred.Api.Models.BatchDeleteTaskRequest)">
-            <summary>
-            批量删除定时任务
-            </summary>
-            <param name="request">批量删除请求</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.SetTaskEnabled(System.Int32,Preferred.Api.Models.TaskEnabledRequest)">
-            <summary>
-            启用/禁用定时任务
-            </summary>
-            <param name="id">任务ID</param>
-            <param name="request">启用/禁用请求</param>
-            <returns>操作结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.ExecuteTask(System.Int32)">
-            <summary>
-            手动执行定时任务
-            </summary>
-            <param name="id">任务ID</param>
-            <returns>执行结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetTaskLogs(System.Nullable{System.Int32},System.Nullable{System.Boolean},System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
-            <summary>
-            获取任务执行日志
-            </summary>
-            <param name="taskId">任务ID（可选）</param>
-            <param name="success">执行结果（可选）</param>
-            <param name="startTime">开始时间（可选）</param>
-            <param name="endTime">结束时间（可选）</param>
-            <param name="page">页码</param>
-            <param name="size">页大小</param>
-            <returns>执行日志列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.CleanExpiredLogs(System.Int32)">
-            <summary>
-            清理过期日志
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.InitSystemMonitorTask">
-            <summary>
-            初始化系统资源监控定时任务
-            </summary>
-            <returns>初始化结果</returns>
-        </member>
-        <member name="T:Preferred.Api.Controllers.SystemResourceController">
-            <summary>
-            系统资源控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.SystemResourceController.GetLatestSystemResource">
-            <summary>
-            获取最新的系统资源信息
-            </summary>
-            <returns>最新系统资源信息</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.SystemResourceController.GetDailySystemResourceData">
-            <summary>
-            获取一天内的系统资源数据
-            </summary>
-            <returns>系统资源列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.SystemResourceController.GetSystemResourceStats">
-            <summary>
-            获取系统资源统计信息
-            </summary>
-            <returns>统计信息</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.SystemResourceController.CreateSystemResource(Preferred.Api.Models.SystemResourceCreateDto)">
-            <summary>
-            创建系统资源记录
-            </summary>
-            <param name="resourceDto">系统资源信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="T:Preferred.Api.Controllers.TagController">
-            <summary>
-            标签管理控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.GetTagList(System.Int32,System.Int32,System.String,System.String,System.String)">
-            <summary>
-            获取标签列表
-            </summary>
-            <param name="page">页码，默认为1</param>
-            <param name="size">每页数量，默认为10</param>
-            <param name="parName">应用模块搜索</param>
-            <param name="tagCode">标签代码搜索</param>
-            <param name="tagName">标签名称搜索</param>
-            <returns>标签列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.GetTagsByParName(System.String)">
-            <summary>
-            根据应用模块获取标签列表
-            </summary>
-            <param name="parName">应用模块名称</param>
-            <returns>标签列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.GetTagById(System.Int32)">
-            <summary>
-            根据ID获取标签详情
-            </summary>
-            <param name="id">标签ID</param>
-            <returns>标签详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.CreateTag(Preferred.Api.Models.TagDto)">
-            <summary>
-            创建新标签
-            </summary>
-            <param name="tagDto">标签创建信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.UpdateTag(System.Int32,Preferred.Api.Models.TagDto)">
-            <summary>
-            更新标签
-            </summary>
-            <param name="id">标签ID</param>
-            <param name="tagDto">标签更新信息</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.DeleteTag(System.Int32)">
-            <summary>
-            删除标签
-            </summary>
-            <param name="id">标签ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.GetModules">
-            <summary>
-            获取所有应用模块列表
-            </summary>
-            <returns>应用模块列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.DownloadTemplate">
-            <summary>
-            下载标签导入模板
-            </summary>
-            <returns>Excel模板文件</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.ImportTags(Microsoft.AspNetCore.Http.IFormFile)">
-            <summary>
-            导入标签数据
-            </summary>
-            <param name="file">Excel文件</param>
-            <returns>导入结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.GenerateTemplate">
-            <summary>
-            生成导入模板
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TagController.BatchDeleteTags(System.Int32[])">
-            <summary>
-            批量删除标签
-            </summary>
-            <param name="ids">标签ID数组</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.TestController.TestSystemMonitor">
-            <summary>
-            测试系统监控服务
-            </summary>
-        </member>
-        <member name="T:Preferred.Api.Controllers.UserController">
-            <summary>
-            用户管理控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.GetUserList(System.Int32,System.Int32,System.String,System.String,System.Nullable{System.Boolean})">
-            <summary>
-            获取用户列表
-            </summary>
-            <param name="page">页码，默认为1</param>
-            <param name="size">每页数量，默认为10</param>
-            <param name="username">用户名搜索</param>
-            <param name="email">邮箱搜索</param>
-            <param name="isActive">用户状态筛选</param>
-            <returns>用户列表</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.GetUserDetail(System.Int32)">
-            <summary>
-            根据ID获取用户详情
-            </summary>
-            <param name="id">用户ID</param>
-            <returns>用户详情</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.UpdateUser(System.Int32,Preferred.Api.Models.UserUpdateDto)">
-            <summary>
-            更新用户信息
-            </summary>
-            <param name="id">用户ID</param>
-            <param name="userDto">用户更新信息</param>
-            <returns>更新结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.DeleteUser(System.Int32)">
-            <summary>
-            删除用户
-            </summary>
-            <param name="id">用户ID</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.BatchDeleteUsers(System.Int32[])">
-            <summary>
-            批量删除用户
-            </summary>
-            <param name="ids">用户ID数组</param>
-            <returns>删除结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.ToggleUserStatus(System.Int32,System.Boolean)">
-            <summary>
-            启用/禁用用户
-            </summary>
-            <param name="id">用户ID</param>
-            <param name="isActive">是否启用</param>
-            <returns>操作结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.CreateUser(Preferred.Api.Models.UserDto)">
-            <summary>
-            创建新用户
-            </summary>
-            <param name="userDto">用户创建信息</param>
-            <returns>创建结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.ChangePassword(Preferred.Api.Models.ChangePasswordDto)">
-            <summary>
-            修改用户密码
-            </summary>
-            <param name="changePasswordDto">修改密码信息</param>
-            <returns>操作结果</returns>
-        </member>
-        <member name="M:Preferred.Api.Controllers.UserController.GenerateUserNamePair">
-            <summary>
-            生成用户名和姓名对
-            </summary>
-        </member>
-        <member name="T:Preferred.Api.Controllers.ZwavAnalysesController">
-            <summary>
-            录波文件解析控制器
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.Create(Microsoft.AspNetCore.Http.IFormFile,System.Threading.CancellationToken)">
-            <summary>上传ZWAV/ZIP并创建解析任务</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetStatus(System.String)">
-            <summary>查询任务状态</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetMeta(System.String)">
-            <summary>获取meta（文件+CFG+HDR+DAT概览+通道列表）</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetSamples(System.String,System.Int64,System.Int32,System.String)">
-            <summary>分页获取样本表格数据</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetWave(System.String,System.Int64,System.Int64,System.String,System.Int32,System.String)">
-            <summary>获取波形下采样数据</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportCsv(System.String,System.Int64,System.Int64,System.String)">
-            <summary>导出CSV（占位：你后续可做真正的流式导出）</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.Delete(System.String)">
-            <summary>删除任务（占位：会同时清理缓存/文件）</summary>
         </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
@@ -3267,14 +2560,765 @@
             新密码
             </summary>
         </member>
-        <member name="T:Preferred.Api.Models.ZwavData">
+        <member name="T:Preferred.Api.Controllers.AuthController">
             <summary>
-            录波数据
+            用户认证控制器
             </summary>
         </member>
-        <member name="T:Preferred.Api.Models.ZwavFileRow">
+        <member name="M:Preferred.Api.Controllers.AuthController.#ctor(Preferred.Api.Services.IUserService,Preferred.Api.Services.INotificationService)">
             <summary>
-            文件记录实体模型
+            构造函数
+            </summary>
+            <param name="userService">用户服务</param>
+        </member>
+        <member name="M:Preferred.Api.Controllers.AuthController.Register(Preferred.Api.Models.UserDto)">
+            <summary>
+            用户注册
+            </summary>
+            <param name="userDto">用户注册信息</param>
+            <returns>注册结果</returns>
+            <remarks>
+            示例请求:
+            
+                POST /api/auth/register
+                {
+                    "username": "john_doe",
+                    "password": "123456",
+                    "email": "john@example.com",
+                    "firstName": "John",
+                    "lastName": "Doe"
+                }
+            
+            </remarks>
+            <response code="200">注册成功</response>
+            <response code="400">请求参数错误或用户已存在</response>
+        </member>
+        <member name="M:Preferred.Api.Controllers.AuthController.Login(Preferred.Api.Models.LoginDto)">
+            <summary>
+            用户登录
+            </summary>
+            <param name="loginDto">用户登录信息</param>
+            <returns>登录结果，包含JWT令牌和用户信息</returns>
+            <remarks>
+            示例请求:
+            
+                POST /api/auth/login
+                {
+                    "username": "john_doe",
+                    "password": "123456"
+                }
+            
+            </remarks>
+            <response code="200">登录成功，返回JWT令牌和用户信息</response>
+            <response code="400">用户名或密码错误</response>
+        </member>
+        <member name="T:Preferred.Api.Controllers.CategoryController">
+            <summary>
+            分类管理控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.GetCategoryList(System.Int32,System.Int32,System.String,System.String,System.String)">
+            <summary>
+            获取分类列表
+            </summary>
+            <param name="page">页码，默认为1</param>
+            <param name="size">每页数量，默认为10</param>
+            <param name="categoryCode">分类代码搜索</param>
+            <param name="categoryName">分类名称搜索</param>
+            <param name="description">描述搜索</param>
+            <returns>分类列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.GetCategoryById(System.Int32)">
+            <summary>
+            根据ID获取分类详情
+            </summary>
+            <param name="id">分类ID</param>
+            <returns>分类详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.CreateCategory(Preferred.Api.Models.CategoryDto)">
+            <summary>
+            创建新分类
+            </summary>
+            <param name="categoryDto">分类创建信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.UpdateCategory(System.Int32,Preferred.Api.Models.CategoryDto)">
+            <summary>
+            更新分类
+            </summary>
+            <param name="id">分类ID</param>
+            <param name="categoryDto">分类更新信息</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.DeleteCategory(System.Int32)">
+            <summary>
+            删除分类
+            </summary>
+            <param name="id">分类ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.GetCategoryCodes">
+            <summary>
+            获取所有分类代码列表
+            </summary>
+            <returns>分类代码列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.CheckCategoryCodeExists(System.String,System.Nullable{System.Int32})">
+            <summary>
+            检查分类代码是否存在
+            </summary>
+            <param name="categoryCode">分类代码</param>
+            <param name="excludeId">排除的ID</param>
+            <returns>是否存在</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.BatchDeleteCategories(Preferred.Api.Models.BatchDeleteRequest)">
+            <summary>
+            批量删除分类
+            </summary>
+            <param name="request">批量删除请求</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.CategoryController.UpdateCategorySeqNo(System.Int32,Preferred.Api.Controllers.SeqNoUpdateRequest)">
+            <summary>
+            更新分类排序
+            </summary>
+            <param name="id">分类ID</param>
+            <param name="request">排序更新请求</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="T:Preferred.Api.Controllers.SeqNoUpdateRequest">
+            <summary>
+            排序更新请求模型
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Controllers.SeqNoUpdateRequest.SeqNo">
+            <summary>
+            新的排序号
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Controllers.DataParserController">
+            <summary>
+            数据解析控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.UploadFile(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            上传并解析 DAT 文件
+            </summary>
+            <param name="file">DAT 文件</param>
+            <returns>解析任务ID</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.GetParseStatus(System.String)">
+            <summary>
+            获取解析状态和结果
+            </summary>
+            <param name="taskId">任务ID</param>
+            <returns>解析状态和结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.ExportToExcel(System.String,System.String)">
+            <summary>
+            导出解析结果为 Excel 文件
+            </summary>
+            <param name="taskId">任务ID</param>
+            <param name="fileName">文件名（可选）</param>
+            <returns>Excel 文件</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.DataParserController.CleanupExpiredTasks">
+            <summary>
+            清理过期的解析任务
+            </summary>
+            <returns>清理结果</returns>
+        </member>
+        <member name="T:Preferred.Api.Controllers.FileController">
+            <summary>
+            文件管理控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.GetFileList(System.Int32,System.Int32,Preferred.Api.Models.FileSearchParams)">
+            <summary>
+            获取文件列表
+            </summary>
+            <param name="page">页码</param>
+            <param name="size">每页数量</param>
+            <param name="searchParams">搜索参数</param>
+            <returns>文件列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.GetFileById(System.Int32)">
+            <summary>
+            根据ID获取文件详情
+            </summary>
+            <param name="id">文件ID</param>
+            <returns>文件详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.DownloadFile(System.Int32)">
+            <summary>
+            下载文件
+            </summary>
+            <param name="id">文件ID</param>
+            <returns>文件流</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.DeleteFile(System.Int32)">
+            <summary>
+            删除文件
+            </summary>
+            <param name="id">文件ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.BatchDeleteFiles(System.Collections.Generic.List{System.Int32})">
+            <summary>
+            批量删除文件
+            </summary>
+            <param name="ids">文件ID列表</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.CleanExpiredFiles(System.Int32)">
+            <summary>
+            清理过期文件
+            </summary>
+            <param name="days">过期天数</param>
+            <returns>清理结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.UploadFile(Microsoft.AspNetCore.Http.IFormFile,System.String,System.String)">
+            <summary>
+            上传单个文件
+            </summary>
+            <param name="file">上传的文件</param>
+            <param name="description">文件描述</param>
+            <param name="appType">应用类型</param>
+            <returns>上传结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.FileController.BatchUploadFiles(System.Collections.Generic.List{Microsoft.AspNetCore.Http.IFormFile},System.String,System.String)">
+            <summary>
+            批量上传文件
+            </summary>
+            <param name="files">上传的文件列表</param>
+            <param name="description">文件描述</param>
+            <param name="appType">应用类型</param>
+            <returns>批量上传结果</returns>
+        </member>
+        <member name="T:Preferred.Api.Controllers.NetworkUrlController">
+            <summary>
+            访问地址管理控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.GetNetworkUrlList(System.Int32,System.Int32,System.String,System.String,System.String,System.Nullable{System.Int64},System.Nullable{System.Int64})">
+            <summary>
+            获取访问地址列表
+            </summary>
+            <param name="page">页码</param>
+            <param name="pageSize">每页数量</param>
+            <param name="name">名称</param>
+            <param name="tagCodeTypes">标签类型列表（逗号分隔）</param>
+            <param name="categoryCode">分类代码</param>
+            <param name="isMark">是否推荐</param>
+            <param name="isAvailable">是否可用</param>
+            <returns>访问地址列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.GetNetworkUrlsByTagType(System.String)">
+            <summary>
+            根据标签类型获取访问地址列表
+            </summary>
+            <param name="tagCodeType">标签类型</param>
+            <returns>访问地址列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.GetNetworkUrlById(System.Int32)">
+            <summary>
+            根据ID获取访问地址详情
+            </summary>
+            <param name="id">访问地址ID</param>
+            <returns>访问地址详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.CreateNetworkUrl(Preferred.Api.Models.NetworkUrlDto)">
+            <summary>
+            创建新访问地址记录
+            </summary>
+            <param name="networkUrlDto">访问地址创建信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.UpdateNetworkUrl(System.Int32,Preferred.Api.Models.NetworkUrlDto)">
+            <summary>
+            更新访问地址
+            </summary>
+            <param name="id">访问地址ID</param>
+            <param name="networkUrlDto">访问地址更新信息</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.DeleteNetworkUrl(System.Int32)">
+            <summary>
+            删除访问地址
+            </summary>
+            <param name="id">访问地址ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="T:Preferred.Api.Controllers.NotificationController">
+            <summary>
+            通知管理控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.GetNotificationList(System.Int32,System.Int32,System.String,System.String,System.String,System.Nullable{System.Int32},System.Nullable{System.Int32},System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Nullable{System.Int32})">
+            <summary>
+            获取通知列表
+            </summary>
+            <param name="page">页码，默认为1</param>
+            <param name="size">每页数量，默认为10</param>
+            <param name="name">标题搜索</param>
+            <param name="content">内容搜索</param>
+            <param name="notifyType">通知类型搜索</param>
+            <param name="notifyStatus">通知状态搜索</param>
+            <param name="isRead">是否已读搜索</param>
+            <param name="sendUser">发送人搜索</param>
+            <param name="receiver">接收人搜索</param>
+            <param name="startTime">开始时间</param>
+            <param name="endTime">结束时间</param>
+            <returns>通知列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.GetNotificationById(System.Int32)">
+            <summary>
+            根据ID获取通知详情
+            </summary>
+            <param name="id">通知ID</param>
+            <returns>通知详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.CreateNotification(Preferred.Api.Models.NotificationCreateDto)">
+            <summary>
+            创建通知
+            </summary>
+            <param name="notificationDto">通知信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.UpdateNotification(Preferred.Api.Models.NotificationUpdateDto)">
+            <summary>
+            更新通知
+            </summary>
+            <param name="notificationDto">通知信息</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.DeleteNotification(System.Int32)">
+            <summary>
+            删除通知
+            </summary>
+            <param name="id">通知ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.BatchDeleteNotifications(System.Collections.Generic.List{System.Int32})">
+            <summary>
+            批量删除通知
+            </summary>
+            <param name="ids">通知ID列表</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.MarkAsRead(System.Int32)">
+            <summary>
+            标记通知为已读
+            </summary>
+            <param name="id">通知ID</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.BatchMarkAsRead(System.Collections.Generic.List{System.Int32})">
+            <summary>
+            批量标记通知为已读
+            </summary>
+            <param name="ids">通知ID列表</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.GetUnreadCount(System.String)">
+            <summary>
+            获取用户未读通知数量
+            </summary>
+            <param name="receiver">接收人</param>
+            <returns>未读数量</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NotificationController.BatchSendNotifications(System.Collections.Generic.List{System.Int32})">
+            <summary>
+            批量删除通知
+            </summary>
+            <param name="ids">通知ID列表</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.GetPictureList(System.Int32,System.Int32,System.String,System.String,System.String)">
+            <summary>
+            获取图片列表
+            </summary>
+            <param name="page">页码，默认为1</param>
+            <param name="size">每页数量，默认为20</param>
+            <param name="appType">应用类型搜索</param>
+            <param name="imageName">图片名称搜索</param>
+            <param name="imageCode">图片代码搜索</param>
+            <returns>图片列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.GetPicturesByAppType(System.String)">
+            <summary>
+            根据应用类型获取图片列表
+            </summary>
+            <param name="appType">应用类型</param>
+            <returns>图片列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.GetPictureById(System.Int32)">
+            <summary>
+            根据ID获取图片详情
+            </summary>
+            <param name="id">图片ID</param>
+            <returns>图片详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.UploadImage(Microsoft.AspNetCore.Http.IFormFile,System.String)">
+            <summary>
+            上传图片
+            </summary>
+            <param name="file">图片文件</param>
+            <param name="aspectRatio">宽高比</param>
+            <returns>上传结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.CreatePicture(Preferred.Api.Models.PictureDto)">
+            <summary>
+            创建新图片记录
+            </summary>
+            <param name="pictureDto">图片创建信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.UpdatePicture(System.Int32,Preferred.Api.Models.PictureDto)">
+            <summary>
+            更新图片
+            </summary>
+            <param name="id">图片ID</param>
+            <param name="pictureDto">图片更新信息</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.DeletePicture(System.Int32)">
+            <summary>
+            删除图片
+            </summary>
+            <param name="id">图片ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.DeleteImageFile(System.String,System.Boolean)">
+            <summary>
+            删除图片文件
+            </summary>
+            <param name="imagePath">图片路径</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.PictureController.GetGCD(System.Int32,System.Int32)">
+            <summary>
+            计算最大公约数
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Controllers.ScheduledTaskController">
+            <summary>
+            定时任务控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetAllTasks(System.Int32,System.Int32)">
+            <summary>
+            获取所有定时任务
+            </summary>
+            <returns>定时任务列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetTaskById(System.Int32)">
+            <summary>
+            根据ID获取定时任务
+            </summary>
+            <param name="id">任务ID</param>
+            <returns>定时任务信息</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.CreateTask(Preferred.Api.Models.ScheduledTaskDto)">
+            <summary>
+            创建定时任务
+            </summary>
+            <param name="taskDto">任务信息</param>
+            <returns>创建的任务信息</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.UpdateTask(System.Int32,Preferred.Api.Models.ScheduledTaskDto)">
+            <summary>
+            更新定时任务
+            </summary>
+            <param name="id">任务ID</param>
+            <param name="taskDto">任务信息</param>
+            <returns>更新的任务信息</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.DeleteTask(System.Int32)">
+            <summary>
+            删除定时任务
+            </summary>
+            <param name="id">任务ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.BatchDeleteTasks(Preferred.Api.Models.BatchDeleteTaskRequest)">
+            <summary>
+            批量删除定时任务
+            </summary>
+            <param name="request">批量删除请求</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.SetTaskEnabled(System.Int32,Preferred.Api.Models.TaskEnabledRequest)">
+            <summary>
+            启用/禁用定时任务
+            </summary>
+            <param name="id">任务ID</param>
+            <param name="request">启用/禁用请求</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.ExecuteTask(System.Int32)">
+            <summary>
+            手动执行定时任务
+            </summary>
+            <param name="id">任务ID</param>
+            <returns>执行结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetTaskLogs(System.Nullable{System.Int32},System.Nullable{System.Boolean},System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>
+            获取任务执行日志
+            </summary>
+            <param name="taskId">任务ID（可选）</param>
+            <param name="success">执行结果（可选）</param>
+            <param name="startTime">开始时间（可选）</param>
+            <param name="endTime">结束时间（可选）</param>
+            <param name="page">页码</param>
+            <param name="size">页大小</param>
+            <returns>执行日志列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.CleanExpiredLogs(System.Int32)">
+            <summary>
+            清理过期日志
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.InitSystemMonitorTask">
+            <summary>
+            初始化系统资源监控定时任务
+            </summary>
+            <returns>初始化结果</returns>
+        </member>
+        <member name="T:Preferred.Api.Controllers.SystemResourceController">
+            <summary>
+            系统资源控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.SystemResourceController.GetLatestSystemResource">
+            <summary>
+            获取最新的系统资源信息
+            </summary>
+            <returns>最新系统资源信息</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.SystemResourceController.GetDailySystemResourceData">
+            <summary>
+            获取一天内的系统资源数据
+            </summary>
+            <returns>系统资源列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.SystemResourceController.GetSystemResourceStats">
+            <summary>
+            获取系统资源统计信息
+            </summary>
+            <returns>统计信息</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.SystemResourceController.CreateSystemResource(Preferred.Api.Models.SystemResourceCreateDto)">
+            <summary>
+            创建系统资源记录
+            </summary>
+            <param name="resourceDto">系统资源信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="T:Preferred.Api.Controllers.TagController">
+            <summary>
+            标签管理控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.GetTagList(System.Int32,System.Int32,System.String,System.String,System.String)">
+            <summary>
+            获取标签列表
+            </summary>
+            <param name="page">页码，默认为1</param>
+            <param name="size">每页数量，默认为10</param>
+            <param name="parName">应用模块搜索</param>
+            <param name="tagCode">标签代码搜索</param>
+            <param name="tagName">标签名称搜索</param>
+            <returns>标签列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.GetTagsByParName(System.String)">
+            <summary>
+            根据应用模块获取标签列表
+            </summary>
+            <param name="parName">应用模块名称</param>
+            <returns>标签列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.GetTagById(System.Int32)">
+            <summary>
+            根据ID获取标签详情
+            </summary>
+            <param name="id">标签ID</param>
+            <returns>标签详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.CreateTag(Preferred.Api.Models.TagDto)">
+            <summary>
+            创建新标签
+            </summary>
+            <param name="tagDto">标签创建信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.UpdateTag(System.Int32,Preferred.Api.Models.TagDto)">
+            <summary>
+            更新标签
+            </summary>
+            <param name="id">标签ID</param>
+            <param name="tagDto">标签更新信息</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.DeleteTag(System.Int32)">
+            <summary>
+            删除标签
+            </summary>
+            <param name="id">标签ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.GetModules">
+            <summary>
+            获取所有应用模块列表
+            </summary>
+            <returns>应用模块列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.DownloadTemplate">
+            <summary>
+            下载标签导入模板
+            </summary>
+            <returns>Excel模板文件</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.ImportTags(Microsoft.AspNetCore.Http.IFormFile)">
+            <summary>
+            导入标签数据
+            </summary>
+            <param name="file">Excel文件</param>
+            <returns>导入结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.GenerateTemplate">
+            <summary>
+            生成导入模板
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TagController.BatchDeleteTags(System.Int32[])">
+            <summary>
+            批量删除标签
+            </summary>
+            <param name="ids">标签ID数组</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.TestController.TestSystemMonitor">
+            <summary>
+            测试系统监控服务
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Controllers.UserController">
+            <summary>
+            用户管理控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.GetUserList(System.Int32,System.Int32,System.String,System.String,System.Nullable{System.Boolean})">
+            <summary>
+            获取用户列表
+            </summary>
+            <param name="page">页码，默认为1</param>
+            <param name="size">每页数量，默认为10</param>
+            <param name="username">用户名搜索</param>
+            <param name="email">邮箱搜索</param>
+            <param name="isActive">用户状态筛选</param>
+            <returns>用户列表</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.GetUserDetail(System.Int32)">
+            <summary>
+            根据ID获取用户详情
+            </summary>
+            <param name="id">用户ID</param>
+            <returns>用户详情</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.UpdateUser(System.Int32,Preferred.Api.Models.UserUpdateDto)">
+            <summary>
+            更新用户信息
+            </summary>
+            <param name="id">用户ID</param>
+            <param name="userDto">用户更新信息</param>
+            <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.DeleteUser(System.Int32)">
+            <summary>
+            删除用户
+            </summary>
+            <param name="id">用户ID</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.BatchDeleteUsers(System.Int32[])">
+            <summary>
+            批量删除用户
+            </summary>
+            <param name="ids">用户ID数组</param>
+            <returns>删除结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.ToggleUserStatus(System.Int32,System.Boolean)">
+            <summary>
+            启用/禁用用户
+            </summary>
+            <param name="id">用户ID</param>
+            <param name="isActive">是否启用</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.CreateUser(Preferred.Api.Models.UserDto)">
+            <summary>
+            创建新用户
+            </summary>
+            <param name="userDto">用户创建信息</param>
+            <returns>创建结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.ChangePassword(Preferred.Api.Models.ChangePasswordDto)">
+            <summary>
+            修改用户密码
+            </summary>
+            <param name="changePasswordDto">修改密码信息</param>
+            <returns>操作结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.UserController.GenerateUserNamePair">
+            <summary>
+            生成用户名和姓名对
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Controllers.ZwavAnalysesController">
+            <summary>
+            录波文件解析控制器
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.UploadAsync(Microsoft.AspNetCore.Http.IFormFile,System.Threading.CancellationToken)">
+            <summary>上传录波文件并写入 Tb_ZwavFile</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.CreateAsync(Preferred.Api.Models.CreateAnalysisByFileIdRequest,System.Threading.CancellationToken)">
+            <summary>基于已上传文件(FileId)创建解析任务</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetStatusAsync(System.String,System.Threading.CancellationToken)">
+            <summary>查询任务状态</summary>
+        </member>
+        <member name="T:Zwav.Application.Processing.AnalysisQueue">
+            <summary>
+            进程内解析队列：基于 Channel，单消费者（Worker）读取，多生产者（Controller/AppService）写入。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Processing.AnalysisQueue.#ctor">
+            <summary>
+            默认使用无界队列。若担心内存膨胀，可切换为有界（见下方注释）。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Processing.AnalysisQueue.EnqueueAsync(Preferred.Api.Models.ZwavAnalysisQueueItem,System.Threading.CancellationToken)">
+            <summary>
+            入队（支持取消）。优先走 TryWrite 快路径，避免不必要的异步状态机开销。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Processing.AnalysisQueue.TryEnqueue(Preferred.Api.Models.ZwavAnalysisQueueItem)">
+            <summary>
+            尝试入队：不阻塞、不抛取消异常，适合“尽力而为”的场景。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Processing.AnalysisQueue.DequeueAsync(System.Threading.CancellationToken)">
+            <summary>
+            出队：单消费者 await ReadAsync。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Processing.AnalysisQueue.Complete(System.Exception)">
+            <summary>
+            完成写端：应用关闭时通知消费者退出。
             </summary>
         </member>
         <member name="M:Zwav.Application.Parsing.DatMetaCalculator.InspectDat(System.Byte[],System.Int32,System.Int32)">

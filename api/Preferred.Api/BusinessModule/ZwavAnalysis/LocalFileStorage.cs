@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Preferred.Api.Models;
@@ -10,7 +11,7 @@ namespace Zwav.Infrastructure.Storage
 {
     public interface IFileStorage
     {
-        Task<(string FullPath, long SizeBytes, string Sha256)> SaveAsync(IFormFile file, string analysisGuid);
+        Task<SavedFileResult> SaveAsync(IFormFile file, string analysisGuid, IProgress<int> progress, CancellationToken ct);
         string GetRoot();
     }
 
@@ -32,30 +33,61 @@ namespace Zwav.Infrastructure.Storage
 
         public string GetRoot() => _root;
 
-        public async Task<(string FullPath, long SizeBytes, string Sha256)> SaveAsync(IFormFile file, string analysisGuid)
+        public async Task<SavedFileResult> SaveAsync(
+            IFormFile file,
+            string guid,
+            IProgress<int> progress,
+            CancellationToken ct)
         {
-            var dir = Path.Combine(_root, analysisGuid);
-            Directory.CreateDirectory(dir);
+            ct.ThrowIfCancellationRequested();
 
-            var safeName = Path.GetFileName(file.FileName);
-            var fullPath = Path.Combine(dir, safeName);
+            var ext = Path.GetExtension(file.FileName);
+            var targetPath = Path.Combine(_root, guid + ext);
 
-            await using (var fs = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+
+            const int bufferSize = 1024 * 1024; // 1MB
+            var buffer = new byte[bufferSize];
+
+            long total = file.Length;
+            long copied = 0;
+
+            using var input = file.OpenReadStream();
+            using var output = new FileStream(
+                targetPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize,
+                useAsync: true);
+
+            int read;
+            int lastReport = -1;
+
+            while ((read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
             {
-                await file.CopyToAsync(fs);
+                await output.WriteAsync(buffer.AsMemory(0, read), ct);
+
+                copied += read;
+
+                if (total > 0 && progress != null)
+                {
+                    int p = (int)(copied * 100L / total);
+                    if (p != lastReport)
+                    {
+                        lastReport = p;
+                        progress.Report(p);
+                    }
+                }
             }
 
-            var size = new FileInfo(fullPath).Length;
-            var sha256 = ComputeSha256(fullPath);
-            return (fullPath, size, sha256);
-        }
+            await output.FlushAsync(ct);
 
-        private static string ComputeSha256(string filePath)
-        {
-            using var sha = SHA256.Create();
-            using var fs = File.OpenRead(filePath);
-            var hash = sha.ComputeHash(fs);
-            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            return new SavedFileResult
+            {
+                FullPath = targetPath,
+                FileSize = copied
+            };
         }
     }
 }
