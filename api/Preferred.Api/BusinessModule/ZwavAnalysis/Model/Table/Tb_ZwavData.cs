@@ -8,7 +8,6 @@ namespace Preferred.Api.Models
     /// <summary>
     /// 录波数据
     /// </summary>
-    [Table("Tb_ZwavData")]
     public class ZwavData
     {
         public int Id { get; set; }  // 主键ID
@@ -89,56 +88,56 @@ namespace Preferred.Api.Models
         public double? Channel70 { get; set; }
 
         // 数字量通道
-        public ushort? Digital1 { get; set; }
-        public ushort? Digital2 { get; set; }
-        public ushort? Digital3 { get; set; }
-        public ushort? Digital4 { get; set; }
-        public ushort? Digital5 { get; set; }
-        public ushort? Digital6 { get; set; }
-        public ushort? Digital7 { get; set; }
-        public ushort? Digital8 { get; set; }
-        public ushort? Digital9 { get; set; }
-        public ushort? Digital10 { get; set; }
-        public ushort? Digital11 { get; set; }
-        public ushort? Digital12 { get; set; }
-        public ushort? Digital13 { get; set; }
-        public ushort? Digital14 { get; set; }
-        public ushort? Digital15 { get; set; }
-        public ushort? Digital16 { get; set; }
-        public ushort? Digital17 { get; set; }
-        public ushort? Digital18 { get; set; }
-        public ushort? Digital19 { get; set; }
-        public ushort? Digital20 { get; set; }
-        public ushort? Digital21 { get; set; }
-        public ushort? Digital22 { get; set; }
-        public ushort? Digital23 { get; set; }
-        public ushort? Digital24 { get; set; }
-        public ushort? Digital25 { get; set; }
-        public ushort? Digital26 { get; set; }
-        public ushort? Digital27 { get; set; }
-        public ushort? Digital28 { get; set; }
-        public ushort? Digital29 { get; set; }
-        public ushort? Digital30 { get; set; }
-        public ushort? Digital31 { get; set; }
-        public ushort? Digital32 { get; set; }
-        public ushort? Digital33 { get; set; }
-        public ushort? Digital34 { get; set; }
-        public ushort? Digital35 { get; set; }
-        public ushort? Digital36 { get; set; }
-        public ushort? Digital37 { get; set; }
-        public ushort? Digital38 { get; set; }
-        public ushort? Digital39 { get; set; }
-        public ushort? Digital40 { get; set; }
-        public ushort? Digital41 { get; set; }
-        public ushort? Digital42 { get; set; }
-        public ushort? Digital43 { get; set; }
-        public ushort? Digital44 { get; set; }
-        public ushort? Digital45 { get; set; }
-        public ushort? Digital46 { get; set; }
-        public ushort? Digital47 { get; set; }
-        public ushort? Digital48 { get; set; }
-        public ushort? Digital49 { get; set; }
-        public ushort? Digital50 { get; set; }
+        public short? Digital1 { get; set; }
+        public short? Digital2 { get; set; }
+        public short? Digital3 { get; set; }
+        public short? Digital4 { get; set; }
+        public short? Digital5 { get; set; }
+        public short? Digital6 { get; set; }
+        public short? Digital7 { get; set; }
+        public short? Digital8 { get; set; }
+        public short? Digital9 { get; set; }
+        public short? Digital10 { get; set; }
+        public short? Digital11 { get; set; }
+        public short? Digital12 { get; set; }
+        public short? Digital13 { get; set; }
+        public short? Digital14 { get; set; }
+        public short? Digital15 { get; set; }
+        public short? Digital16 { get; set; }
+        public short? Digital17 { get; set; }
+        public short? Digital18 { get; set; }
+        public short? Digital19 { get; set; }
+        public short? Digital20 { get; set; }
+        public short? Digital21 { get; set; }
+        public short? Digital22 { get; set; }
+        public short? Digital23 { get; set; }
+        public short? Digital24 { get; set; }
+        public short? Digital25 { get; set; }
+        public short? Digital26 { get; set; }
+        public short? Digital27 { get; set; }
+        public short? Digital28 { get; set; }
+        public short? Digital29 { get; set; }
+        public short? Digital30 { get; set; }
+        public short? Digital31 { get; set; }
+        public short? Digital32 { get; set; }
+        public short? Digital33 { get; set; }
+        public short? Digital34 { get; set; }
+        public short? Digital35 { get; set; }
+        public short? Digital36 { get; set; }
+        public short? Digital37 { get; set; }
+        public short? Digital38 { get; set; }
+        public short? Digital39 { get; set; }
+        public short? Digital40 { get; set; }
+        public short? Digital41 { get; set; }
+        public short? Digital42 { get; set; }
+        public short? Digital43 { get; set; }
+        public short? Digital44 { get; set; }
+        public short? Digital45 { get; set; }
+        public short? Digital46 { get; set; }
+        public short? Digital47 { get; set; }
+        public short? Digital48 { get; set; }
+        public short? Digital49 { get; set; }
+        public short? Digital50 { get; set; }
 
         public int SeqNo { get; set; }
         public DateTime CrtTime { get; set; }

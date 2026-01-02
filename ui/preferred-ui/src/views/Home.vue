@@ -3,10 +3,6 @@
     <!-- 顶部导航栏 -->
     <div class="top-header">
       <div class="header-content">
-        <div class="nav-links">
-          <router-link to="/" class="nav-link">首页</router-link>
-          <router-link to="/algorithm-planning" class="nav-link">AI算法规划</router-link>
-        </div>
         <div class="search-container">
           <el-input
             v-model="searchKeyword"
@@ -511,7 +507,7 @@ const openAdminLogin = (): void => {
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
-  justify-content: space-between;
+  justify-content: center; /* 改为居中对齐 */
   align-items: center;
 }
 

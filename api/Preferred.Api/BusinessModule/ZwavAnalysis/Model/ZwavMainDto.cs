@@ -2,7 +2,7 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Collections.Generic;
 
-namespace Preferred.Api.Models
+namespace Zwav.Application.Parsing
 {
     public sealed class UploadZwavFileResponse
     {
@@ -78,7 +78,7 @@ namespace Preferred.Api.Models
         /// <summary>
         /// 数据列表
         /// </summary>
-        public System.Collections.Generic.List<T> Data { get; set; }
+        public List<T> Data { get; set; }
         
         /// <summary>
         /// 总记录数
@@ -196,13 +196,13 @@ namespace Preferred.Api.Models
     {
         public string FaultStartTime { get; set; }
         public string FaultKeepingTime { get; set; }
-        public string DeviceInfoJson { get; set; }
-        public string TripInfoJSON { get; set; }
-        public string FaultInfoJson { get; set; }
-        public string DigitalStatusJson { get; set; }
-        public string DigitalEventJson { get; set; }
-        public string SettingValueJson { get; set; }
-        public string RelayEnaValueJSON { get; set; }
+        public List<NameValue> DeviceInfoJson { get; set; }
+        public List<TripInfo> TripInfoJSON { get; set; }
+        public List<FaultInfo> FaultInfoJson { get; set; }
+        public List<NameValue> DigitalStatusJson { get; set; }
+        public List<DigitalEvent> DigitalEventJson { get; set; }
+        public List<SettingValue> SettingValueJson { get; set; }
+        public List<RelayEnaValue> RelayEnaValueJSON { get; set; }
     }
 
     public sealed class WaveDataPageDto

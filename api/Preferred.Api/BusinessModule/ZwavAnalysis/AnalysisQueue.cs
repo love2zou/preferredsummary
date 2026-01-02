@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Preferred.Api.Models;
+using Zwav.Application.Parsing;
 
 namespace Zwav.Application.Processing
 {

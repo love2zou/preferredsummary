@@ -4,7 +4,7 @@ export const API_CONFIG = {
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://159.75.184.108:8080',
 
   // 超时时间
-  TIMEOUT: Number(import.meta.env.VITE_API_TIMEOUT) || 10000,
+  TIMEOUT: Number(import.meta.env.VITE_API_TIMEOUT) || 300000,
 
   // API端点
   ENDPOINTS: {

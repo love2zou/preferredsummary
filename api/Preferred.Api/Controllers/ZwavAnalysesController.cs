@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Preferred.Api.Models;
+using Zwav.Application.Parsing;
 using Preferred.Api.Services;
 using SixLabors.ImageSharp;
 using System.Linq;
@@ -85,7 +86,7 @@ namespace Preferred.Api.Controllers
                 // 关键：从 Tb_ZwavFile 取文件信息并创建解析任务（由 AppService 做全套校验与入队）
                 var result = await _app.CreateAnalysisByFileIdAsync(req.FileId, req.ForceRecreate, ct);
 
-                var progressUrl = Url.Action(nameof(GetStatusAsync), new { analysisGuid = result.AnalysisGuid });
+                //var progressUrl = Url.Action(nameof(GetStatusAsync), new { analysisGuid = result.AnalysisGuid });
 
                 // 语义上建议返回 202 Accepted（任务已接收进入队列），你也可以保持 200
                 return Accepted(new ApiResponse<CreateAnalysisResponse>
@@ -96,7 +97,7 @@ namespace Preferred.Api.Controllers
                     {
                         AnalysisGuid = result.AnalysisGuid,
                         Status = result.Status,
-                        ProgressUrl = progressUrl
+                        //ProgressUrl = progressUrl
                     }
                 });
             }
@@ -121,21 +122,21 @@ namespace Preferred.Api.Controllers
 
 
         /// <summary>查询任务状态</summary>
-        [HttpGet("{analysisGuid}")]
-        public async Task<ActionResult<AnalysisStatusResponse>> GetStatusAsync([FromRoute] string analysisGuid, CancellationToken ct)
-        {
-            var status = await _app.GetStatusAsync(analysisGuid, ct);
-            if (status == null) return NotFound();
+        // [HttpGet("{analysisGuid}")]
+        // public async Task<ActionResult<AnalysisStatusResponse>> GetStatusAsync([FromRoute] string analysisGuid, CancellationToken ct)
+        // {
+        //     var status = await _app.GetStatusAsync(analysisGuid, ct);
+        //     if (status == null) return NotFound();
 
-            return Ok(new ApiResponse<AnalysisStatusResponse>
-            {
-                Success = true,
-                Message = "查询任务状态成功",
-                Data = status
-            });
-        }
+        //     return Ok(new ApiResponse<AnalysisStatusResponse>
+        //     {
+        //         Success = true,
+        //         Message = "查询任务状态成功",
+        //         Data = status
+        //     });
+        // }
 
-        // 任务列表
+        /// <summary>分页查询录波解析任务列表</summary>
         [HttpGet]
         public async Task<IActionResult> GetListAsync(
             [FromQuery] string status,
@@ -143,13 +144,11 @@ namespace Preferred.Api.Controllers
             [FromQuery] DateTime? fromUtc,
             [FromQuery] DateTime? toUtc,
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 20,
-            [FromQuery] string orderBy = "CrtTimeDesc",
-            CancellationToken ct = default)
+            [FromQuery] int pageSize = 20)
         {
             try
             {
-                var data = await _app.QueryAsync(status, keyword, fromUtc, toUtc, page, pageSize, orderBy, ct);
+                var data = await _app.QueryAsync(status, keyword, fromUtc, toUtc, page, pageSize);
                 return Ok(new ApiResponse<PagedResult<AnalysisListItemDto>>
                 {
                     Success = true,
@@ -163,7 +162,7 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        // 任务详情
+        /// <summary>获取录波解析任务详情（包含文件信息和配置摘要）</summary>
         [HttpGet("{analysisGuid}/detail")]
         public async Task<IActionResult> GetDetailAsync([FromRoute] string analysisGuid, CancellationToken ct)
         {
@@ -180,7 +179,7 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        // CFG
+        /// <summary>获取 CFG 配置信息</summary>
         [HttpGet("{analysisGuid}/cfg")]
         public async Task<IActionResult> GetCfgAsync([FromRoute] string analysisGuid, [FromQuery] bool includeText = false, CancellationToken ct = default)
         {
@@ -197,7 +196,7 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        // Channels
+        /// <summary>获取通道列表</summary>
         [HttpGet("{analysisGuid}/channels")]
         public async Task<IActionResult> GetChannelsAsync(
             [FromRoute] string analysisGuid,
@@ -218,7 +217,7 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        // HDR
+        /// <summary>获取 HDR 头文件信息</summary>
         [HttpGet("{analysisGuid}/hdr")]
         public async Task<IActionResult> GetHdrAsync([FromRoute] string analysisGuid, CancellationToken ct)
         {
@@ -235,7 +234,7 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        // 波形数据
+        /// <summary>获取波形数据（分页/降采样）</summary>
         [HttpGet("{analysisGuid}/get-wavedata")]
         public async Task<IActionResult> GetWaveDataAsync(
             [FromRoute] string analysisGuid,
@@ -245,12 +244,11 @@ namespace Preferred.Api.Controllers
             [FromQuery] int? limit = 2000,
             [FromQuery] string channels = null,
             [FromQuery] string digitals = null,
-            [FromQuery] int downSample = 1,
-            CancellationToken ct = default)
+            [FromQuery] int downSample = 1)
         {
             try
             {
-                var data = await _app.GetWaveDataAsync(analysisGuid, fromSample, toSample, offset, limit, channels, digitals, downSample, ct);
+                var data = await _app.GetWaveDataAsync(analysisGuid, fromSample, toSample, offset, limit, channels, digitals, downSample);
                 if (data == null) return NotFound(new ApiErrorResponse { Message = "任务不存在" });
 
                 return Ok(new ApiResponse<WaveDataPageDto> { Success = true, Message = "查询成功", Data = data });
@@ -261,7 +259,29 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        // 删除任务（可选，但你接口声明了就必须实现）
+        /// <summary>下载原始录波文件</summary>
+        [HttpGet("{analysisGuid}/download")]
+        public async Task<IActionResult> DownloadAsync([FromRoute] string analysisGuid, CancellationToken ct)
+        {
+            try
+            {
+                var (path, name) = await _app.GetFileDownloadInfoAsync(analysisGuid, ct);
+                if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+                {
+                    return NotFound(new ApiErrorResponse { Message = "文件不存在" });
+                }
+
+                var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+                // 使用 application/octet-stream 强制下载
+                return File(stream, "application/octet-stream", name);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiErrorResponse { Message = "下载文件失败", Details = ex.Message });
+            }
+        }
+
+        /// <summary>删除录波解析任务</summary>
         [HttpDelete("{analysisGuid}")]
         public async Task<IActionResult> DeleteAsync([FromRoute] string analysisGuid, [FromQuery] bool deleteFile = false, CancellationToken ct = default)
         {

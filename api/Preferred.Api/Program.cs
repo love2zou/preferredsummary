@@ -16,6 +16,9 @@ namespace Preferred.Api
     {
         public static void Main(string[] args)
         {
+            // 确保控制台输出编码为 UTF-8
+            Console.OutputEncoding = Encoding.UTF8;
+            
             // 注册 CodePagesEncodingProvider 以支持更多编码（如 GB18030）
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             // 配置 Serilog

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Http;
+using Zwav.Application.Parsing;
 using Preferred.Api.Models;
 
 namespace Preferred.Api.Services
@@ -23,7 +24,7 @@ namespace Preferred.Api.Services
 
         Task<PagedResult<AnalysisListItemDto>> QueryAsync(
             string status, string keyword, DateTime? fromUtc, DateTime? toUtc,
-            int pageIndex, int pageSize, string orderBy, CancellationToken ct);
+            int pageIndex, int pageSize);
 
         Task<AnalysisDetailDto> GetDetailAsync(string analysisGuid, CancellationToken ct);
 
@@ -38,8 +39,9 @@ namespace Preferred.Api.Services
             int? fromSample, int? toSample,
             int? offset, int? limit,
             string channels, string digitals,
-            int downSample,
-            CancellationToken ct);
+            int downSample);
+
+        Task<(string FilePath, string FileName)> GetFileDownloadInfoAsync(string analysisGuid, CancellationToken ct);
 
         Task<bool> DeleteAsync(string analysisGuid, bool deleteFile, CancellationToken ct);
     }

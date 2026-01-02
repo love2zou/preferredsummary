@@ -36,7 +36,24 @@ namespace Preferred.Api
         {
             // 添加数据库上下文
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseMySql(Configuration.GetConnectionString("DefaultConnectionString")));
+                options.UseMySql(Configuration.GetConnectionString("DefaultConnectionString"),
+                    mySqlOptions => mySqlOptions.CommandTimeout(60))); // 设置数据库命令超时为60秒
+
+            // 配置Kestrel上传限制（解决大文件上传超时或被截断）
+            services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+            {
+                options.Limits.MaxRequestBodySize = 1024L * 1024 * 1024; // 1GB
+                options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2); // 保持连接2分钟
+                options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(2); // 请求头超时
+            });
+
+            // 配置表单选项（解决Multipart Body Length Limit Exceeded）
+            services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+            {
+                options.ValueLengthLimit = int.MaxValue;
+                options.MultipartBodyLengthLimit = 1024L * 1024 * 1024; // 1GB
+                options.MultipartHeadersLengthLimit = int.MaxValue;
+            });
 
             // 配置JSON序列化选项
             services.AddControllers()

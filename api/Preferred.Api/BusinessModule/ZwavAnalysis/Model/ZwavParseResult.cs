@@ -2,6 +2,47 @@ using System.Collections.Generic;
 
 namespace Zwav.Application.Parsing
 {
+     public class NameValue
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+    }
+
+    public class TripInfo
+    {
+        public string Time { get; set; }
+        public string Name { get; set; }
+        public string Phase { get; set; }
+        public string Value { get; set; }
+    }
+
+    public class FaultInfo
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+        public string Unit { get; set; }
+    }
+
+    public class DigitalEvent
+    {
+        public string Time { get; set; }
+        public string Name { get; set; }
+        public string Value { get; set; }
+    }
+
+    public class SettingValue
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+        public string Unit { get; set; }
+    }
+    
+        public class RelayEnaValue
+    {
+        public string Name { get; set; }
+        public string Value { get; set; }
+    }
+    
     public class CfgParseResult
     {
         public string FullText { get; set; }
@@ -59,7 +100,7 @@ namespace Zwav.Application.Parsing
         public int SampleNo { get; set; }        // sampleNo（JS里读了但没展示，这里保留）
         public int TimeRaw { get; set; }         // timeRaw
         public double[] Channels { get; set; }    // 全部模拟量物理值，长度 = ACount
-        public ushort[] Digitals { get; set; }   // 可选：每条记录的数字字（长度 = dvWords）
+        public short[] Digitals { get; set; }   // 可选：每条记录的数字字（长度 = dvWords）
     }
 
     public class WaveDataParseResult

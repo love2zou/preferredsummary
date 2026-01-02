@@ -113,7 +113,7 @@ namespace Zwav.Application.Workers
             // 3) 解压目录逻辑
             var baseDir = Path.GetDirectoryName(item.StoragePath);
             var extractDir = string.IsNullOrWhiteSpace(item.ExtractPath)
-                ? Path.Combine(baseDir, "extracted")
+                ? Path.Combine(baseDir, $"extracted_{item.AnalysisGuid}") // 生成唯一目录名
                 : item.ExtractPath;
 
             ZwavZipHelper.EnsureExtract(item.StoragePath, extractDir);

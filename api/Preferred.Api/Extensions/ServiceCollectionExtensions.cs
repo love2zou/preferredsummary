@@ -25,9 +25,6 @@ namespace Preferred.Api.Extensions
             services.AddScoped<IBookingService, BookingService>();
             // 注册系统监控服务
             services.AddScoped<ISystemMonitorService, SystemMonitorService>();
-            // 注册数据解析服务
-            services.AddScoped<IDataParserService, DataParserService>();
-            services.AddScoped<IFireAnalysisService, FireAnalysisService>();
             //录波文件服务
             services.AddScoped<IFileStorage, LocalFileStorage>();
             services.AddSingleton<IAnalysisQueue, AnalysisQueue>();

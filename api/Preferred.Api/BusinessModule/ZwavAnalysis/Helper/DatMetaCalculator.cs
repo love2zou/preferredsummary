@@ -100,14 +100,14 @@ namespace Zwav.Application.Parsing
                 offset += cfg.AnalogCount * 2;
 
                 // 数字量：按 dvWords 跳过（可选读取）
-                ushort[] digitals = null;
+                short[] digitals = null;
                 if (includeDigitals && dvWords > 0)
                 {
-                    digitals = new ushort[dvWords];
+                    digitals = new short[dvWords];
                     for (int w = 0; w < dvWords; w++)
                     {
                         // JS 用 getInt16 读取并跳过；这里用 ushort 更贴近“16位字”
-                        digitals[w] = BitConverter.ToUInt16(span.Slice(offset + w * 2, 2));
+                        digitals[w] = BitConverter.ToInt16(span.Slice(offset + w * 2, 2));
                     }
                 }
                 offset += dvWords * 2;

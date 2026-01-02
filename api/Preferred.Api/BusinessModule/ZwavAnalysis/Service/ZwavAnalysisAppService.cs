@@ -3,13 +3,17 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Reflection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using Preferred.Api.Data;
+using Zwav.Application.Parsing;
 using Preferred.Api.Models;
 using Zwav.Application.Processing;
 using Zwav.Infrastructure.Storage;
+using System.Linq.Expressions;
 
 namespace Preferred.Api.Services
 {
@@ -201,7 +205,7 @@ namespace Preferred.Api.Services
 
         public async Task<PagedResult<AnalysisListItemDto>> QueryAsync(
             string status, string keyword, DateTime? fromUtc, DateTime? toUtc,
-            int page, int pageSize, string orderBy, CancellationToken ct)
+            int page, int pageSize)
         {
             page = page <= 0 ? 1 : page;
             pageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 200);
@@ -214,7 +218,7 @@ namespace Preferred.Api.Services
                 q = q.Where(x => x.a.Status == status);
 
             if (!string.IsNullOrWhiteSpace(keyword))
-                q = q.Where(x => x.f.OriginalName.Contains(keyword) || x.a.AnalysisGuid.Contains(keyword));
+                q = q.Where(x => x.f.OriginalName.Contains(keyword));
 
             if (fromUtc.HasValue)
                 q = q.Where(x => x.a.CrtTime >= fromUtc.Value);
@@ -222,13 +226,7 @@ namespace Preferred.Api.Services
             if (toUtc.HasValue)
                 q = q.Where(x => x.a.CrtTime <= toUtc.Value);
 
-            q = orderBy switch
-            {
-                "UpdTimeDesc" => q.OrderByDescending(x => x.a.UpdTime),
-                _ => q.OrderByDescending(x => x.a.CrtTime)
-            };
-
-            var totalLong = await q.LongCountAsync(ct);
+            var totalLong = await q.LongCountAsync();
             var total = totalLong > int.MaxValue ? int.MaxValue : (int)totalLong;
 
             var items = await q.Skip((page - 1) * pageSize)
@@ -245,8 +243,8 @@ namespace Preferred.Api.Services
                     UpdTime = x.a.UpdTime,
                     StartTime = x.a.StartTime,
                     FinishTime = x.a.FinishTime
-                })
-                .ToListAsync(ct);
+                }).OrderByDescending(q => q.UpdTime)
+                .ToListAsync();
 
             var totalPages = (int)Math.Ceiling(total / (double)pageSize);
 
@@ -380,13 +378,13 @@ namespace Preferred.Api.Services
             {
                 FaultStartTime = h.FaultStartTime,
                 FaultKeepingTime = h.FaultKeepingTime,
-                DeviceInfoJson = h.DeviceInfoJson,
-                TripInfoJSON = h.TripInfoJSON,
-                FaultInfoJson = h.FaultInfoJson,
-                DigitalStatusJson = h.DigitalStatusJson,
-                DigitalEventJson = h.DigitalEventJson,
-                SettingValueJson = h.SettingValueJson,
-                RelayEnaValueJSON = h.RelayEnaValueJSON
+                DeviceInfoJson = JsonSerializer.Deserialize<List<NameValue>>(h.DeviceInfoJson),
+                TripInfoJSON = JsonSerializer.Deserialize<List<TripInfo>>(h.TripInfoJSON),
+                FaultInfoJson = JsonSerializer.Deserialize<List<FaultInfo>>(h.FaultInfoJson),
+                DigitalStatusJson = JsonSerializer.Deserialize<List<NameValue>>(h.DigitalStatusJson),
+                DigitalEventJson = JsonSerializer.Deserialize<List<DigitalEvent>>(h.DigitalEventJson),
+                SettingValueJson = JsonSerializer.Deserialize<List<SettingValue>>(h.SettingValueJson),
+                RelayEnaValueJSON = JsonSerializer.Deserialize<List<RelayEnaValue>>(h.RelayEnaValueJSON)
             };
         }
 
@@ -401,26 +399,88 @@ namespace Preferred.Api.Services
                 .ToArray();
         }
 
-        private static readonly System.Reflection.PropertyInfo[] ZwavDataChannelProps =
-            Enumerable.Range(1, 70).Select(i => typeof(ZwavData).GetProperty($"Channel{i}")).ToArray();
+        
 
-        private static readonly System.Reflection.PropertyInfo[] ZwavDataDigitalProps =
-            Enumerable.Range(1, 50).Select(i => typeof(ZwavData).GetProperty($"Digital{i}")).ToArray();
 
-        private static double ReadAnalog(ZwavData row, int idx)
+        private static readonly Func<WaveRowRaw, double>[] ZwavAnalogGetters =
+            Enumerable.Range(1, 70).Select(BuildAnalogGetter).ToArray();
+
+        private static readonly Func<WaveRowRaw, short>[] ZwavDigitalGetters =
+            Enumerable.Range(1, 50).Select(BuildDigitalGetter).ToArray();
+
+        private static Func<WaveRowRaw, double> BuildAnalogGetter(int i)
         {
-            var p = ZwavDataChannelProps[idx - 1];
-            if (p == null) return 0;
-            var v = p.GetValue(row);
-            return v == null ? 0 : Convert.ToDouble(v);
+            var prop = typeof(WaveRowRaw).GetProperty($"Channel{i}", BindingFlags.Public | BindingFlags.Instance);
+            if (prop == null) return _ => 0d;
+
+            var row = Expression.Parameter(typeof(WaveRowRaw), "row");
+            var access = Expression.Property(row, prop);                       // row.Channel{i}
+            var toObj = Expression.Convert(access, typeof(object));            // box
+            var call = Expression.Condition(
+                Expression.Equal(toObj, Expression.Constant(null)),
+                Expression.Constant(0d),
+                Expression.Convert(Expression.Call(typeof(Convert), nameof(Convert.ToDouble), null, toObj), typeof(double))
+            );
+
+            return Expression.Lambda<Func<WaveRowRaw, double>>(call, row).Compile();
         }
 
-        private static short ReadDigital(ZwavData row, int idx)
+        private static Func<WaveRowRaw, short> BuildDigitalGetter(int i)
         {
-            var p = ZwavDataDigitalProps[idx - 1];
-            if (p == null) return 0;
-            var v = p.GetValue(row);
-            return v == null ? (short)0 : Convert.ToInt16(v);
+            var prop = typeof(WaveRowRaw).GetProperty($"Digital{i}", BindingFlags.Public | BindingFlags.Instance);
+            if (prop == null) return _ => (short)0;
+
+            var row = Expression.Parameter(typeof(WaveRowRaw), "row");
+            var access = Expression.Property(row, prop);
+            var toObj = Expression.Convert(access, typeof(object));
+            var call = Expression.Condition(
+                Expression.Equal(toObj, Expression.Constant(null)),
+                Expression.Constant((short)0),
+                Expression.Convert(Expression.Call(typeof(Convert), nameof(Convert.ToInt16), null, toObj), typeof(short))
+            );
+
+            return Expression.Lambda<Func<WaveRowRaw, short>>(call, row).Compile();
+        }
+
+        private static double ReadAnalog(WaveRowRaw row, int idx)
+        {
+            if (idx < 1 || idx > ZwavAnalogGetters.Length) return 0d;
+            return ZwavAnalogGetters[idx - 1](row);
+        }
+
+        private static short ReadDigital(WaveRowRaw row, int idx)
+        {
+            if (idx < 1 || idx > ZwavDigitalGetters.Length) return (short)0;
+            return ZwavDigitalGetters[idx - 1](row);
+        }
+
+        private static double[] ReadAnalogs(WaveRowRaw row, int[] indices)
+        {
+            if (indices == null || indices.Length == 0) return Array.Empty<double>();
+
+            var arr = new double[indices.Length];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                var idx = indices[i];
+                // 防御：避免 idx 越界导致 switch default 以外的异常（你 switch 已 default=0，其实这里可省）
+                if (idx < 1 || idx > 70) { arr[i] = 0; continue; }
+                arr[i] = row.GetAnalog(idx);
+            }
+            return arr;
+        }
+
+        private static short[] ReadDigitals(WaveRowRaw row, int[] indices)
+        {
+            if (indices == null || indices.Length == 0) return Array.Empty<short>();
+
+            var arr = new short[indices.Length];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                var idx = indices[i];
+                if (idx < 1 || idx > 50) { arr[i] = 0; continue; }
+                arr[i] = row.GetDigital(idx);
+            }
+            return arr;
         }
 
         public async Task<WaveDataPageDto> GetWaveDataAsync(
@@ -428,13 +488,12 @@ namespace Preferred.Api.Services
             int? fromSample, int? toSample,
             int? offset, int? limit,
             string channels, string digitals,
-            int downSample,
-            CancellationToken ct)
+            int downSample)
         {
             downSample = downSample <= 0 ? 1 : downSample;
 
             var a = await _context.ZwavAnalyses.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid, ct);
+                .FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid);
             if (a == null) return null;
 
             var ch = ParseIndices(channels, 1, 70);
@@ -468,16 +527,146 @@ namespace Preferred.Api.Services
                 q = q.Where(x => (x.SampleNo % downSample) == 0);
 
             var rows = await q.OrderBy(x => x.SampleNo)
+                .Select(x => new WaveRowRaw
+                {
+                    SampleNo = x.SampleNo,
+                    TimeRaw = x.TimeRaw,
+                    Channel1 = x.Channel1 != null ? (double?)Math.Round(x.Channel1.Value, 3) : null,
+                    Channel2 = x.Channel2 != null ? (double?)Math.Round(x.Channel2.Value, 3) : null,
+                    Channel3 = x.Channel3 != null ? (double?)Math.Round(x.Channel3.Value, 3) : null,
+                    Channel4 = x.Channel4 != null ? (double?)Math.Round(x.Channel4.Value, 3) : null,
+                    Channel5 = x.Channel5 != null ? (double?)Math.Round(x.Channel5.Value, 3) : null,
+                    Channel6 = x.Channel6 != null ? (double?)Math.Round(x.Channel6.Value, 3) : null,
+                    Channel7 = x.Channel7 != null ? (double?)Math.Round(x.Channel7.Value, 3) : null,
+                    Channel8 = x.Channel8 != null ? (double?)Math.Round(x.Channel8.Value, 3) : null,
+                    Channel9 = x.Channel9 != null ? (double?)Math.Round(x.Channel9.Value, 3) : null,
+                    Channel10 = x.Channel10 != null ? (double?)Math.Round(x.Channel10.Value, 3) : null,
+                    Channel11 = x.Channel11 != null ? (double?)Math.Round(x.Channel11.Value, 3) : null,
+                    Channel12 = x.Channel12 != null ? (double?)Math.Round(x.Channel12.Value, 3) : null,
+                    Channel13 = x.Channel13 != null ? (double?)Math.Round(x.Channel13.Value, 3) : null,
+                    Channel14 = x.Channel14 != null ? (double?)Math.Round(x.Channel14.Value, 3) : null,
+                    Channel15 = x.Channel15 != null ? (double?)Math.Round(x.Channel15.Value, 3) : null,
+                    Channel16 = x.Channel16 != null ? (double?)Math.Round(x.Channel16.Value, 3) : null,
+                    Channel17 = x.Channel17 != null ? (double?)Math.Round(x.Channel17.Value, 3) : null,
+                    Channel18 = x.Channel18 != null ? (double?)Math.Round(x.Channel18.Value, 3) : null,
+                    Channel19 = x.Channel19 != null ? (double?)Math.Round(x.Channel19.Value, 3) : null,
+                    Channel20 = x.Channel20 != null ? (double?)Math.Round(x.Channel20.Value, 3) : null,
+                    Channel21 = x.Channel21 != null ? (double?)Math.Round(x.Channel21.Value, 3) : null,
+                    Channel22 = x.Channel22 != null ? (double?)Math.Round(x.Channel22.Value, 3) : null,
+                    Channel23 = x.Channel23 != null ? (double?)Math.Round(x.Channel23.Value, 3) : null,
+                    Channel24 = x.Channel24 != null ? (double?)Math.Round(x.Channel24.Value, 3) : null,
+                    Channel25 = x.Channel25 != null ? (double?)Math.Round(x.Channel25.Value, 3) : null,
+                    Channel26 = x.Channel26 != null ? (double?)Math.Round(x.Channel26.Value, 3) : null,
+                    Channel27 = x.Channel27 != null ? (double?)Math.Round(x.Channel27.Value, 3) : null,
+                    Channel28 = x.Channel28 != null ? (double?)Math.Round(x.Channel28.Value, 3) : null,
+                    Channel29 = x.Channel29 != null ? (double?)Math.Round(x.Channel29.Value, 3) : null,
+                    Channel30 = x.Channel30 != null ? (double?)Math.Round(x.Channel30.Value, 3) : null,
+                    Channel31 = x.Channel31 != null ? (double?)Math.Round(x.Channel31.Value, 3) : null,
+                    Channel32 = x.Channel32 != null ? (double?)Math.Round(x.Channel32.Value, 3) : null,
+                    Channel33 = x.Channel33 != null ? (double?)Math.Round(x.Channel33.Value, 3) : null,
+                    Channel34 = x.Channel34 != null ? (double?)Math.Round(x.Channel34.Value, 3) : null,
+                    Channel35 = x.Channel35 != null ? (double?)Math.Round(x.Channel35.Value, 3) : null,
+                    Channel36 = x.Channel36 != null ? (double?)Math.Round(x.Channel36.Value, 3) : null,
+                    Channel37 = x.Channel37 != null ? (double?)Math.Round(x.Channel37.Value, 3) : null,
+                    Channel38 = x.Channel38 != null ? (double?)Math.Round(x.Channel38.Value, 3) : null,
+                    Channel39 = x.Channel39 != null ? (double?)Math.Round(x.Channel39.Value, 3) : null,
+                    Channel40 = x.Channel40 != null ? (double?)Math.Round(x.Channel40.Value, 3) : null,
+                    Channel41 = x.Channel41 != null ? (double?)Math.Round(x.Channel41.Value, 3) : null,
+                    Channel42 = x.Channel42 != null ? (double?)Math.Round(x.Channel42.Value, 3) : null,
+                    Channel43 = x.Channel43 != null ? (double?)Math.Round(x.Channel43.Value, 3) : null,
+                    Channel44 = x.Channel44 != null ? (double?)Math.Round(x.Channel44.Value, 3) : null,
+                    Channel45 = x.Channel45 != null ? (double?)Math.Round(x.Channel45.Value, 3) : null,
+                    Channel46 = x.Channel46 != null ? (double?)Math.Round(x.Channel46.Value, 3) : null,
+                    Channel47 = x.Channel47 != null ? (double?)Math.Round(x.Channel47.Value, 3) : null,
+                    Channel48 = x.Channel48 != null ? (double?)Math.Round(x.Channel48.Value, 3) : null,
+                    Channel49 = x.Channel49 != null ? (double?)Math.Round(x.Channel49.Value, 3) : null,
+                    Channel50 = x.Channel50 != null ? (double?)Math.Round(x.Channel50.Value, 3) : null,
+                    Channel51 = x.Channel51 != null ? (double?)Math.Round(x.Channel51.Value, 3) : null,
+                    Channel52 = x.Channel52 != null ? (double?)Math.Round(x.Channel52.Value, 3) : null,
+                    Channel53 = x.Channel53 != null ? (double?)Math.Round(x.Channel53.Value, 3) : null,
+                    Channel54 = x.Channel54 != null ? (double?)Math.Round(x.Channel54.Value, 3) : null,
+                    Channel55 = x.Channel55 != null ? (double?)Math.Round(x.Channel55.Value, 3) : null,
+                    Channel56 = x.Channel56 != null ? (double?)Math.Round(x.Channel56.Value, 3) : null,
+                    Channel57 = x.Channel57 != null ? (double?)Math.Round(x.Channel57.Value, 3) : null,
+                    Channel58 = x.Channel58 != null ? (double?)Math.Round(x.Channel58.Value, 3) : null,
+                    Channel59 = x.Channel59 != null ? (double?)Math.Round(x.Channel59.Value, 3) : null,
+                    Channel60 = x.Channel60 != null ? (double?)Math.Round(x.Channel60.Value, 3) : null,
+                    Channel61 = x.Channel61 != null ? (double?)Math.Round(x.Channel61.Value, 3) : null,
+                    Channel62 = x.Channel62 != null ? (double?)Math.Round(x.Channel62.Value, 3) : null,
+                    Channel63 = x.Channel63 != null ? (double?)Math.Round(x.Channel63.Value, 3) : null,
+                    Channel64 = x.Channel64 != null ? (double?)Math.Round(x.Channel64.Value, 3) : null,
+                    Channel65 = x.Channel65 != null ? (double?)Math.Round(x.Channel65.Value, 3) : null,
+                    Channel66 = x.Channel66 != null ? (double?)Math.Round(x.Channel66.Value, 3) : null,
+                    Channel67 = x.Channel67 != null ? (double?)Math.Round(x.Channel67.Value, 3) : null,
+                    Channel68 = x.Channel68 != null ? (double?)Math.Round(x.Channel68.Value, 3) : null,
+                    Channel69 = x.Channel69 != null ? (double?)Math.Round(x.Channel69.Value, 3) : null,
+                    Channel70 = x.Channel70 != null ? (double?)Math.Round(x.Channel70.Value, 3) : null,
+                    Digital1 = x.Digital1,
+                    Digital2 = x.Digital2,
+                    Digital3 = x.Digital3,
+                    Digital4 = x.Digital4,
+                    Digital5 = x.Digital5,
+                    Digital6 = x.Digital6,
+                    Digital7 = x.Digital7,
+                    Digital8 = x.Digital8,
+                    Digital9 = x.Digital9,
+                    Digital10 = x.Digital10,
+                    Digital11 = x.Digital11,
+                    Digital12 = x.Digital12,
+                    Digital13 = x.Digital13,
+                    Digital14 = x.Digital14,
+                    Digital15 = x.Digital15,
+                    Digital16 = x.Digital16,
+                    Digital17 = x.Digital17,
+                    Digital18 = x.Digital18,
+                    Digital19 = x.Digital19,
+                    Digital20 = x.Digital20,
+                    Digital21 = x.Digital21,
+                    Digital22 = x.Digital22,
+                    Digital23 = x.Digital23,
+                    Digital24 = x.Digital24,
+                    Digital25 = x.Digital25,
+                    Digital26 = x.Digital26,
+                    Digital27 = x.Digital27,
+                    Digital28 = x.Digital28,
+                    Digital29 = x.Digital29,
+                    Digital30 = x.Digital30,
+                    Digital31 = x.Digital31,
+                    Digital32 = x.Digital32,
+                    Digital33 = x.Digital33,
+                    Digital34 = x.Digital34,
+                    Digital35 = x.Digital35,
+                    Digital36 = x.Digital36,
+                    Digital37 = x.Digital37,
+                    Digital38 = x.Digital38,
+                    Digital39 = x.Digital39,
+                    Digital40 = x.Digital40,
+                    Digital41 = x.Digital41,
+                    Digital42 = x.Digital42,
+                    Digital43 = x.Digital43,
+                    Digital44 = x.Digital44,
+                    Digital45 = x.Digital45,
+                    Digital46 = x.Digital46,
+                    Digital47 = x.Digital47,
+                    Digital48 = x.Digital48,
+                    Digital49 = x.Digital49,
+                    Digital50 = x.Digital50
+                })
                 .Take(take)
-                .ToListAsync(ct);
+                .ToListAsync();
 
-            var dtoRows = rows.Select(r => new WaveDataRowDto
+            var dtoRows = new WaveDataRowDto[rows.Count];
+            for (int i = 0; i < rows.Count; i++)
             {
-                SampleNo = r.SampleNo,
-                TimeRaw = r.TimeRaw,
-                Analog = ch.Select(idx => ReadAnalog(r, idx)).ToArray(),
-                Digital = dg.Select(idx => ReadDigital(r, idx)).ToArray()
-            }).ToArray();
+                var r = rows[i];
+                dtoRows[i] = new WaveDataRowDto
+                {
+                    SampleNo = r.SampleNo,
+                    TimeRaw = r.TimeRaw,
+                    Analog = ReadAnalogs(r, ch),
+                    Digital = ReadDigitals(r, dg)
+                };
+            }
 
             return new WaveDataPageDto
             {
@@ -488,6 +677,19 @@ namespace Preferred.Api.Services
                 Digitals = dg,
                 Rows = dtoRows
             };
+        }
+
+        public async Task<(string FilePath, string FileName)> GetFileDownloadInfoAsync(string analysisGuid, CancellationToken ct)
+        {
+            var a = await _context.ZwavAnalyses.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid, ct);
+            if (a == null) return (null, null);
+
+            var f = await _context.ZwavFiles.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == a.FileId, ct);
+            if (f == null) return (null, null);
+
+            return (f.StoragePath, f.OriginalName);
         }
 
         public async Task<bool> CancelAsync(string analysisGuid, CancellationToken ct)
@@ -544,8 +746,17 @@ namespace Preferred.Api.Services
             {
                 try
                 {
+                    // 1. 删除原始上传文件
                     if (!string.IsNullOrWhiteSpace(f.StoragePath) && File.Exists(f.StoragePath))
+                    {
                         File.Delete(f.StoragePath);
+                    }
+
+                    // 2. 删除解压后的文件夹 (ExtractPath)
+                    if (!string.IsNullOrWhiteSpace(f.ExtractPath) && Directory.Exists(f.ExtractPath))
+                    {
+                        Directory.Delete(f.ExtractPath, recursive: true);
+                    }
                 }
                 catch
                 {
