@@ -373,8 +373,8 @@ const handleDownload = async (row: ZwavFileAnalysis) => {
   try {
     const res: any = await zwavService.downloadFile(row.analysisGuid)
     // 创建 blob 链接并下载
-    // 注意：api 拦截器返回的是 response.data，这里 res 应该是 Blob 对象
-    const blob = new Blob([res], { type: 'application/octet-stream' })
+    // api 拦截器对于 blob 类型请求返回完整 response
+    const blob = new Blob([res.data], { type: 'application/octet-stream' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -421,7 +421,7 @@ const startBatchUpload = async () => {
   // 注意：uploadRef.value.uploadFiles 可能包含已上传的文件，需要过滤出 raw 存在且 status 为 ready 的文件（或者全部重新上传，视需求而定）
   // 这里简化为取 raw
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const uploadFiles = (uploadRef.value ? (uploadRef.value as any).uploadFiles : []) as UploadUserFile[]
+  const uploadFiles = (uploadRef.value ? ((uploadRef.value as any).uploadFiles || []) : []) as UploadUserFile[]
   const filesToUpload = uploadFiles.length > 0 ? uploadFiles : fileList.value || []
   
   if (filesToUpload.length === 0) {

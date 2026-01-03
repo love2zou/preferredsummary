@@ -5,6 +5,7 @@ using System.Linq;
 using System.Xml;
 using System.Text;
 using System.Text.RegularExpressions;
+using Preferred.Api.Models;
 
 namespace Zwav.Application.Parsing
 {
@@ -180,5 +181,48 @@ namespace Zwav.Application.Parsing
                 return false;
             }
         }
+        
+        public static string Escape(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            if (s.Contains("\"")) s = s.Replace("\"", "\"\"");
+            if (s.Contains(",") || s.Contains("\n") || s.Contains("\r"))
+                return $"\"{s}\"";
+            return s;
+        }
+
+        public static short Get(byte[] digitalWords, int idx)
+        {
+            if (idx <= 0) return 0;
+            if (digitalWords == null || digitalWords.Length < 2) return 0;
+
+            int bit = idx - 1;
+            int wordIndex = bit / 16;
+            int bitInWord = bit % 16;
+
+            int byteIndex = wordIndex * 2;
+            if (byteIndex + 1 >= digitalWords.Length) return 0;
+
+            ushort word = (ushort)(digitalWords[byteIndex] | (digitalWords[byteIndex + 1] << 8));
+            return (short)(((word >> bitInWord) & 1) == 1 ? 1 : 0);
+        }
+
+        public static readonly Func<ZwavData, double?>[] Getters =
+        {
+            x => x.Channel1,  x => x.Channel2,  x => x.Channel3,  x => x.Channel4,  x => x.Channel5,
+            x => x.Channel6,  x => x.Channel7,  x => x.Channel8,  x => x.Channel9,  x => x.Channel10,
+            x => x.Channel11, x => x.Channel12, x => x.Channel13, x => x.Channel14, x => x.Channel15,
+            x => x.Channel16, x => x.Channel17, x => x.Channel18, x => x.Channel19, x => x.Channel20,
+            x => x.Channel21, x => x.Channel22, x => x.Channel23, x => x.Channel24, x => x.Channel25,
+            x => x.Channel26, x => x.Channel27, x => x.Channel28, x => x.Channel29, x => x.Channel30,
+            x => x.Channel31, x => x.Channel32, x => x.Channel33, x => x.Channel34, x => x.Channel35,
+            x => x.Channel36, x => x.Channel37, x => x.Channel38, x => x.Channel39, x => x.Channel40,
+            x => x.Channel41, x => x.Channel42, x => x.Channel43, x => x.Channel44, x => x.Channel45,
+            x => x.Channel46, x => x.Channel47, x => x.Channel48, x => x.Channel49, x => x.Channel50,
+            x => x.Channel51, x => x.Channel52, x => x.Channel53, x => x.Channel54, x => x.Channel55,
+            x => x.Channel56, x => x.Channel57, x => x.Channel58, x => x.Channel59, x => x.Channel60,
+            x => x.Channel61, x => x.Channel62, x => x.Channel63, x => x.Channel64, x => x.Channel65,
+            x => x.Channel66, x => x.Channel67, x => x.Channel68, x => x.Channel69, x => x.Channel70
+        };
     }
 }

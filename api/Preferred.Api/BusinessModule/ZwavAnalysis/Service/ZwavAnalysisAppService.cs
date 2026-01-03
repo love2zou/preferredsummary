@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -406,7 +407,7 @@ namespace Preferred.Api.Services
             Enumerable.Range(1, 70).Select(BuildAnalogGetter).ToArray();
 
         private static readonly Func<WaveRowRaw, short>[] ZwavDigitalGetters =
-            Enumerable.Range(1, 50).Select(BuildDigitalGetter).ToArray();
+            Enumerable.Range(1, 700).Select(BuildDigitalGetter).ToArray();
 
         private static Func<WaveRowRaw, double> BuildAnalogGetter(int i)
         {
@@ -469,24 +470,20 @@ namespace Preferred.Api.Services
             return arr;
         }
 
-        private static short[] ReadDigitals(WaveRowRaw row, int[] indices)
+        private static short[] ReadDigitals(WaveRowRaw r, int[] dg)
         {
-            if (indices == null || indices.Length == 0) return Array.Empty<short>();
+            if (dg == null || dg.Length == 0) return Array.Empty<short>();
 
-            var arr = new short[indices.Length];
-            for (int i = 0; i < indices.Length; i++)
-            {
-                var idx = indices[i];
-                if (idx < 1 || idx > 50) { arr[i] = 0; continue; }
-                arr[i] = row.GetDigital(idx);
-            }
+            var arr = new short[dg.Length];
+            for (int i = 0; i < dg.Length; i++)
+                arr[i] = r.GetDigital(dg[i]); // 从 DigitalWords 按位取
+
             return arr;
         }
 
         public async Task<WaveDataPageDto> GetWaveDataAsync(
             string analysisGuid,
-            int? fromSample, int? toSample,
-            int? offset, int? limit,
+            int? fromSample, int? toSample, int? limit,
             string channels, string digitals,
             int downSample)
         {
@@ -496,8 +493,8 @@ namespace Preferred.Api.Services
                 .FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid);
             if (a == null) return null;
 
-            var ch = ParseIndices(channels, 1, 70);
-            var dg = ParseIndices(digitals, 1, 50);
+            var ch = ParseIndices(channels, 1, ZwavConstants.MaxAnalog);
+            var dg = ParseIndices(digitals, 1, ZwavConstants.MaxDigital); 
 
             if (ch.Length == 0 && dg.Length == 0)
                 ch = new[] { 1 };
@@ -513,7 +510,7 @@ namespace Preferred.Api.Services
             }
             else
             {
-                from = offset.GetValueOrDefault(0);
+                from = 0;
                 to = int.MaxValue;
             }
 
@@ -531,6 +528,7 @@ namespace Preferred.Api.Services
                 {
                     SampleNo = x.SampleNo,
                     TimeRaw = x.TimeRaw,
+
                     Channel1 = x.Channel1 != null ? (double?)Math.Round(x.Channel1.Value, 3) : null,
                     Channel2 = x.Channel2 != null ? (double?)Math.Round(x.Channel2.Value, 3) : null,
                     Channel3 = x.Channel3 != null ? (double?)Math.Round(x.Channel3.Value, 3) : null,
@@ -601,56 +599,9 @@ namespace Preferred.Api.Services
                     Channel68 = x.Channel68 != null ? (double?)Math.Round(x.Channel68.Value, 3) : null,
                     Channel69 = x.Channel69 != null ? (double?)Math.Round(x.Channel69.Value, 3) : null,
                     Channel70 = x.Channel70 != null ? (double?)Math.Round(x.Channel70.Value, 3) : null,
-                    Digital1 = x.Digital1,
-                    Digital2 = x.Digital2,
-                    Digital3 = x.Digital3,
-                    Digital4 = x.Digital4,
-                    Digital5 = x.Digital5,
-                    Digital6 = x.Digital6,
-                    Digital7 = x.Digital7,
-                    Digital8 = x.Digital8,
-                    Digital9 = x.Digital9,
-                    Digital10 = x.Digital10,
-                    Digital11 = x.Digital11,
-                    Digital12 = x.Digital12,
-                    Digital13 = x.Digital13,
-                    Digital14 = x.Digital14,
-                    Digital15 = x.Digital15,
-                    Digital16 = x.Digital16,
-                    Digital17 = x.Digital17,
-                    Digital18 = x.Digital18,
-                    Digital19 = x.Digital19,
-                    Digital20 = x.Digital20,
-                    Digital21 = x.Digital21,
-                    Digital22 = x.Digital22,
-                    Digital23 = x.Digital23,
-                    Digital24 = x.Digital24,
-                    Digital25 = x.Digital25,
-                    Digital26 = x.Digital26,
-                    Digital27 = x.Digital27,
-                    Digital28 = x.Digital28,
-                    Digital29 = x.Digital29,
-                    Digital30 = x.Digital30,
-                    Digital31 = x.Digital31,
-                    Digital32 = x.Digital32,
-                    Digital33 = x.Digital33,
-                    Digital34 = x.Digital34,
-                    Digital35 = x.Digital35,
-                    Digital36 = x.Digital36,
-                    Digital37 = x.Digital37,
-                    Digital38 = x.Digital38,
-                    Digital39 = x.Digital39,
-                    Digital40 = x.Digital40,
-                    Digital41 = x.Digital41,
-                    Digital42 = x.Digital42,
-                    Digital43 = x.Digital43,
-                    Digital44 = x.Digital44,
-                    Digital45 = x.Digital45,
-                    Digital46 = x.Digital46,
-                    Digital47 = x.Digital47,
-                    Digital48 = x.Digital48,
-                    Digital49 = x.Digital49,
-                    Digital50 = x.Digital50
+
+                    // ====== 关键：数字量改成 DigitalWords ======
+                    DigitalWords = x.DigitalWords
                 })
                 .Take(take)
                 .ToListAsync();
@@ -664,7 +615,7 @@ namespace Preferred.Api.Services
                     SampleNo = r.SampleNo,
                     TimeRaw = r.TimeRaw,
                     Analog = ReadAnalogs(r, ch),
-                    Digital = ReadDigitals(r, dg)
+                    Digital = ReadDigitals(r, dg) // 返回 0/1
                 };
             }
 
@@ -678,6 +629,7 @@ namespace Preferred.Api.Services
                 Rows = dtoRows
             };
         }
+
 
         public async Task<(string FilePath, string FileName)> GetFileDownloadInfoAsync(string analysisGuid, CancellationToken ct)
         {
@@ -767,5 +719,122 @@ namespace Preferred.Api.Services
             return true;
         }
 
+        public async Task<string> ExportWaveDataAsync(
+                string analysisGuid,
+                Stream output)
+            {
+                if (string.IsNullOrWhiteSpace(analysisGuid))
+                    throw new ArgumentException("analysisGuid 不能为空", nameof(analysisGuid));
+
+                // 1) Analysis
+                var a = await _context.ZwavAnalyses.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid);
+
+                if (a == null)
+                    throw new KeyNotFoundException("任务不存在");
+
+                // 2) Channels（Tb_ZwavChannel）
+                var channelDefs = await _context.ZwavChannels.AsNoTracking()
+                    .Where(c => c.AnalysisId == a.Id)
+                    .Where(c => c.IsEnable == 1)
+                    .Select(c => new ChannelExportDef
+                    {
+                        ChannelIndex = c.ChannelIndex,
+                        ChannelType = c.ChannelType, // "Analog"/"Digital"
+                        Name = c.ChannelName ?? c.ChannelCode ?? ("CH" + c.ChannelIndex)
+                    })
+                    .ToListAsync();
+
+                var analogs = channelDefs
+                    .Where(x => x.IsAnalog)
+                    .OrderBy(x => x.ChannelIndex)
+                    .ToList();
+
+                var digitals = channelDefs
+                    .Where(x => x.IsDigital)
+                    .OrderBy(x => x.ChannelIndex)
+                    .ToList();
+
+                if (analogs.Count == 0 && digitals.Count == 0)
+                {
+                    // 兜底：至少一个模拟通道
+                    analogs.Add(new ChannelExportDef { ChannelIndex = 1, ChannelType = "Analog", Name = "Channel1" });
+                }
+
+                // 4) 数据查询（Tb_ZwavData）
+                var q = _context.ZwavDatas.AsNoTracking()
+                    .Where(x => x.AnalysisId == a.Id)
+                    .OrderBy(x => x.TimeRaw);
+
+                // 5) 写 CSV（BOM + header + rows）
+                var fileName = $"Zwav_{analysisGuid}_{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
+                await WriteUtf8BomAsync(output);
+
+                using var writer = new StreamWriter(output, Encoding.UTF8, 64 * 1024, leaveOpen: true);
+
+                // header
+                var headers = new List<string>(2 + analogs.Count + digitals.Count)
+                {
+                    "序号",
+                    "时间(ms)"
+                };
+                headers.AddRange(analogs.Select(x => ZwavZipHelper.Escape(x.Name)));
+                headers.AddRange(digitals.Select(x => ZwavZipHelper.Escape(x.Name)));
+                await writer.WriteLineAsync(string.Join(",", headers));
+
+                var analogGetters = ZwavZipHelper.Getters; // 70 路 getter
+
+                int rowNo = 0;
+
+                await foreach (var row in q.AsAsyncEnumerable())
+                {
+                    rowNo++;
+
+                    var sb = new StringBuilder(256);
+                    sb.Append(rowNo).Append(',').Append(row.TimeRaw);
+
+                    // analogs
+                    foreach (var ch in analogs)
+                    {
+                        double? v = null;
+                        if (ch.ChannelIndex >= 1 && ch.ChannelIndex <= analogGetters.Length)
+                            v = analogGetters[ch.ChannelIndex - 1](row);
+
+                        sb.Append(',').Append(v.HasValue ? v.Value.ToString("0.######") : "");
+                    }
+
+                    // digitals: 从 DigitalWords 按 bit 取 0/1
+                    foreach (var dg in digitals)
+                    {
+                        short bit = ZwavZipHelper.Get(row.DigitalWords, dg.ChannelIndex);
+                        sb.Append(',').Append(bit);
+                    }
+
+                    await writer.WriteLineAsync(sb.ToString());
+
+                    if ((rowNo % 2000) == 0)
+                        await writer.FlushAsync();
+                }
+
+                await writer.FlushAsync();
+                return fileName;
+            }
+
+            private static async Task WriteUtf8BomAsync(Stream output)
+            {
+                // BOM：Excel 对中文列头更友好
+                var bom = new byte[] { 0xEF, 0xBB, 0xBF };
+                await output.WriteAsync(bom, 0, bom.Length);
+            }
+
+            private sealed class ChannelExportDef
+            {
+                public int ChannelIndex { get; set; }
+                public string ChannelType { get; set; }
+                public string Name { get; set; }
+
+                public bool IsAnalog => string.Equals(ChannelType, "Analog", StringComparison.OrdinalIgnoreCase);
+                public bool IsDigital => string.Equals(ChannelType, "Digital", StringComparison.OrdinalIgnoreCase);
+            }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 
 namespace Zwav.Application.Parsing
@@ -19,11 +20,10 @@ namespace Zwav.Application.Parsing
             return (dvWords, recordSize, totalRecords);
         }
 
-        /// <summary>
-        /// .NET Core 3.1：解析 DAT 前 N 条记录，但解析“全部模拟通道”（不限制前三路）。
-        /// 可选 includeDigitals=true 则返回每条记录的数字字（ushort[]）。
-        /// </summary>
-        public static WaveDataParseResult ParseDatAllChannels(byte[] datBytes, CfgParseResult cfg, int maxRecords = 20, bool includeDigitals = false)
+        public static WaveDataParseResult ParseDatAllChannels(
+            byte[] datBytes,
+            CfgParseResult cfg,
+            int maxRecords = 20)
         {
             if (datBytes == null) throw new ArgumentNullException(nameof(datBytes));
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
@@ -36,81 +36,88 @@ namespace Zwav.Application.Parsing
             int take = Math.Min(maxRecords, totalRecords);
             var rows = new List<DatRowAll>(capacity: take);
 
-            // 预取系数，避免循环内多次判空
-            double[] aCoef = new double[cfg.AnalogCount];
-            double[] bCoef = new double[cfg.AnalogCount];
-            for (int k = 0; k < cfg.AnalogCount; k++)
+            int aCount = cfg.AnalogCount;
+            int dCount = cfg.DigitalCount;
+
+            // 预取系数：A 默认 1，B 默认 0
+            double[] aCoef = new double[aCount];
+            double[] bCoef = new double[aCount];
+            for (int k = 0; k < aCount; k++)
             {
-                // JS: cfg.Channels[k]?.a ?? 1; cfg.Channels[k]?.b ?? 0;
                 if (cfg.Channels != null && k < cfg.Channels.Count && cfg.Channels[k] != null)
                 {
-                    aCoef[k] = (double)(cfg.Channels[k].A ?? 0m);
+                    aCoef[k] = (double)(cfg.Channels[k].A ?? 1m);
                     bCoef[k] = (double)(cfg.Channels[k].B ?? 0m);
                 }
                 else
                 {
-                    aCoef[k] = (double)(cfg.Channels[k].A ?? 0m);
-                    bCoef[k] = (double)(cfg.Channels[k].B ?? 0m);
+                    aCoef[k] = 1d;
+                    bCoef[k] = 0d;
                 }
             }
 
-            // 小端读取（与你 JS 的 getInt32(..., true) / getInt16(..., true) 一致）:contentReference[oaicite:2]{index=2}
             ReadOnlySpan<byte> span = datBytes;
 
             int offset = 0;
+            int analogBytes = aCount * 2;
+            int digitalBytes = dvWords * 2;
+
             for (int i = 0; i < take; i++)
             {
-                // 边界保护：避免异常数据导致越界
+                // 保护整条记录长度
                 if (offset + recordSize > span.Length) break;
 
-                int sampleNo = BitConverter.ToInt32(span.Slice(offset, 4));
-                if (BitConverter.IsLittleEndian == false)
-                {
-                    // 如果不是小端，则手动反转字节序
-                    byte[] tmp = span.Slice(offset, 4).ToArray();
-                    Array.Reverse(tmp);
-                    sampleNo = BitConverter.ToInt32(tmp, 0);
-                }
+                int sampleNo = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(offset, 4));
                 offset += 4;
 
-                int timeRaw = BitConverter.ToInt32(span.Slice(offset, 4));
-                if (BitConverter.IsLittleEndian == false)
-                {
-                    // 如果不是小端，则手动反转字节序
-                    byte[] tmp = span.Slice(offset, 4).ToArray();
-                    Array.Reverse(tmp);
-                    timeRaw = BitConverter.ToInt32(tmp, 0);
-                }
+                int timeRaw = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(offset, 4));
                 offset += 4;
 
-                // 全部模拟量
-                var analogVals = new double[cfg.AnalogCount];
-                for (int k = 0; k < cfg.AnalogCount; k++)
+                // ===== 模拟量换算 =====
+                var analogVals = new double[aCount];
+                int analogBase = offset;
+                for (int k = 0; k < aCount; k++)
                 {
-                    short raw = BitConverter.ToInt16(span.Slice(offset + k * 2, 2));
-                    if (BitConverter.IsLittleEndian == false)
-                    {
-                        // 如果不是小端，则手动反转字节序
-                        byte[] tmp = span.Slice(offset + k * 2, 2).ToArray();
-                        Array.Reverse(tmp);
-                        raw = BitConverter.ToInt16(tmp, 0);
-                    }
+                    int pos = analogBase + (k * 2);
+                    short raw = BinaryPrimitives.ReadInt16LittleEndian(span.Slice(pos, 2));
                     analogVals[k] = aCoef[k] * raw + bCoef[k];
                 }
-                offset += cfg.AnalogCount * 2;
+                offset += analogBytes;
 
-                // 数字量：按 dvWords 跳过（可选读取）
-                short[] digitals = null;
-                if (includeDigitals && dvWords > 0)
+                // ===== 数字量：读取原始字节 + 计算每路 0/1 =====
+                byte[] digitalWords = null;
+                short[] digitalBits = null;
+
+                if (dvWords > 0)
                 {
-                    digitals = new short[dvWords];
-                    for (int w = 0; w < dvWords; w++)
+                    if (offset + digitalBytes > span.Length) break;
+
+                    // 原始数字字（用于落库 VARBINARY）
+                    digitalWords = new byte[digitalBytes];
+                    span.Slice(offset, digitalBytes).CopyTo(digitalWords);
+
+                    // 计算每路开关量（0/1），长度 = cfg.DigitalCount
+                    if (dCount > 0)
                     {
-                        // JS 用 getInt16 读取并跳过；这里用 ushort 更贴近“16位字”
-                        digitals[w] = BitConverter.ToInt16(span.Slice(offset + w * 2, 2));
+                        digitalBits = new short[dCount];
+
+                        // 逐 word（16bit）展开
+                        int bitIndex = 0;
+                        for (int w = 0; w < dvWords && bitIndex < dCount; w++)
+                        {
+                            int bi = (w * 2);
+
+                            // 小端拼 word
+                            ushort word = (ushort)(digitalWords[bi] | (digitalWords[bi + 1] << 8));
+
+                            for (int b = 0; b < 16 && bitIndex < dCount; b++, bitIndex++)
+                            {
+                                digitalBits[bitIndex] = (short)(((word >> b) & 1) == 1 ? 1 : 0);
+                            }
+                        }
                     }
                 }
-                offset += dvWords * 2;
+                offset += digitalBytes;
 
                 rows.Add(new DatRowAll
                 {
@@ -118,7 +125,7 @@ namespace Zwav.Application.Parsing
                     SampleNo = sampleNo,
                     TimeRaw = timeRaw,
                     Channels = analogVals,
-                    Digitals = digitals
+                    DigitalWords = digitalWords
                 });
             }
 

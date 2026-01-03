@@ -302,57 +302,11 @@ namespace Zwav.Application.Parsing
         public double? Channel69 { get; set; }
         public double? Channel70 { get; set; }
 
-        // Digital1..Digital50
-        public short? Digital1 { get; set; }
-        public short? Digital2 { get; set; }
-        public short? Digital3 { get; set; }
-        public short? Digital4 { get; set; }
-        public short? Digital5 { get; set; }
-        public short? Digital6 { get; set; }
-        public short? Digital7 { get; set; }
-        public short? Digital8 { get; set; }
-        public short? Digital9 { get; set; }
-        public short? Digital10 { get; set; }
-        public short? Digital11 { get; set; }
-        public short? Digital12 { get; set; }
-        public short? Digital13 { get; set; }
-        public short? Digital14 { get; set; }
-        public short? Digital15 { get; set; }
-        public short? Digital16 { get; set; }
-        public short? Digital17 { get; set; }
-        public short? Digital18 { get; set; }
-        public short? Digital19 { get; set; }
-        public short? Digital20 { get; set; }
-        public short? Digital21 { get; set; }
-        public short? Digital22 { get; set; }
-        public short? Digital23 { get; set; }
-        public short? Digital24 { get; set; }
-        public short? Digital25 { get; set; }
-        public short? Digital26 { get; set; }
-        public short? Digital27 { get; set; }
-        public short? Digital28 { get; set; }
-        public short? Digital29 { get; set; }
-        public short? Digital30 { get; set; }
-        public short? Digital31 { get; set; }
-        public short? Digital32 { get; set; }
-        public short? Digital33 { get; set; }
-        public short? Digital34 { get; set; }
-        public short? Digital35 { get; set; }
-        public short? Digital36 { get; set; }
-        public short? Digital37 { get; set; }
-        public short? Digital38 { get; set; }
-        public short? Digital39 { get; set; }
-        public short? Digital40 { get; set; }
-        public short? Digital41 { get; set; }
-        public short? Digital42 { get; set; }
-        public short? Digital43 { get; set; }
-        public short? Digital44 { get; set; }
-        public short? Digital45 { get; set; }
-        public short? Digital46 { get; set; }
-        public short? Digital47 { get; set; }
-        public short? Digital48 { get; set; }
-        public short? Digital49 { get; set; }
-        public short? Digital50 { get; set; }
+         /// <summary>
+        /// 数字量字（bitset），来自数据库 Tb_ZwavData.DigitalWords VARBINARY(100)
+        /// 按小端序存储：每个 word 2 字节（低字节在前）
+        /// </summary>
+        public byte[] DigitalWords { get; set; }
 
         public double GetAnalog(int idx) => idx switch
         {
@@ -429,60 +383,28 @@ namespace Zwav.Application.Parsing
             _ => 0
         };
 
-        public short GetDigital(int idx) => idx switch
+         /// <summary>
+        /// 获取第 idx 路数字量（1-based），返回 0/1。
+        /// idx=1 表示第1路数字量，映射到 DigitalWords 的 bit0；
+        /// idx=16 映射到 word0 的 bit15；
+        /// idx=17 映射到 word1 的 bit0。
+        /// </summary>
+        public short GetDigital(int idx)
         {
-            1 => (Digital1 ?? 0),
-            2 => (Digital2 ?? 0),
-            3 => (Digital3 ?? 0),
-            4 => (Digital4 ?? 0),
-            5 => (Digital5 ?? 0),
-            6 => (Digital6 ?? 0),
-            7 => (Digital7 ?? 0),
-            8 => (Digital8 ?? 0),
-            9 => (Digital9 ?? 0),
-            10 => (Digital10 ?? 0),
-            11 => (Digital11 ?? 0),
-            12 => (Digital12 ?? 0),
-            13 => (Digital13 ?? 0),
-            14 => (Digital14 ?? 0),
-            15 => (Digital15 ?? 0),
-            16 => (Digital16 ?? 0),
-            17 => (Digital17 ?? 0),
-            18 => (Digital18 ?? 0),
-            19 => (Digital19 ?? 0),
-            20 => (Digital20 ?? 0),
-            21 => (Digital21 ?? 0),
-            22 => (Digital22 ?? 0),
-            23 => (Digital23 ?? 0),
-            24 => (Digital24 ?? 0),
-            25 => (Digital25 ?? 0),
-            26 => (Digital26 ?? 0),
-            27 => (Digital27 ?? 0),
-            28 => (Digital28 ?? 0),
-            29 => (Digital29 ?? 0),
-            30 => (Digital30 ?? 0),
-            31 => (Digital31 ?? 0),
-            32 => (Digital32 ?? 0),
-            33 => (Digital33 ?? 0),
-            34 => (Digital34 ?? 0),
-            35 => (Digital35 ?? 0),
-            36 => (Digital36 ?? 0),
-            37 => (Digital37 ?? 0),
-            38 => (Digital38 ?? 0),
-            39 => (Digital39 ?? 0),
-            40 => (Digital40 ?? 0),
-            41 => (Digital41 ?? 0),
-            42 => (Digital42 ?? 0),
-            43 => (Digital43 ?? 0),
-            44 => (Digital44 ?? 0),
-            45 => (Digital45 ?? 0),
-            46 => (Digital46 ?? 0),
-            47 => (Digital47 ?? 0),
-            48 => (Digital48 ?? 0),
-            49 => (Digital49 ?? 0),
-            50 => (Digital50 ?? 0),
-            _ => 0
-        };
+            if (idx <= 0) return 0;
+            if (DigitalWords == null || DigitalWords.Length < 2) return 0;
+
+            int bit = idx - 1;
+            int wordIndex = bit / 16;
+            int bitInWord = bit % 16;
+
+            int byteIndex = wordIndex * 2;
+            if (byteIndex + 1 >= DigitalWords.Length) return 0;
+
+            // 小端：低字节在前
+            ushort word = (ushort)(DigitalWords[byteIndex] | (DigitalWords[byteIndex + 1] << 8));
+            return (short)(((word >> bitInWord) & 0x1) == 1 ? 1 : 0);
+        }
     }
 
 }

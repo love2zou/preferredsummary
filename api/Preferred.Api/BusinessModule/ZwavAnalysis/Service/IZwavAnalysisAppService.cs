@@ -36,13 +36,16 @@ namespace Preferred.Api.Services
 
         Task<WaveDataPageDto> GetWaveDataAsync(
             string analysisGuid,
-            int? fromSample, int? toSample,
-            int? offset, int? limit,
+            int? fromSample, int? toSample, int? limit,
             string channels, string digitals,
             int downSample);
 
         Task<(string FilePath, string FileName)> GetFileDownloadInfoAsync(string analysisGuid, CancellationToken ct);
 
         Task<bool> DeleteAsync(string analysisGuid, bool deleteFile, CancellationToken ct);
+
+        Task<string> ExportWaveDataAsync(
+            string analysisGuid,
+            Stream output);
     }
 }

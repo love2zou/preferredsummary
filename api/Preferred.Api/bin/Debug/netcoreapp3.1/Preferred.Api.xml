@@ -870,6 +870,11 @@
             录波数据
             </summary>
         </member>
+        <member name="P:Preferred.Api.Models.ZwavData.DigitalWords">
+            <summary>
+            数字量字（bitset），对应数据库 VARBINARY(100)
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
             API响应基础模型
@@ -3131,14 +3136,24 @@
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetHdrAsync(System.String,System.Threading.CancellationToken)">
             <summary>获取 HDR 头文件信息</summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetWaveDataAsync(System.String,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Nullable{System.Int32},System.Nullable{System.Int32},System.String,System.String,System.Int32)">
-            <summary>获取波形数据（分页/降采样）</summary>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.GetWaveDataAsync(System.String,System.Nullable{System.Int32},System.Nullable{System.Int32},System.Nullable{System.Int32},System.String,System.String,System.Int32)">
+            <summary>获取录波波形数据（支持区间查询、分页与下采样）</summary>
+            <param name="analysisGuid">录波分析唯一标识，用于定位对应的分析记录</param>
+            <param name="fromSample">起始采样点编号（SampleNo）与 toSample 同时传入时生效，表示按采样点区间查询。</param>
+            <param name="toSample">结束采样点编号（SampleNo）与 fromSample 同时传入时生效，表示按采样点区间查询。</param>
+            <param name="limit">本次最多返回的采样点数量</param>
+            <param name="channels">模拟量通道索引集合（1~70），支持逗号分隔或区间格式（如 "1,2,5-8"）。</param>
+            <param name="digitals">开关量通道索引集合（1~50），支持逗号分隔或区间格式。</param>
+            <param name="downSample">下采样倍率（抽点参数）。N 表示仅返回 SampleNo 能被 N 整除的采样点；小于等于 0 时按 1 处理（不下采样）。</param>
         </member>
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.DownloadAsync(System.String,System.Threading.CancellationToken)">
             <summary>下载原始录波文件</summary>
         </member>
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.DeleteAsync(System.String,System.Boolean,System.Threading.CancellationToken)">
             <summary>删除录波解析任务</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportAsync(System.String,System.Boolean)">
+            <summary>导出波形数据（CSV）</summary>
         </member>
         <member name="T:Zwav.Application.Processing.AnalysisQueue">
             <summary>
@@ -3175,12 +3190,6 @@
             等价于 inspectDat(buf, A, D)
             </summary>
         </member>
-        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.ParseDatAllChannels(System.Byte[],Zwav.Application.Parsing.CfgParseResult,System.Int32,System.Boolean)">
-            <summary>
-            .NET Core 3.1：解析 DAT 前 N 条记录，但解析“全部模拟通道”（不限制前三路）。
-            可选 includeDigitals=true 则返回每条记录的数字字（ushort[]）。
-            </summary>
-        </member>
         <member name="M:Zwav.Application.Parsing.HdrParser.Parse(System.String,System.String@)">
             <summary>
             解析 HDR XML 文本。遇到不规范 XML（前导控制字符/多根/片段）会自动容错。
@@ -3195,6 +3204,12 @@
             <summary>
             根据 BOM / XML 声明智能检测编码（等价 JS detectXmlEncoding）
             </summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.MaxAnalog">
+            <summary>最大模拟量通道数</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.MaxDigital">
+            <summary>最大开关量通道数</summary>
         </member>
         <member name="T:Zwav.Application.Parsing.PagedResult`1">
             <summary>
@@ -3225,6 +3240,20 @@
         <member name="P:Zwav.Application.Parsing.PagedResult`1.TotalPages">
             <summary>
             总页数
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Parsing.WaveRowRaw.DigitalWords">
+            <summary>
+            数字量字（bitset），来自数据库 Tb_ZwavData.DigitalWords VARBINARY(100)
+            按小端序存储：每个 word 2 字节（低字节在前）
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.WaveRowRaw.GetDigital(System.Int32)">
+            <summary>
+            获取第 idx 路数字量（1-based），返回 0/1。
+            idx=1 表示第1路数字量，映射到 DigitalWords 的 bit0；
+            idx=16 映射到 word0 的 bit15；
+            idx=17 映射到 word1 的 bit0。
             </summary>
         </member>
     </members>

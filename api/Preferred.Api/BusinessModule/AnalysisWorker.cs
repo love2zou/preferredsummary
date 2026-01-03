@@ -172,7 +172,7 @@ namespace Zwav.Application.Workers
             await context.SaveChangesAsync(ct);
 
             int maxRows = 50000;
-            var waveResult = DatMetaCalculator.ParseDatAllChannels(datBuf, cfg, maxRows, true);
+            var waveResult = DatMetaCalculator.ParseDatAllChannels(datBuf, cfg, maxRows);
             await UpsertWaveDataAsync(context, analysis.Id, waveResult, ct);
             // 9) 完成
             await UpdateStatusAsync(context, analysis, "Ready", 100, null, null, DateTime.UtcNow, ct);
@@ -311,71 +311,12 @@ namespace Zwav.Application.Workers
             await tx.CommitAsync(ct);
         }
 
-        private static async Task UpsertWaveDataAsync_OLD(ApplicationDbContext context, int analysisId, WaveDataParseResult result, CancellationToken ct)
-        {
-            var now = DateTime.UtcNow;
-
-            // 遍历解析后的每一行数据并插入到数据库
-            foreach (var row in result.Rows)
-            {
-                // 尝试查找是否已有该样本号的记录
-                var entity = await context.ZwavDatas
-                    .FirstOrDefaultAsync(x => x.AnalysisId == analysisId && x.SampleNo == row.SampleNo, ct);
-
-                if (entity == null)
-                {
-                    // 如果没有找到，创建新实体
-                    entity = new ZwavData
-                    {
-                        AnalysisId = analysisId,
-                        SampleNo = row.SampleNo,
-                        TimeRaw = row.TimeRaw,
-                        CrtTime = now
-                    };
-                    context.ZwavDatas.Add(entity);
-                }
-
-                // 更新或设置模拟量通道（示例只更新前几个，您可以根据需要继续扩展）
-                for (int i = 0; i < row.Channels.Length; i++)
-                {
-                    var channelProperty = typeof(ZwavData).GetProperty($"Channel{i + 1}");
-                    if (channelProperty != null)
-                    {
-                        channelProperty.SetValue(entity, row.Channels[i]);
-                    }
-                }
-
-                // 更新数字量通道（示例只更新前几个，您可以根据需要继续扩展）
-                if (row.Digitals != null)
-                {
-                    for (int i = 0; i < row.Digitals.Length; i++)
-                    {
-                        var digitalProperty = typeof(ZwavData).GetProperty($"Digital{i + 1}");
-                        if (digitalProperty != null)
-                        {
-                            digitalProperty.SetValue(entity, row.Digitals[i]);
-                        }
-                    }
-                }
-
-                // 设置其他字段（如时间）
-                entity.UpdTime = now;
-            }
-            // 保存更改
-            await context.SaveChangesAsync(ct);
-        }
-
         private static readonly System.Reflection.PropertyInfo[] ChannelProps =
-            Enumerable.Range(1, 70) // 这里填你最大通道数
+            Enumerable.Range(1, ZwavConstants.MaxAnalog) // 这里填你最大通道数
                 .Select(i => typeof(ZwavData).GetProperty($"Channel{i}"))
                 .ToArray();
 
-        private static readonly System.Reflection.PropertyInfo[] DigitalProps =
-            Enumerable.Range(1, 50) // 这里填你最大数字量通道数
-                .Select(i => typeof(ZwavData).GetProperty($"Digital{i}"))
-                .ToArray();
-
-        private static async Task UpsertWaveDataAsync(
+          private static async Task UpsertWaveDataAsync(
             ApplicationDbContext context,
             int analysisId,
             WaveDataParseResult result,
@@ -433,14 +374,9 @@ namespace Zwav.Application.Workers
                     }
 
                     // Digitals
-                    if (row.Digitals != null)
+                    if (row.DigitalWords != null)
                     {
-                        var len = Math.Min(row.Digitals.Length, DigitalProps.Length);
-                        for (int i = 0; i < len; i++)
-                        {
-                            var p = DigitalProps[i];
-                            if (p != null) p.SetValue(entity, row.Digitals[i]);
-                        }
+                        entity.DigitalWords = row.DigitalWords;
                     }
 
                     pending++;

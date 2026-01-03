@@ -40,6 +40,10 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   (response: AxiosResponse) => {
+    // 如果是 blob 类型，返回完整响应对象（以便获取 headers）
+    if (response.config.responseType === 'blob') {
+      return response
+    }
     return response.data
   },
   error => {

@@ -243,12 +243,11 @@ export const zwavService = {
 
   // 获取波形数据
   getWaveData(analysisGuid: string, params: {
-    fromSample?: number
-    toSample?: number
-    offset?: number
     limit?: number
     channels?: string
     digitals?: string
+    fromSample?: number
+    toSample?: number
     downSample?: number
   }) {
     return api.get<any, ApiResponse<WaveDataPageDto>>(`/api/ZwavAnalyses/${analysisGuid}/get-wavedata`, {
@@ -259,6 +258,14 @@ export const zwavService = {
   // 下载原文件
   downloadFile(analysisGuid: string) {
     return api.get(`/api/ZwavAnalyses/${analysisGuid}/download`, {
+      responseType: 'blob'
+    })
+  },
+
+  // 导出波形数据 CSV
+  exportWaveData(analysisGuid: string, enabledOnly: boolean = true) {
+    return api.get(`/api/ZwavAnalyses/${analysisGuid}/export`, {
+      params: { enabledOnly },
       responseType: 'blob'
     })
   }

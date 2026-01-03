@@ -100,7 +100,7 @@ namespace Zwav.Application.Parsing
         public int SampleNo { get; set; }        // sampleNo（JS里读了但没展示，这里保留）
         public int TimeRaw { get; set; }         // timeRaw
         public double[] Channels { get; set; }    // 全部模拟量物理值，长度 = ACount
-        public short[] Digitals { get; set; }   // 可选：每条记录的数字字（长度 = dvWords）
+        public byte[] DigitalWords { get; set; } // 压缩后的开关量
     }
 
     public class WaveDataParseResult

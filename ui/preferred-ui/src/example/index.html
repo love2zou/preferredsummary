@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>ECharts 录波曲线 - 纵向拼接多纵轴（共用X轴）</title>
+  <style>
+    body{ margin:0; background:#f6f7fb; font-family: Arial,"Microsoft YaHei",sans-serif;}
+    .bar{ padding:12px 16px; background:#fff; border-bottom:1px solid #e6e8ef; font-size:12px; color:#333; }
+    #chart{ width:100%; height:720px; background:#fff; }
+    .hint{ padding:10px 16px; font-size:12px; color:#666; background:#fff; border-top:1px solid #eef0f5;}
+    .k{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    展示方式：4 个纵向拼接轨道（每轨道独立 Y 轴），X 轴时间一致并联动。支持：滚轮/框选缩放、十字准星联动。
+  </div>
+
+  <div id="chart"></div>
+  <div class="hint">
+    若离线无法加载 ECharts：把 <span class="k">echarts.min.js</span> 放到本地并修改 script src。
+  </div>
+
+  <!-- ECharts（CDN）。离线环境请改为本地 echarts.min.js -->
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+  <script>
+  (function () {
+    // -------------------------
+    // 1) 构造示例录波数据（时间 + 4 通道）
+    // -------------------------
+    function makeDemoData() {
+      const fs = 10000;
+      const durationSec = 3;
+      const n = Math.floor(fs * durationSec);
+
+      const t = new Array(n);
+      const Va = new Array(n);
+      const Vb = new Array(n);
+      const Vc = new Array(n);
+      const Ia = new Array(n);
+
+      const f0 = 50;
+      const w0 = 2 * Math.PI * f0;
+      const w3 = 2 * Math.PI * (3 * f0);
+
+      for (let i = 0; i < n; i++) {
+        const ti = i / fs;
+        t[i] = ti;
+
+        const noise = (Math.random() - 0.5) * 0.02;
+
+        Va[i] = 311 * (Math.sin(w0 * ti) + 0.06 * Math.sin(w3 * ti)) + 311 * noise;
+        Vb[i] = 311 * (Math.sin(w0 * ti - 2*Math.PI/3) + 0.06 * Math.sin(w3 * ti - 2*Math.PI/3)) + 311 * noise;
+        Vc[i] = 311 * (Math.sin(w0 * ti + 2*Math.PI/3) + 0.06 * Math.sin(w3 * ti + 2*Math.PI/3)) + 311 * noise;
+        Ia[i] = 80  * (Math.sin(w0 * ti - Math.PI/8) + 0.1  * Math.sin(w3 * ti)) + 2 + 6 * noise;
+      }
+
+      const toXY = (xArr, yArr) => xArr.map((x, i) => [x, yArr[i]]);
+
+      return {
+        durationSec,
+        Va: toXY(t, Va),
+        Vb: toXY(t, Vb),
+        Vc: toXY(t, Vc),
+        Ia: toXY(t, Ia),
+      };
+    }
+
+    const data = makeDemoData();
+
+    // -------------------------
+    // 2) 初始化 ECharts
+    // -------------------------
+    const el = document.getElementById('chart');
+    const chart = echarts.init(el);
+
+    // 纵向 4 轨道布局（百分比最稳）
+    const grids = [
+      { top: '6%',  height: '18%' },
+      { top: '28%', height: '18%' },
+      { top: '50%', height: '18%' },
+      { top: '72%', height: '18%' },
+    ];
+
+    const channels = [
+      { key: 'Va', name: 'Va', unit: 'V' },
+      { key: 'Vb', name: 'Vb', unit: 'V' },
+      { key: 'Vc', name: 'Vc', unit: 'V' },
+      { key: 'Ia', name: 'Ia', unit: 'A' },
+    ];
+
+    const option = {
+      animation: false,
+      backgroundColor: '#ffffff',
+
+      // 十字准星联动：所有 xAxis 同步
+      axisPointer: {
+        link: [{ xAxisIndex: 'all' }],
+        triggerTooltip: true
+      },
+
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+        formatter: function (params) {
+          if (!params || !params.length) return '';
+          const x = params[0].value[0];
+          const lines = [`t = ${x.toFixed(6)} s`];
+          for (const p of params) {
+            const v = p.value[1];
+            lines.push(`${p.seriesName}: ${Number.isFinite(v) ? v.toFixed(3) : '-'}`);
+          }
+          return lines.join('<br/>');
+        }
+      },
+
+      // 缩放：同时控制 4 条 xAxis
+      dataZoom: [
+        { type: 'inside', xAxisIndex: [0,1,2,3], filterMode: 'none' },
+        { type: 'slider', xAxisIndex: [0,1,2,3], bottom: 8, height: 24, filterMode: 'none' }
+      ],
+
+      grid: grids.map(g => ({
+        left: 110,   // 左侧留空：放通道名 + y 轴刻度
+        right: 20,
+        top: g.top,
+        height: g.height
+      })),
+
+      xAxis: grids.map((g, i) => ({
+        type: 'value',
+        min: 0,
+        max: data.durationSec,
+        gridIndex: i,
+        axisLine: { show: true },
+        axisTick: { show: true },
+        splitLine: { show: true, lineStyle: { color: '#f0f2f7' } },
+        axisLabel: { show: i === 3 },
+        name: i === 3 ? '时间 (s)' : '',
+        nameLocation: 'end',
+        nameGap: 22
+      })),
+
+      yAxis: channels.map((ch, i) => ({
+        type: 'value',
+        gridIndex: i,
+        scale: true,
+        splitNumber: 4,
+        splitLine: { show: true, lineStyle: { color: '#f0f2f7' } },
+
+        // 关键：通道名作为 yAxis.name 放在左侧中部
+        name: `${ch.name} (${ch.unit})`,
+        nameLocation: 'middle',
+        nameRotate: 0,
+        nameGap: 70,
+        nameTextStyle: { fontSize: 12, fontWeight: 600, color: '#333' },
+
+        axisLine: { show: true, lineStyle: { color: '#e6e8ef' } },
+        axisTick: { show: true },
+        axisLabel: { show: true, color: '#666' }
+      })),
+
+      series: channels.map((ch, i) => ({
+        name: ch.name,
+        type: 'line',
+        xAxisIndex: i,
+        yAxisIndex: i,
+        showSymbol: false,
+        hoverAnimation: false,
+        lineStyle: { width: 1.5 },
+        sampling: 'lttb',
+        progressive: 2000,
+        data: data[ch.key]
+      }))
+    };
+
+    chart.setOption(option);
+
+    window.addEventListener('resize', () => chart.resize());
+  })();
+  </script>
+</body>
+</html>

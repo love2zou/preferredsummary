@@ -120,22 +120,6 @@ namespace Preferred.Api.Controllers
             }
         }
 
-
-        /// <summary>查询任务状态</summary>
-        // [HttpGet("{analysisGuid}")]
-        // public async Task<ActionResult<AnalysisStatusResponse>> GetStatusAsync([FromRoute] string analysisGuid, CancellationToken ct)
-        // {
-        //     var status = await _app.GetStatusAsync(analysisGuid, ct);
-        //     if (status == null) return NotFound();
-
-        //     return Ok(new ApiResponse<AnalysisStatusResponse>
-        //     {
-        //         Success = true,
-        //         Message = "查询任务状态成功",
-        //         Data = status
-        //     });
-        // }
-
         /// <summary>分页查询录波解析任务列表</summary>
         [HttpGet]
         public async Task<IActionResult> GetListAsync(
@@ -234,13 +218,19 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        /// <summary>获取波形数据（分页/降采样）</summary>
+        /// <summary>获取录波波形数据（支持区间查询、分页与下采样）</summary>
+        /// <param name="analysisGuid">录波分析唯一标识，用于定位对应的分析记录</param>
+        /// <param name="fromSample">起始采样点编号（SampleNo）与 toSample 同时传入时生效，表示按采样点区间查询。</param>
+        /// <param name="toSample">结束采样点编号（SampleNo）与 fromSample 同时传入时生效，表示按采样点区间查询。</param>
+        /// <param name="limit">本次最多返回的采样点数量</param>
+        /// <param name="channels">模拟量通道索引集合（1~70），支持逗号分隔或区间格式（如 "1,2,5-8"）。</param>
+        /// <param name="digitals">开关量通道索引集合（1~50），支持逗号分隔或区间格式。</param>
+        /// <param name="downSample">下采样倍率（抽点参数）。N 表示仅返回 SampleNo 能被 N 整除的采样点；小于等于 0 时按 1 处理（不下采样）。</param>
         [HttpGet("{analysisGuid}/get-wavedata")]
         public async Task<IActionResult> GetWaveDataAsync(
             [FromRoute] string analysisGuid,
             [FromQuery] int? fromSample,
             [FromQuery] int? toSample,
-            [FromQuery] int? offset,
             [FromQuery] int? limit = 2000,
             [FromQuery] string channels = null,
             [FromQuery] string digitals = null,
@@ -248,7 +238,7 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                var data = await _app.GetWaveDataAsync(analysisGuid, fromSample, toSample, offset, limit, channels, digitals, downSample);
+                var data = await _app.GetWaveDataAsync(analysisGuid, fromSample, toSample, limit, channels, digitals, downSample);
                 if (data == null) return NotFound(new ApiErrorResponse { Message = "任务不存在" });
 
                 return Ok(new ApiResponse<WaveDataPageDto> { Success = true, Message = "查询成功", Data = data });
@@ -298,5 +288,27 @@ namespace Preferred.Api.Controllers
             }
         }
 
+        /// <summary>导出波形数据（CSV）</summary>
+        [HttpGet("{analysisGuid}/export")]
+        public async Task<IActionResult> ExportAsync(
+            [FromRoute] string analysisGuid,
+            [FromQuery] bool enabledOnly = true)
+        {
+            try
+            {
+                // 这里用 MemoryStream 简单好用；如果你担心文件很大，可改“写到临时文件再 FileStreamResult”
+                var ms = new MemoryStream();
+                var fileName = await _app.ExportWaveDataAsync(
+                    analysisGuid: analysisGuid,
+                    output: ms);
+
+                ms.Position = 0;
+                return File(ms, "text/csv; charset=utf-8", fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiErrorResponse { Message = "导出失败", Details = ex.Message });
+            }
+        }
     }
 }
