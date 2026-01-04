@@ -260,10 +260,6 @@
                   </el-collapse-item>
 
                   <el-collapse-item title="故障信息" name="3" v-if="hdrData.faultInfoJson && hdrData.faultInfoJson.length">
-                    <div style="margin-bottom: 10px; padding: 0 10px;">
-                      <div class="info-item"><label>故障开始时间:</label> <span>{{ hdrData.faultStartTime }}</span></div>
-                      <div class="info-item"><label>故障持续时间:</label> <span>{{ hdrData.faultKeepingTime }}</span></div>
-                    </div>
                     <el-table :data="hdrData.faultInfoJson" size="small" border>
                       <el-table-column type="index" label="序号" width="50" align="center" />
                       <el-table-column prop="name" label="名称" width="160" />
@@ -276,6 +272,10 @@
                   </el-collapse-item>
 
                   <el-collapse-item title="保护动作信息" name="2" v-if="hdrData.tripInfoJSON && hdrData.tripInfoJSON.length">
+                    <div style="margin-bottom: 10px; padding: 0 10px;">
+                      <div class="info-item"><label>故障开始时间:</label> <span>{{ hdrData.faultStartTime }}</span></div>
+                      <div class="info-item"><label>故障持续时间:</label> <span>{{ hdrData.faultKeepingTime }}</span></div>
+                    </div>
                     <el-table :data="hdrData.tripInfoJSON" size="small" border>
                       <el-table-column type="index" label="序号" width="50" align="center" />
                       <el-table-column prop="time" label="时间" width="70" />
@@ -1326,4 +1326,4 @@ pre {
   text-align: center;
   margin-top: 20px;
 }
-</style>
+</style><>

@@ -44,7 +44,6 @@ namespace Zwav.Application.Parsing
     {
         public string AnalysisGuid { get; set; }
         public string Status { get; set; }
-        public string ProgressUrl { get; set; }
     }
 
     public class AnalysisStatusResponse

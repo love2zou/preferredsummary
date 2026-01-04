@@ -3185,9 +3185,9 @@
             完成写端：应用关闭时通知消费者退出。
             </summary>
         </member>
-        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.InspectDat(System.Byte[],System.Int32,System.Int32)">
+        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.DetectLayoutStrong(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Nullable{System.Int32},System.Int32)">
             <summary>
-            等价于 inspectDat(buf, A, D)
+            更强的布局探测：起始偏移 + 模拟量编码 + dvWords 搜索。
             </summary>
         </member>
         <member name="M:Zwav.Application.Parsing.HdrParser.Parse(System.String,System.String@)">
@@ -3210,6 +3210,37 @@
         </member>
         <member name="F:Zwav.Application.Parsing.ZwavConstants.MaxDigital">
             <summary>最大开关量通道数</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.Queued">
+            <summary>进度状态：排队中</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.Canceled">
+            <summary>进度状态：已取消</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.Completed">
+            <summary>进度状态：已完成</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.Failed">
+            <summary>进度状态：失败</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.Parsing">
+            <summary>进度状态：解析中</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingRead">
+            <summary>进度状态：解析读取录波文件</summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "F:Zwav.Application.Parsing.ZwavConstants.ParsingExtract" -->
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingCfg">
+            <summary>进度状态：解析CFG文件</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingHdr">
+            <summary>进度状态：解析HDR文件</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingChannel">
+            <summary>进度状态：解析通道</summary>
+        </member>
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingDat">
+            <summary>进度状态：解析Dat数据</summary>
         </member>
         <member name="T:Zwav.Application.Parsing.PagedResult`1">
             <summary>

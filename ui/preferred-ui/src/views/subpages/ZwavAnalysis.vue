@@ -13,10 +13,9 @@
           </el-form-item>
           <el-form-item label="状态">
             <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 120px">
-              <el-option label="上传中" value="Uploading" />
               <el-option label="排队中" value="Queued" />
-              <el-option label="解析中" value="Processing" />
-              <el-option label="已完成" value="Ready" />
+              <el-option label="解析中" value="Parsing" />
+              <el-option label="已完成" value="Completed" />
               <el-option label="失败" value="Failed" />
             </el-select>
           </el-form-item>
@@ -77,7 +76,7 @@
           <template #default="{ row }">
             <el-progress 
               :percentage="row.progress" 
-              :status="row.status === 'Failed' ? 'exception' : (row.status === 'Ready' ? 'success' : '')"
+              :status="row.status === 'Failed' ? 'exception' : (row.status === 'Completed' ? 'success' : '')"
             />
           </template>
         </el-table-column>
@@ -95,7 +94,6 @@
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button 
-              v-if="row.status === 'Ready'" 
               link 
               type="primary" 
               size="small"
@@ -495,24 +493,32 @@ const formatDateTime = (str: string) => {
 
 const getStatusType = (status: string) => {
   const map: Record<string, string> = {
-    'Uploading': 'info',
     'Queued': 'warning',
-    'Processing': 'primary',
-    'Ready': 'success',
+    'Canceled': 'info',
+    'Completed': 'success',
     'Failed': 'danger',
-    'Canceled': 'info'
+    'ParsingRead': 'primary',
+    'ParsingExtract': 'primary',
+    'ParsingCfg': 'primary',
+    'ParsingHdr': 'primary',
+    'ParsingChannel': 'primary',
+    'ParsingDat': 'primary'
   }
-  return map[status] || ''
+  return map[status] || 'info'
 }
 
 const getStatusText = (status: string) => {
   const map: Record<string, string> = {
-    'Uploading': '上传中',
     'Queued': '排队中',
-    'Processing': '解析中',
-    'Ready': '已完成',
+    'Canceled': '已取消',
+    'Completed': '已完成',
     'Failed': '失败',
-    'Canceled': '已取消'
+    'ParsingRead': '读取录波',
+    'ParsingExtract': '解压中',
+    'ParsingCfg': '解析CFG',
+    'ParsingHdr': '解析HDR',
+    'ParsingChannel': '解析通道',
+    'ParsingDat': '解析Dat数据'
   }
   return map[status] || status
 }

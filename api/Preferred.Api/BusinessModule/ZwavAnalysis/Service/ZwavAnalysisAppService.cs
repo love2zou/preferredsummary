@@ -115,8 +115,8 @@ namespace Preferred.Api.Services
                 {
                     // 若已有任务且状态不是 Failed/Canceled，可直接复用
                     // （如你希望 Completed 也强制重建，可在这里排除）
-                    if (!string.Equals(existing.Status, "Failed", StringComparison.OrdinalIgnoreCase) &&
-                        !string.Equals(existing.Status, "Canceled", StringComparison.OrdinalIgnoreCase))
+                    if (!string.Equals(existing.Status, ZwavConstants.Failed, StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(existing.Status, ZwavConstants.Canceled, StringComparison.OrdinalIgnoreCase))
                     {
                         return (existing.AnalysisGuid, existing.Status);
                     }
@@ -131,7 +131,7 @@ namespace Preferred.Api.Services
             var analysis = new ZwavAnalysis
             {
                 AnalysisGuid = guid,
-                Status = "Queued",       // 这里也可以先用 "Preparing"
+                Status = ZwavConstants.Queued,       // 这里也可以先用 "Preparing"
                 Progress = 0,
                 ErrorMessage = null,
                 FileId = fileId,
@@ -149,7 +149,7 @@ namespace Preferred.Api.Services
             try
             {
                 // 5) 这里不再做上传落盘，所以可以直接把状态推进到 Queued/Waiting
-                await progWriter.UpdateAsync("Queued", 5);
+                await progWriter.UpdateAsync(ZwavConstants.Queued, 5);
 
                 // 6) 入队：建议入队参数用 analysisGuid 或 analysisId
                 await _queue.EnqueueAsync(new ZwavAnalysisQueueItem
@@ -160,18 +160,18 @@ namespace Preferred.Api.Services
                     StoragePath = zwavFile.StoragePath,
                     ExtractPath = zwavFile.ExtractPath
                 }, ct);
-                await progWriter.UpdateAsync("Queued", 10);
+                await progWriter.UpdateAsync(ZwavConstants.Queued, 10);
 
-                return (guid, "Queued");
+                return (guid, ZwavConstants.Queued);
             }
             catch (OperationCanceledException)
             {
-                await progWriter.UpdateAsync("Canceled", analysis.Progress, "client canceled");
+                await progWriter.UpdateAsync(ZwavConstants.Canceled, analysis.Progress, "client canceled");
                 throw;
             }
             catch (Exception ex)
             {
-                await progWriter.UpdateAsync("Failed", analysis.Progress, ex.Message);
+                await progWriter.UpdateAsync(ZwavConstants.Failed, analysis.Progress, ex.Message);
                 throw;
             }
         }
@@ -216,7 +216,26 @@ namespace Preferred.Api.Services
                     select new { a, f };
 
             if (!string.IsNullOrWhiteSpace(status))
-                q = q.Where(x => x.a.Status == status);
+            {
+                if (status.Equals(ZwavConstants.Parsing, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Parsing 集合状态：包含所有解析中的子状态
+                    var parsingStates = new[]
+                    {
+                        ZwavConstants.ParsingRead,
+                        ZwavConstants.ParsingExtract,
+                        ZwavConstants.ParsingCfg,
+                        ZwavConstants.ParsingHdr,
+                        ZwavConstants.ParsingChannel,
+                        ZwavConstants.ParsingDat
+                    };
+                    q = q.Where(x => parsingStates.Contains(x.a.Status));
+                }
+                else
+                {
+                    q = q.Where(x => x.a.Status == status);
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(keyword))
                 q = q.Where(x => x.f.OriginalName.Contains(keyword));
@@ -651,9 +670,9 @@ namespace Preferred.Api.Services
             if (a == null) return false;
 
             // 如果已经完成/失败就不取消
-            if (a.Status == "Ready" || a.Status == "Failed") return false;
+            if (a.Status == ZwavConstants.Completed || a.Status == ZwavConstants.Failed) return false;
 
-            a.Status = "Canceled";
+            a.Status = ZwavConstants.Canceled;
             a.ErrorMessage = "client canceled";
             a.UpdTime = DateTime.UtcNow;
             await _context.SaveChangesAsync(ct);

@@ -71,6 +71,7 @@ namespace Preferred.Api.Controllers
                 return StatusCode(500, new ApiErrorResponse { Message = "上传失败", Details = ex.Message });
             }
         }
+        
         /// <summary>基于已上传文件(FileId)创建解析任务</summary>
         [HttpPost("create")]
         [Consumes("application/json")]
@@ -86,8 +87,6 @@ namespace Preferred.Api.Controllers
                 // 关键：从 Tb_ZwavFile 取文件信息并创建解析任务（由 AppService 做全套校验与入队）
                 var result = await _app.CreateAnalysisByFileIdAsync(req.FileId, req.ForceRecreate, ct);
 
-                //var progressUrl = Url.Action(nameof(GetStatusAsync), new { analysisGuid = result.AnalysisGuid });
-
                 // 语义上建议返回 202 Accepted（任务已接收进入队列），你也可以保持 200
                 return Accepted(new ApiResponse<CreateAnalysisResponse>
                 {
@@ -96,8 +95,7 @@ namespace Preferred.Api.Controllers
                     Data = new CreateAnalysisResponse
                     {
                         AnalysisGuid = result.AnalysisGuid,
-                        Status = result.Status,
-                        //ProgressUrl = progressUrl
+                        Status = result.Status
                     }
                 });
             }

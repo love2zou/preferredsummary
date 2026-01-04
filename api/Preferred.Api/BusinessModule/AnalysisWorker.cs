@@ -89,7 +89,7 @@ namespace Zwav.Application.Workers
             var a = await context.ZwavAnalyses.FirstOrDefaultAsync(x => x.AnalysisGuid == analysisGuid, ct);
             if (a == null) return;
 
-            a.Status = "Failed";
+            a.Status = ZwavConstants.Failed;
             a.Progress = 100;
             a.ErrorMessage = ex.Message;
             a.FinishTime = DateTime.UtcNow;
@@ -108,7 +108,7 @@ namespace Zwav.Application.Workers
 
             if (analysis == null) return;
 
-            await UpdateStatusAsync(context, analysis, "Parsing", 5, null, DateTime.UtcNow, null, ct);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingRead, 5, null, DateTime.UtcNow, null, ct);
 
             // 3) 解压目录逻辑
             var baseDir = Path.GetDirectoryName(item.StoragePath);
@@ -128,7 +128,7 @@ namespace Zwav.Application.Workers
                 await context.SaveChangesAsync(ct);
             }
 
-            await UpdateStatusAsync(context, analysis, "Parsing", 20, null, null, null, ct);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingExtract, 20, null, null, null, ct);
 
             // 4) 后续核心文件查找、CFG/HDR/DAT 解析照旧
             var (cfgPath, hdrPath, datPath) = ZwavZipHelper.FindCoreFiles(extractDir);
@@ -142,7 +142,7 @@ namespace Zwav.Application.Workers
             // Upsert Tb_ZwavCfg
             await UpsertCfgAsync(context, analysis.Id, cfg, ct);
 
-            await UpdateStatusAsync(context, analysis, "Parsing", 45, null, null, null, ct);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingCfg, 45, null, null, null, ct);
 
             // 6) 解析 HDR（可选）
             if (!string.IsNullOrWhiteSpace(hdrPath))
@@ -153,12 +153,12 @@ namespace Zwav.Application.Workers
                 await UpsertHdrAsync(context, analysis.Id, hdr, ct);
             }
 
-            await UpdateStatusAsync(context, analysis, "Parsing", 65, null, null, null, ct);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingHdr, 65, null, null, null, ct);
 
             // 7) 通道落库（覆盖式：先删后插，使用事务）
             await ReplaceChannelsAsync(context, analysis.Id, cfg, ct);
 
-            await UpdateStatusAsync(context, analysis, "Parsing", 80, null, null, null, ct);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingChannel, 80, null, null, null, ct);
 
             // 8) DAT 元信息
             byte[] datBuf = File.ReadAllBytes(datPath);
@@ -169,13 +169,14 @@ namespace Zwav.Application.Workers
             analysis.TotalRecords = (int)Math.Min(totalRecords, int.MaxValue); // 你表是 INT，先保护；建议后面改 BIGINT
             analysis.DigitalWords = digitalWords;
             analysis.UpdTime = DateTime.UtcNow;
-            await context.SaveChangesAsync(ct);
 
-            int maxRows = 50000;
+            int maxRows = 50000;       
             var waveResult = DatMetaCalculator.ParseDatAllChannels(datBuf, cfg, maxRows);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingDat, 90, null, null, null, ct);
+            //DAT数据落库
             await UpsertWaveDataAsync(context, analysis.Id, waveResult, ct);
             // 9) 完成
-            await UpdateStatusAsync(context, analysis, "Ready", 100, null, null, DateTime.UtcNow, ct);
+            await UpdateStatusAsync(context, analysis, ZwavConstants.Completed, 100, null, null, DateTime.UtcNow, ct);
         }
 
         private static async Task UpdateStatusAsync(
@@ -387,7 +388,7 @@ namespace Zwav.Application.Workers
 
                         // 如果数据极大，且你不需要继续更新已跟踪实体，可以定期清理跟踪，降低内存
                         // 在 EF Core 5.0 以下版本没有 ChangeTracker.Clear()，可手动分离已跟踪实体
-                        foreach (var entry in context.ChangeTracker.Entries().ToList())
+                        foreach (var entry in context.ChangeTracker.Entries<ZwavData>().ToList())
                         {
                             entry.State = EntityState.Detached;
                         }
