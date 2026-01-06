@@ -220,6 +220,7 @@ namespace Zwav.Application.Parsing
     {
         public int SampleNo { get; set; }
         public int TimeRaw { get; set; }
+        public double TimeMs { get; set; }
         public double[] Analog { get; set; } = Array.Empty<double>();
         public short[] Digital { get; set; } = Array.Empty<short>();
     }
@@ -228,6 +229,7 @@ namespace Zwav.Application.Parsing
     {
         public int SampleNo { get; set; }
         public int TimeRaw { get; set; }
+        public double TimeMs { get; set; }
 
         // Channel1..Channel70
         public double? Channel1 { get; set; }

@@ -361,6 +361,7 @@ namespace Zwav.Application.Workers
                     }
 
                     entity.TimeRaw = row.TimeRaw;
+                    entity.TimeMs = row.TimeMs;
                     entity.UpdTime = now;
 
                     // Channels：使用缓存的 PropertyInfo，避免重复 GetProperty

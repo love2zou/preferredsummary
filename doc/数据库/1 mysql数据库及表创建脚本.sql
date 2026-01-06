@@ -293,7 +293,8 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavData (
     Id INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
 	AnalysisId INT NOT NULL COMMENT '解析任务ID',
     SampleNo INT NOT NULL COMMENT '样本号',
-    TimeRaw INT NOT NULL COMMENT '原始时间戳',
+	TimeRaw INT NOT NULL COMMENT '原始时间戳(us)',
+	TimeMs  DOUBLE NOT NULL COMMENT '时间戳(ms)，由 TimeRaw * TimeMul / 1000 计算，用于展示和绘图',
     -- 模拟量通道（根据要求最大70个通道）
     Channel1 DOUBLE COMMENT '模拟量通道1',
     Channel2 DOUBLE COMMENT '模拟量通道2',

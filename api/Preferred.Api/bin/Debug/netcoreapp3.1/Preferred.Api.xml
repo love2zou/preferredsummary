@@ -3185,11 +3185,6 @@
             完成写端：应用关闭时通知消费者退出。
             </summary>
         </member>
-        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.DetectLayoutStrong(System.ReadOnlySpan{System.Byte},System.Int32,System.Int32,System.Nullable{System.Int32},System.Int32)">
-            <summary>
-            更强的布局探测：起始偏移 + 模拟量编码 + dvWords 搜索。
-            </summary>
-        </member>
         <member name="M:Zwav.Application.Parsing.HdrParser.Parse(System.String,System.String@)">
             <summary>
             解析 HDR XML 文本。遇到不规范 XML（前导控制字符/多根/片段）会自动容错。

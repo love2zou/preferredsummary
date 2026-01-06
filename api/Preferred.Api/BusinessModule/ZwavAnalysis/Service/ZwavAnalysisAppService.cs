@@ -547,6 +547,7 @@ namespace Preferred.Api.Services
                 {
                     SampleNo = x.SampleNo,
                     TimeRaw = x.TimeRaw,
+                    TimeMs = x.TimeMs,
 
                     Channel1 = x.Channel1 != null ? (double?)Math.Round(x.Channel1.Value, 3) : null,
                     Channel2 = x.Channel2 != null ? (double?)Math.Round(x.Channel2.Value, 3) : null,
@@ -633,6 +634,7 @@ namespace Preferred.Api.Services
                 {
                     SampleNo = r.SampleNo,
                     TimeRaw = r.TimeRaw,
+                    TimeMs = r.TimeMs,
                     Analog = ReadAnalogs(r, ch),
                     Digital = ReadDigitals(r, dg) // 返回 0/1
                 };
@@ -783,7 +785,7 @@ namespace Preferred.Api.Services
                 // 4) 数据查询（Tb_ZwavData）
                 var q = _context.ZwavDatas.AsNoTracking()
                     .Where(x => x.AnalysisId == a.Id)
-                    .OrderBy(x => x.TimeRaw);
+                    .OrderBy(x => x.TimeMs);
 
                 // 5) 写 CSV（BOM + header + rows）
                 var fileName = $"Zwav_{analysisGuid}_{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
@@ -810,7 +812,7 @@ namespace Preferred.Api.Services
                     rowNo++;
 
                     var sb = new StringBuilder(256);
-                    sb.Append(rowNo).Append(',').Append(row.TimeRaw);
+                    sb.Append(rowNo).Append(',').Append(row.TimeMs);
 
                     // analogs
                     foreach (var ch in analogs)

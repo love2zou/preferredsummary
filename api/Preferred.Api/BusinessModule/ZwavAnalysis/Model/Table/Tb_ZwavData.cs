@@ -14,6 +14,7 @@ namespace Preferred.Api.Models
         public int AnalysisId { get; set; }
         public int SampleNo { get; set; }  // 样本号
         public int TimeRaw { get; set; }  // 原始时间戳
+        public double TimeMs { get; set; }  // 时间戳（毫秒）
 
         // 模拟量通道
         public double? Channel1 { get; set; }

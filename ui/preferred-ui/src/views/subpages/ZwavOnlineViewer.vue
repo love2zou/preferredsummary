@@ -39,15 +39,18 @@
             </el-icon>
           </el-tooltip>
 
-          <el-tooltip content="故障时序图" placement="top">
-            <el-icon
-              class="stats-icon"
-              :class="{ disabled: !hdrData || !hdrData.tripInfoJSON || hdrData.tripInfoJSON.length === 0 }"
-              @click="openSequenceDialog"
-            >
-              <Timer />
-            </el-icon>
-          </el-tooltip>
+          <!-- ✅ 稳定版：按钮触发，必然响应点击 -->
+        <el-tooltip content="故障时序图" placement="top" :disabled="!canOpenSequence">
+          <el-button
+            link
+            class="icon-btn"
+            :disabled="!canOpenSequence"
+            @click.stop="openSequenceDialog"
+            title="故障时序图"
+          >
+            <el-icon><Timer /></el-icon>
+          </el-button>
+        </el-tooltip>
 
           <el-tooltip :content="isFullScreen ? '退出全屏' : '全屏显示'" placement="top">
             <el-icon class="stats-icon" @click="toggleFullScreen">
@@ -230,6 +233,107 @@
             </el-table-column>
           </el-table>
         </el-dialog>
+
+        <!-- 故障时序图浮窗 -->
+        <el-dialog
+          v-model="showSequenceDialog"
+          title="故障时序图"
+          width="1400px"
+          draggable
+          append-to-body
+          :close-on-click-modal="false"
+          class="sequence-dialog"
+          @opened="renderSequenceDiagram"
+        >
+          <div class="seq-layout">
+            <!-- 左侧树形结构 -->
+            <div class="seq-sidebar">
+              <div class="sidebar-actions">
+                <el-button type="primary" size="small" :icon="Plus" @click="openFileSelectDialog">
+                  添加对比
+                </el-button>
+              </div>
+              <el-tree
+                ref="seqTreeRef"
+                :data="seqTreeData"
+                :props="{ label: 'label', children: 'children' }"
+                show-checkbox
+                check-strictly
+                check-on-click-node
+                node-key="id"
+                default-expand-all
+                highlight-current
+                :default-checked-keys="defaultCheckedKeys"
+                @check="handleTreeCheck"
+              >
+                <template #default="{ node, data }">
+                  <span class="custom-tree-node" :title="node.label">
+                    {{ node.label }}
+                  </span>
+                </template>
+              </el-tree>
+            </div>
+
+            <!-- 右侧时序图 -->
+            <div class="seq-content">
+              <div class="seq-container" ref="seqContainerRef">
+                  <div class="left-info" :style="{ top: leftInfoTop + 'px' }">
+                    <div class="fault-time">{{ currentMainFaultTime }}</div>
+                    <div class="sub-info">故障发生时间</div>
+                  </div>
+                  <svg ref="seqSvgRef" class="seq-svg"></svg>
+              </div>
+            </div>
+          </div>
+        </el-dialog>
+
+        <!-- 文件选择弹窗 -->
+        <el-dialog
+          v-model="fileSelectDialogVisible"
+          title="选择录波文件"
+          width="800px"
+          append-to-body
+          :close-on-click-modal="false"
+        >
+          <div class="file-select-header">
+            <el-input
+              v-model="fileSearchKeyword"
+              placeholder="文件名"
+              style="width: 200px"
+              clearable
+              @keyup.enter="fetchFileList"
+            />
+            <el-button type="primary" :icon="Search" @click="fetchFileList">查询</el-button>
+          </div>
+          
+          <el-table
+            v-loading="fileLoading"
+            :data="fileTableData"
+            border
+            stripe
+            height="400"
+            @row-click="handleFileSelect"
+            class="file-table"
+          >
+            <el-table-column prop="originalName" label="文件名" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="crtTime" label="创建时间" width="160" />
+            <el-table-column label="操作" width="80">
+              <template #default>
+                <el-icon><Plus /></el-icon>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <div class="pagination-container">
+            <el-pagination
+              v-model:current-page="filePagination.page"
+              v-model:page-size="filePagination.pageSize"
+              :total="filePagination.total"
+              layout="total, prev, pager, next"
+              @current-change="fetchFileList"
+            />
+          </div>
+        </el-dialog>
       </div>
 
       <!-- 右侧信息显示 -->
@@ -287,12 +391,12 @@
                     </el-table>
                   </el-collapse-item>
 
-                  <el-collapse-item title="保护动作信息" name="2" v-if="hdrData.tripInfoJSON && hdrData.tripInfoJSON.length">
+                  <el-collapse-item title="保护动作信息" name="2" v-if="tripInfoArray.length">
                     <div style="margin-bottom: 10px; padding: 0 10px;">
                       <div class="info-item"><label>故障开始时间:</label> <span>{{ hdrData.faultStartTime }}</span></div>
                       <div class="info-item"><label>故障持续时间:</label> <span>{{ hdrData.faultKeepingTime }}</span></div>
                     </div>
-                    <el-table :data="hdrData.tripInfoJSON" size="small" border>
+                    <el-table :data="tripInfoArray" size="small" border>
                       <el-table-column type="index" label="序号" width="50" align="center" />
                       <el-table-column prop="time" label="时间" width="70" />
                       <el-table-column prop="phase" label="相位" width="50" align="center" />
@@ -360,11 +464,11 @@
 </template>
 
 <script setup lang="ts">
-import { zwavService, type AnalysisDetailDto, type CfgDto, type ChannelDto, type HdrDto, type WaveDataPageDto } from '@/services/zwavService'
-import { Download, Histogram, Setting } from '@element-plus/icons-vue'
+import { zwavService, type AnalysisDetailDto, type CfgDto, type ChannelDto, type HdrDto, type WaveDataPageDto, type ZwavFileAnalysis } from '@/services/zwavService'
+import { Download, FullScreen, Histogram, Plus, Search, Setting, Timer } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -415,57 +519,64 @@ const filteredDigitalChannels = computed(() => {
   )
 })
 
+/** ✅ tripInfoJSON 可能是数组，也可能是 JSON 字符串；统一转换为数组供界面/时序图使用 */
+const tripInfoArray = computed<any[]>(() => {
+  const t: any = hdrData.value?.tripInfoJSON
+  if (!t) return []
+  if (Array.isArray(t)) return t
+  if (typeof t === 'string') {
+    try {
+      const arr = JSON.parse(t)
+      return Array.isArray(arr) ? arr : []
+    } catch {
+      return []
+    }
+  }
+  return []
+})
+
+/** ✅ 是否可打开故障时序图 */
+const canOpenSequence = computed(() => tripInfoArray.value.length > 0)
+
 /**
  * 判断通道是否有动作
  * 规则：
  * 1. 在 digitalStatusJson 中值为 '1' (初始闭合)
- * 2. 在 digitalEventJson 中存在记录且值为 '1' (变位闭合)
+ * 2. 在 digitalEventJson 中存在记录 (认为有变化/有动作)
  */
 const actionChannelIndices = computed(() => {
   const indices = new Set<number>()
   if (!hdrData.value) return indices
 
-  // 1. Check Status (Init)
-   if (hdrData.value.digitalStatusJson) {
-     hdrData.value.digitalStatusJson.forEach(item => {
-       if (String(item.value) === '1') {
-         // 使用更宽松的匹配
-         const ch = digitalChannels.value.find(c => 
-           c.channelName === item.name || 
-           c.channelName.trim() === item.name.trim()
-         )
-         if (ch) indices.add(ch.channelIndex)
-       }
-     })
-   }
- 
-   // 2. Check Events
-   // 只要有事件（无论是变0还是变1），都意味着存在变化或状态非恒定0（假设初始0变1，或者初始1变0）
-   // 如果事件是 0->0 (冗余)，虽然还是0，但通常不会记录这种事件。
-   // 所以简单认为：只要在 EventJson 中出现，或者 StatusJson 中为 1，即为“有动作/存在1”
-   if (hdrData.value.digitalEventJson) {
-     hdrData.value.digitalEventJson.forEach(item => {
-       // 只要有记录，就认为是有动作（曾有过1，或变成了1）
-       const ch = digitalChannels.value.find(c => 
-         c.channelName === item.name || 
-         c.channelName.trim() === item.name.trim()
-       )
-       if (ch) indices.add(ch.channelIndex)
-     })
-   }
-   
-   return indices
- })
- 
- // 无动作 = 所有 - 有动作
- const noActionChannelIndices = computed(() => {
-   // 必须基于 filteredDigitalChannels 还是 digitalChannels? 
-   // 逻辑上应该是基于所有数字通道进行分类，不受搜索关键词影响（或者受影响？）
-   // 通常分类是基于全量的。
-   const allIndices = digitalChannels.value.map(c => c.channelIndex)
-   const actionIndices = actionChannelIndices.value
-   return new Set(allIndices.filter(idx => !actionIndices.has(idx)))
- })
+  if (hdrData.value.digitalStatusJson) {
+    hdrData.value.digitalStatusJson.forEach((item: any) => {
+      if (String(item.value) === '1') {
+        const ch = digitalChannels.value.find(
+          (c) => c.channelName === item.name || c.channelName.trim() === String(item.name).trim()
+        )
+        if (ch) indices.add(ch.channelIndex)
+      }
+    })
+  }
+
+  if (hdrData.value.digitalEventJson) {
+    hdrData.value.digitalEventJson.forEach((item: any) => {
+      const ch = digitalChannels.value.find(
+        (c) => c.channelName === item.name || c.channelName.trim() === String(item.name).trim()
+      )
+      if (ch) indices.add(ch.channelIndex)
+    })
+  }
+
+  return indices
+})
+
+// 无动作 = 所有 - 有动作
+const noActionChannelIndices = computed(() => {
+  const allIndices = digitalChannels.value.map((c) => c.channelIndex)
+  const actionIndices = actionChannelIndices.value
+  return new Set(allIndices.filter((idx) => !actionIndices.has(idx)))
+})
 
 const handleCheckAllAnalogChange = (val: boolean) => {
   selectedChannels.value = val ? filteredAnalogChannels.value.map((c) => c.channelIndex) : []
@@ -486,14 +597,12 @@ const handleCheckAllDigitalChange = (val: boolean) => {
 const handleHasActionChange = (val: boolean) => {
   const actionIndices = Array.from(actionChannelIndices.value)
   if (val) {
-    // Add all action channels
     const newSet = new Set(selectedDigitalChannels.value)
-    actionIndices.forEach(idx => newSet.add(idx))
+    actionIndices.forEach((idx) => newSet.add(idx))
     selectedDigitalChannels.value = Array.from(newSet)
   } else {
-    // Remove all action channels
     const newSet = new Set(selectedDigitalChannels.value)
-    actionIndices.forEach(idx => newSet.delete(idx))
+    actionIndices.forEach((idx) => newSet.delete(idx))
     selectedDigitalChannels.value = Array.from(newSet)
   }
   updateMainDigitalCheckbox()
@@ -502,57 +611,45 @@ const handleHasActionChange = (val: boolean) => {
 const handleNoActionChange = (val: boolean) => {
   const noActionIndices = Array.from(noActionChannelIndices.value)
   if (val) {
-    // Add all no-action channels
     const newSet = new Set(selectedDigitalChannels.value)
-    noActionIndices.forEach(idx => newSet.add(idx))
+    noActionIndices.forEach((idx) => newSet.add(idx))
     selectedDigitalChannels.value = Array.from(newSet)
   } else {
-    // Remove all no-action channels
     const newSet = new Set(selectedDigitalChannels.value)
-    noActionIndices.forEach(idx => newSet.delete(idx))
+    noActionIndices.forEach((idx) => newSet.delete(idx))
     selectedDigitalChannels.value = Array.from(newSet)
   }
   updateMainDigitalCheckbox()
 }
 
-const handleDigitalChange = (value: number[]) => {
+const handleDigitalChange = (_value: number[]) => {
   updateMainDigitalCheckbox()
   updateActionCheckboxes()
 }
 
-// 这里的 updateMainDigitalCheckbox 主要用于更新“有动作”和“无动作”的状态
-// 因为移除了“全选”按钮，checkAllDigital 变量虽然还在代码中，但不再绑定界面元素，
-// 不过为了保持代码完整性，先保留计算逻辑，或者可以删除它。
-// 这里仅保留 updateActionCheckboxes 的调用
 const updateMainDigitalCheckbox = () => {
-  // const checkedCount = selectedDigitalChannels.value.length
-  // const totalCount = filteredDigitalChannels.value.length
-  // checkAllDigital.value = checkedCount === totalCount && totalCount > 0
-  // isIndeterminateDigital.value = checkedCount > 0 && checkedCount < totalCount
   updateActionCheckboxes()
 }
 
 const updateActionCheckboxes = () => {
   const selectedSet = new Set(selectedDigitalChannels.value)
-  
-  // Update Has Action
+
   const actionIndices = Array.from(actionChannelIndices.value)
   if (actionIndices.length === 0) {
     checkHasAction.value = false
     isIndeterminateHasAction.value = false
   } else {
-    const selectedActionCount = actionIndices.filter(idx => selectedSet.has(idx)).length
+    const selectedActionCount = actionIndices.filter((idx) => selectedSet.has(idx)).length
     checkHasAction.value = selectedActionCount === actionIndices.length
     isIndeterminateHasAction.value = selectedActionCount > 0 && selectedActionCount < actionIndices.length
   }
 
-  // Update No Action
   const noActionIndices = Array.from(noActionChannelIndices.value)
   if (noActionIndices.length === 0) {
     checkNoAction.value = false
     isIndeterminateNoAction.value = false
   } else {
-    const selectedNoActionCount = noActionIndices.filter(idx => selectedSet.has(idx)).length
+    const selectedNoActionCount = noActionIndices.filter((idx) => selectedSet.has(idx)).length
     checkNoAction.value = selectedNoActionCount === noActionIndices.length
     isIndeterminateNoAction.value = selectedNoActionCount > 0 && selectedNoActionCount < noActionIndices.length
   }
@@ -576,16 +673,549 @@ const applyAxisSettings = () => {
   fetchWaveData()
 }
 
-const openSequenceDialog = () => {
+const seqTreeData = ref<any[]>([])
+const seqTreeRef = ref()
+const defaultCheckedKeys = ref<string[]>([])
+const currentMainFaultTime = ref('')
+
+// File Selection Dialog
+const fileSelectDialogVisible = ref(false)
+const fileSearchKeyword = ref('')
+const fileLoading = ref(false)
+const fileTableData = ref<ZwavFileAnalysis[]>([])
+const filePagination = reactive({
+  page: 1,
+  pageSize: 10,
+  total: 0
+})
+
+// Store loaded trip info for comparison
+// Key: analysisGuid (or fileId/name), Value: TripInfo[]
+const loadedTripInfos = new Map<string, any[]>()
+const loadedFileNames = new Map<string, string>()
+const loadedFileColors = new Map<string, string>()
+
+// Colors for different files
+const SERIES_COLORS = ['#1677ff', '#b56be6', '#f6a04b', '#52c41a', '#ff4d4f']
+
+/** ✅ 打开故障时序图：先打开 dialog，再 nextTick + 双 RAF 绘制，确保尺寸可用 */
+const openSequenceDialog = async () => {
+  if (!hdrData.value || tripInfoArray.value.length === 0) {
+    ElMessage.warning('暂无故障时序数据')
+    return
+  }
+
+  // Init with current file
+  const guid = analysisGuid
+  const fileName = detailData.value?.file?.originalName || '当前文件'
+  const startTime = hdrData.value.faultStartTime || '未知时间'
+  currentMainFaultTime.value = startTime
+
+  // Use computed tripInfoArray which handles parsing
+  const tripInfo = tripInfoArray.value
+
+  // Cache current data
+  loadedTripInfos.set(guid, tripInfo)
+  loadedFileNames.set(guid, fileName)
+  loadedFileColors.set(guid, SERIES_COLORS[0])
+
+  // Build tree node for current file
+  const rootId = guid
+  const tripNodes = tripInfo.map((item, index) => {
+    const valText = item.value === '1' ? '动作' : (item.value === '0' ? '复归' : item.value)
+    return {
+      label: `${item.time}ms ${item.name} ${valText}`,
+      id: `${rootId}-trip-${index}`,
+      disabled: true // Leaf nodes not checkable for simplicity, or checkable to filter? usually check root to show/hide file
+    }
+  })
+
+  seqTreeData.value = [
+    {
+      label: fileName,
+      id: rootId,
+      children: [
+        { label: `启动时间: ${startTime}`, id: `${rootId}-start-time`, disabled: true },
+        ...tripNodes
+      ]
+    }
+  ]
+  
+  defaultCheckedKeys.value = [rootId]
+
   showSequenceDialog.value = true
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      renderSequenceDiagram()
+    })
+  })
+}
+
+const openFileSelectDialog = () => {
+  fileSelectDialogVisible.value = true
+  fetchFileList()
+}
+
+const fetchFileList = async () => {
+  fileLoading.value = true
+  try {
+    const params = {
+      page: filePagination.page,
+      pageSize: filePagination.pageSize,
+      keyword: fileSearchKeyword.value,
+      status: 'Completed' // Only completed files have HDR
+    }
+    const res: any = await zwavService.getList(params)
+    if (res.success) {
+      fileTableData.value = res.data.data.filter((f: any) => f.analysisGuid !== analysisGuid) // Exclude current
+      filePagination.total = res.data.total
+    }
+  } catch (err) {
+    console.error(err)
+  } finally {
+    fileLoading.value = false
+  }
+}
+
+const handleFileSelect = async (row: ZwavFileAnalysis) => {
+  if (loadedTripInfos.has(row.analysisGuid)) {
+    ElMessage.info('该文件已在列表中')
+    return
+  }
+
+  try {
+    const res: any = await zwavService.getHdr(row.analysisGuid)
+    if (res.success && res.data && res.data.tripInfoJSON) {
+      const guid = row.analysisGuid
+      const fileName = row.originalName
+      const startTime = res.data.faultStartTime
+      
+      let tripInfo: any[] = []
+      const t = res.data.tripInfoJSON
+      if (Array.isArray(t)) {
+        tripInfo = t
+      } else if (typeof t === 'string') {
+        try {
+          tripInfo = JSON.parse(t)
+        } catch {
+          tripInfo = []
+        }
+      }
+
+      if (!Array.isArray(tripInfo) || tripInfo.length === 0) {
+         ElMessage.warning('该文件没有保护动作信息')
+         return
+      }
+
+      // Cache
+      loadedTripInfos.set(guid, tripInfo)
+      loadedFileNames.set(guid, fileName)
+      // Assign color
+      const colorIndex = loadedTripInfos.size % SERIES_COLORS.length
+      loadedFileColors.set(guid, SERIES_COLORS[colorIndex])
+
+      // Add to Tree
+      const tripNodes = tripInfo.map((item: any, index: number) => {
+        const valText = item.value === '1' ? '动作' : (item.value === '0' ? '复归' : item.value)
+        return {
+          label: `${item.time}ms ${item.name} ${valText}`,
+          id: `${guid}-trip-${index}`,
+          disabled: true
+        }
+      })
+
+      const newNode = {
+        label: fileName,
+        id: guid,
+        children: [
+          { label: `启动时间: ${startTime}`, id: `${guid}-start-time`, disabled: true },
+          ...tripNodes
+        ]
+      }
+      seqTreeData.value = [...seqTreeData.value, newNode]
+
+      // Auto check new file
+      defaultCheckedKeys.value = [...defaultCheckedKeys.value, guid]
+      // Need to manually set checked keys because binding might not update immediately for new nodes
+      nextTick(() => {
+        seqTreeRef.value?.setCheckedKeys(defaultCheckedKeys.value)
+        renderSequenceDiagram()
+      })
+
+      ElMessage.success('添加成功')
+      // Don't close dialog to allow multiple select? Or close? User said "batch add", maybe keep open.
+      // But user said "I can batch add... from ZwavAnalysis table", usually implies a picker.
+      // Let's keep picker open.
+    } else {
+      ElMessage.warning('该文件没有保护动作信息')
+    }
+  } catch (err) {
+    console.error(err)
+    ElMessage.error('加载文件信息失败')
+  }
+}
+
+const handleTreeCheck = () => {
+  // Simple debounce
+  if ((window as any)._seqRenderTimer) clearTimeout((window as any)._seqRenderTimer)
+  ;(window as any)._seqRenderTimer = setTimeout(() => {
+    renderSequenceDiagram()
+  }, 100)
+}
+
+/* =========================
+ * 故障时序图绘制逻辑 (SVG)
+ * ========================= */
+const seqSvgRef = ref<SVGElement | null>(null)
+const seqContainerRef = ref<HTMLElement | null>(null)
+const leftInfoTop = ref(0)
+
+const NS = 'http://www.w3.org/2000/svg'
+const LANES = [60, 100, 140]
+const SWAYS = [-20, 0, 20]
+const GAP = 22
+
+function el(name: string, attrs: any = {}, text?: string) {
+  const n = document.createElementNS(NS, name)
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v))
+  if (text != null) n.textContent = text
+  return n
+}
+
+function clearSvg() {
+  if (seqSvgRef.value) {
+    while (seqSvgRef.value.firstChild) seqSvgRef.value.removeChild(seqSvgRef.value.firstChild)
+  }
+}
+
+function setViewBox(W: number, H: number) {
+  if (seqSvgRef.value) {
+    seqSvgRef.value.setAttribute('viewBox', `0 0 ${W} ${H}`)
+    ;(seqSvgRef.value as any).style.height = `${H}px`
+  }
+}
+
+function parseMs(str: any) {
+  if (str == null) return NaN
+  const s = String(str).trim()
+  const m = s.match(/(\d+(\.\d+)?)/)
+  return m ? Number(m[1]) : NaN
+}
+
+function splitTextByChars(text: string, maxChars: number) {
+  const s = String(text ?? '').trim()
+  if (!s) return ['']
+  const out: string[] = []
+  let i = 0
+  while (i < s.length) {
+    out.push(s.slice(i, i + maxChars))
+    i += maxChars
+  }
+  return out
+}
+
+function appendWrappedText(
+  parentG: Element,
+  x: number,
+  y: number,
+  anchor: string,
+  fill: string,
+  text: string,
+  maxChars = 16,
+  lineHeight = 16
+) {
+  const lines = splitTextByChars(text, maxChars)
+  const t = el('text', { x, y, fill, class: 'label-text', 'text-anchor': anchor, 'font-size': '12', 'font-weight': 'bold' })
+  lines.forEach((ln, idx) => {
+    const ts = el('tspan', { x, dy: idx === 0 ? '0' : String(lineHeight) }, ln)
+    t.appendChild(ts)
+  })
+  parentG.appendChild(t)
+}
+
+function buildNodesFromTripInfoMap(selectedTripInfos: Map<string, any[]>) {
+  const map = new Map<number, any>()
+
+  for (const [guid, tripInfo] of selectedTripInfos) {
+    const color = loadedFileColors.get(guid) || '#1677ff'
+    
+    for (const r of tripInfo) {
+      const t = parseMs(r.time)
+      if (!Number.isFinite(t)) continue
+
+      if (!map.has(t)) map.set(t, { timeMs: t, labels: [] as any[] })
+      const node = map.get(t)
+
+      const valText = r.value === '1' ? '动作' : r.value === '0' ? '复归' : r.value
+      const txt = `${r.name} ${valText}`
+      node.labels.push({ text: txt, color, guid })
+    }
+  }
+
+  const nodes = [...map.values()].sort((a, b) => a.timeMs - b.timeMs)
+
+  // 交替上下
+  let flip = false
+  for (const n of nodes) {
+    const side = flip ? 'bottom' : 'top'
+    flip = !flip
+    n.labels.forEach((x: any) => (x.side = side))
+  }
+  return nodes
+}
+
+function estimateGroupExtent(itemsCount: number, maxLines: number) {
+  const dotsSpan = itemsCount <= 1 ? 0 : (itemsCount - 1) * GAP
+  const textSpan = maxLines <= 1 ? 0 : (maxLines - 1) * 16
+  return dotsSpan + textSpan + 20
+}
+
+function estimateVerticalNeeds(nodes: any[]) {
+  let needTop = 0
+  let needBot = 0
+
+  nodes.forEach((node, idx) => {
+    const arr = node.labels
+    if (!arr || !arr.length) return
+
+    const isTop = (arr[0].side || 'top') === 'top'
+    const lane = idx % 3
+    const laneDist = LANES[lane]
+
+    const maxChars = arr.length > 1 ? 14 : 16
+    const maxLines = Math.max(...arr.map((x: any) => splitTextByChars(x.text, maxChars).length))
+
+    const extent = laneDist + estimateGroupExtent(arr.length, maxLines)
+    if (isTop) needTop = Math.max(needTop, extent)
+    else needBot = Math.max(needBot, extent)
+  })
+
+  needTop = Math.max(needTop, 100)
+  needBot = Math.max(needBot, 100)
+  return { needTop, needBot }
+}
+
+function drawLabelGroup(cx: number, axisY: number, items: any[], isTop: boolean, color: string, idx: number) {
+  if (!seqSvgRef.value) return
+
+  const dir = isTop ? -1 : 1
+  const lane = idx % 3
+  const laneDist = LANES[lane]
+  const sway = SWAYS[lane] * (idx % 2 === 0 ? 1 : -1)
+
+  const anchorX = cx + sway
+  const anchorY = axisY + dir * laneDist
+
+  const g = el('g', {})
+  seqSvgRef.value.appendChild(g)
+
+  // 轴线到锚点的斜线：颜色也用主题色，避免“线颜色不对”
+  g.appendChild(
+    el('line', {
+      x1: cx,
+      y1: axisY,
+      x2: anchorX,
+      y2: anchorY,
+      stroke: color,
+      'stroke-width': 1.5
+    })
+  )
+
+  const goLeft = anchorX > cx
+  const hxLen = 30
+
+  const ys: number[] = []
+  for (let i = 0; i < items.length; i++) ys.push(anchorY + dir * GAP * i)
+
+  // 多条时画竖线
+  if (items.length > 1) {
+    g.appendChild(
+      el('line', {
+        x1: anchorX,
+        y1: Math.min(...ys),
+        x2: anchorX,
+        y2: Math.max(...ys),
+        stroke: color,
+        'stroke-width': 2
+      })
+    )
+  }
+
+  for (let i = 0; i < items.length; i++) {
+    const y = ys[i]
+    // Use item's specific color
+    const itemColor = items[i].color || color
+
+    g.appendChild(el('circle', { cx: anchorX, cy: y, r: 3, fill: itemColor }))
+
+    const hx = anchorX + (goLeft ? -hxLen : hxLen)
+    g.appendChild(
+      el('line', {
+        x1: anchorX,
+        y1: y,
+        x2: hx,
+        y2: y,
+        stroke: itemColor,
+        'stroke-width': 1.5
+      })
+    )
+
+    const textX = hx + (goLeft ? -6 : 6)
+    appendWrappedText(g, textX, y + 4, goLeft ? 'end' : 'start', '#333', items[i].text, 18, 16)
+  }
+}
+
+function computeXPositions(times: number[], x0: number, x1: number) {
+  const n = times.length
+  if (n === 0) return []
+  if (n === 1) return [(x0 + x1) / 2]
+
+  const sorted = [...times].sort((a, b) => a - b)
+  const weights = sorted.map((t) => Math.log(1 + Math.max(0, t)))
+  const minW = Math.min(...weights)
+  const maxW = Math.max(...weights)
+  const spanW = Math.max(1e-6, maxW - minW)
+
+  const xs = new Map<number, number>()
+  for (let i = 0; i < n; i++) {
+    const eq = i / (n - 1)
+    const wq = (weights[i] - minW) / spanW
+    const mix = 0.8 * eq + 0.2 * wq
+    xs.set(sorted[i], x0 + mix * (x1 - x0))
+  }
+  return times.map((t) => xs.get(t) as number)
+}
+
+const renderSequenceDiagram = () => {
+  if (!seqSvgRef.value || !seqContainerRef.value) return
+  
+  // Get checked keys
+  const checkedKeys = seqTreeRef.value?.getCheckedKeys() || defaultCheckedKeys.value
+  
+  // Filter for GUIDs (which are the root nodes in our tree structure)
+  const selectedGuids = checkedKeys.filter((k: string) => loadedTripInfos.has(k))
+
+  clearSvg()
+
+  if (selectedGuids.length === 0) {
+    setViewBox(1000, 260)
+    seqSvgRef.value.appendChild(
+      el('text', { x: 40, y: 80, fill: '#909399', 'font-size': '14', 'font-weight': 'bold' }, '请在左侧勾选要显示的文件')
+    )
+    leftInfoTop.value = 130
+    return
+  }
+
+  // Collect trip infos
+  const selectedMap = new Map<string, any[]>()
+  for (const guid of selectedGuids) {
+    const info = loadedTripInfos.get(guid)
+    if (info) selectedMap.set(guid, info)
+  }
+
+  // Use nextTick to ensure container size is correct
+  setTimeout(() => {
+    if (!seqContainerRef.value || !seqSvgRef.value) return
+    const box = seqContainerRef.value.getBoundingClientRect()
+    const W = Math.max(1000, Math.floor(box.width))
+
+    const nodes = buildNodesFromTripInfoMap(selectedMap)
+    const { needTop, needBot } = estimateVerticalNeeds(nodes)
+
+    const topPad = 40
+    const botPad = 40
+    const axisY = topPad + needTop
+    leftInfoTop.value = axisY
+    const H = axisY + needBot + botPad
+    setViewBox(W, H)
+
+    const xLeftPad = 120
+    const xRightPad = 80
+    const axisStart = xLeftPad
+    const xBodyEnd = W - xRightPad
+
+    const axisColor = '#cfe6ff'
+    const headColor = '#9dc5f8'
+
+    seqSvgRef.value.appendChild(
+      el('line', {
+        x1: axisStart,
+        y1: axisY,
+        x2: xBodyEnd,
+        y2: axisY,
+        stroke: axisColor,
+        'stroke-width': 4,
+        'stroke-linecap': 'round'
+      })
+    )
+
+    const headLen = 30
+    const headHalf = 12
+    const tipX = xBodyEnd + headLen
+    seqSvgRef.value.appendChild(
+      el('polygon', {
+        points: `${tipX},${axisY} ${xBodyEnd},${axisY - headHalf} ${xBodyEnd},${axisY + headHalf}`,
+        fill: headColor
+      })
+    )
+    
+    seqSvgRef.value.appendChild(
+      el(
+        'text',
+        {
+          x: tipX + 10,
+          y: axisY + 4,
+          fill: '#909399',
+          'font-weight': 'bold',
+          'font-size': '12'
+        },
+        'ms'
+      )
+    )
+
+    const times = nodes.map((n: any) => n.timeMs)
+    const xs = computeXPositions(times, axisStart + 30, xBodyEnd - 30)
+
+    nodes.forEach((node: any, idx: number) => {
+      const cx = xs[idx]
+      // Use first label's color for node circle
+      const firstLabel = node.labels[0]
+      const nodeColor = firstLabel ? firstLabel.color : '#1677ff'
+
+      seqSvgRef.value!.appendChild(el('circle', { cx, cy: axisY, r: 5, fill: '#fff', stroke: nodeColor, 'stroke-width': 2 }))
+      
+      seqSvgRef.value!.appendChild(
+        el(
+          'text',
+          {
+            x: cx,
+            y: axisY + 18,
+            'text-anchor': 'middle',
+            fill: '#606266',
+            'font-size': '11',
+            'font-weight': 'bold'
+          },
+          String(node.timeMs)
+        )
+      )
+
+      const arr = node.labels
+      if (arr && arr.length) {
+        const isTop = (arr[0].side || 'top') === 'top'
+        drawLabelGroup(cx, axisY, arr, isTop, nodeColor, idx)
+      }
+    })
+  }, 100)
 }
 
 const toggleFullScreen = () => {
-  const el = document.querySelector('.left-panel')
+  const el = document.querySelector('.left-panel') as any
   if (!el) return
 
   if (!document.fullscreenElement) {
-    el.requestFullscreen().catch((err) => {
+    el.requestFullscreen().catch((err: any) => {
       ElMessage.error(`无法进入全屏模式: ${err.message}`)
     })
   } else {
@@ -701,37 +1331,28 @@ const fetchWaveData = async () => {
 }
 
 const handleExport = () => {
-  ElMessageBox.confirm(
-    '确定要导出当前分析的波形数据吗？文件可能较大，请耐心等待。',
-    '导出确认',
-    {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    }/*  */
-  )
+  ElMessageBox.confirm('确定要导出当前分析的波形数据吗？文件可能较大，请耐心等待。', '导出确认', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning'
+  })
     .then(async () => {
       try {
         loading.value = true
         const res = await zwavService.exportWaveData(analysisGuid)
-        // res is axios response object
         const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
         const link = document.createElement('a')
         const url = window.URL.createObjectURL(blob)
         link.href = url
-        
+
         let fileName = 'wave_data.csv'
-        // Try to get filename from content-disposition
-        const contentDisposition = res.headers['content-disposition']
+        const contentDisposition = (res as any).headers?.['content-disposition']
         if (contentDisposition) {
           const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
-          if (fileNameMatch != null && fileNameMatch[1]) {
-            fileName = fileNameMatch[1].replace(/['"]/g, '')
-          }
+          if (fileNameMatch != null && fileNameMatch[1]) fileName = fileNameMatch[1].replace(/['"]/g, '')
         }
-        // Fallback
         if (fileName === 'wave_data.csv' && detailData.value?.file?.originalName) {
-           fileName = `${detailData.value.file.originalName}.csv`
+          fileName = `${detailData.value.file.originalName}.csv`
         }
 
         link.setAttribute('download', fileName)
@@ -748,39 +1369,14 @@ const handleExport = () => {
         loading.value = false
       }
     })
-    .catch(() => {
-      // Cancelled
-    })
-}
-
-/**
- * 数字通道绘制规则（按你的需求）：
- * - 0：绿色线（阶梯）
- * - 1：红色虚化矩形区间（area）
- * - 0<->1：自然形成“线 + 区间”
- * 技术实现：一个数字通道拆成两个 series：
- *  - 绿色线 series：data = (v==0?0:null)
- *  - 红色区 series：data = (v==1?1:null)，lineStyle.width=0 + areaStyle
- */
-type SeriesItem = {
-  name: string
-  isDigital: boolean
-  unit?: string
-  analogData?: number[]
-  digitalRaw?: number[]        // 0/1 原始值
-  digitalLine0?: Array<number | null>  // 0 时绿色线
-  digitalArea1?: Array<number | null>  // 1 时红色区
+    .catch(() => {})
 }
 
 const updateChart = (data: WaveDataPageDto) => {
   if (!myChart || !chartRef.value) return
 
-  // X 轴数据
   const xAxisData = data.rows.map((r) => r.timeMs)
-
   const stats: { name: string; max: number; min: number }[] = []
-
-  // 用于 tooltip：通过 dataIndex 精准取数字通道原始 0/1
   const digitalRawMap = new Map<string, number[]>()
 
   type SeriesItem = {
@@ -813,15 +1409,10 @@ const updateChart = (data: WaveDataPageDto) => {
     }
     stats.push({ name, max, min })
 
-    seriesItems.push({
-      name,
-      isDigital: false,
-      unit,
-      analogData: channelData
-    })
+    seriesItems.push({ name, isDigital: false, unit, analogData: channelData })
   })
 
-  // ---------- Digital（核心：0 绿线 + 1 红色虚化区） ----------
+  // ---------- Digital ----------
   selectedDigitalChannels.value.forEach((chIdx) => {
     const chInfo = digitalChannels.value.find((c) => c.channelIndex === chIdx)
     const name = chInfo ? `${chInfo.channelIndex}. ${chInfo.channelName}` : `D${chIdx}`
@@ -829,21 +1420,16 @@ const updateChart = (data: WaveDataPageDto) => {
     const dataIndex = data.digitals ? data.digitals.indexOf(chIdx) : -1
     if (dataIndex === -1) return
 
-    // raw: 强制归一为 0/1
     const raw = data.rows.map((r) => {
       const v = r.digital && r.digital[dataIndex] !== undefined ? r.digital[dataIndex] : 0
       return v === 1 ? 1 : 0
     })
 
-    // tooltip 用：保存原始 0/1
     digitalRawMap.set(name, raw)
 
-    // 0：绿色线（非 0 用 null 断开）
     const line0 = raw.map((v) => (v === 0 ? 0 : null))
-    // 1：红色虚化区（非 1 用 null 断开）
     const area1 = raw.map((v) => (v === 1 ? 1 : null))
 
-    // stats（0/1）
     let max = 0
     let min = 1
     for (const v of raw) {
@@ -852,12 +1438,7 @@ const updateChart = (data: WaveDataPageDto) => {
     }
     stats.push({ name, max, min })
 
-    seriesItems.push({
-      name,
-      isDigital: true,
-      digitalLine0: line0,
-      digitalArea1: area1
-    })
+    seriesItems.push({ name, isDigital: true, digitalLine0: line0, digitalArea1: area1 })
   })
 
   channelStats.value = stats
@@ -881,7 +1462,6 @@ const updateChart = (data: WaveDataPageDto) => {
   const DIGITAL_GREEN = '#67C23A'
   const DIGITAL_RED_AREA = 'rgba(245,108,108,0.35)'
 
-  // tooltip：数字通道通过 dataIndex 从 rawMap 取真实 0/1（不会“固定不变”）
   const tooltipFormatter = (params: any[]) => {
     if (!params || params.length === 0) return ''
 
@@ -889,19 +1469,15 @@ const updateChart = (data: WaveDataPageDto) => {
     const dataIndex = params[0].dataIndex
 
     let html = `<div>时间(ms): ${xVal}</div>`
-
-    // 去重：数字通道有 -0/-1 两条 series，只显示一行
     const seen = new Set<string>()
 
     for (const p of params) {
       const sName: string = p.seriesName || ''
-      const baseName =
-        sName.endsWith('-0') || sName.endsWith('-1') ? sName.slice(0, -2) : sName
+      const baseName = sName.endsWith('-0') || sName.endsWith('-1') ? sName.slice(0, -2) : sName
 
       if (seen.has(baseName)) continue
       seen.add(baseName)
 
-      // 数字通道：查 raw
       if (sName.endsWith('-0') || sName.endsWith('-1')) {
         const rawArr = digitalRawMap.get(baseName)
         if (rawArr && dataIndex >= 0 && dataIndex < rawArr.length) {
@@ -913,7 +1489,6 @@ const updateChart = (data: WaveDataPageDto) => {
         continue
       }
 
-      // 模拟量
       const val = p.value
       if (val === null || val === undefined) continue
       html += `<div style="color:${p.color}">${baseName}: ${Number(val).toFixed(4)}</div>`
@@ -972,7 +1547,6 @@ const updateChart = (data: WaveDataPageDto) => {
     })
 
     if (!item.isDigital) {
-      // 模拟量
       series.push({
         name: item.name,
         type: 'line',
@@ -991,7 +1565,6 @@ const updateChart = (data: WaveDataPageDto) => {
       return
     }
 
-    // 数字量：两条 series（绿线 + 红区）
     series.push({
       name: `${item.name}-0`,
       type: 'line',
@@ -1001,7 +1574,7 @@ const updateChart = (data: WaveDataPageDto) => {
       step: 'start',
       symbol: 'none',
       lineStyle: { color: DIGITAL_GREEN, width: 2 },
-      tooltip: { show: true }, // tooltip 只依赖 formatter（此处保持 true）
+      tooltip: { show: true },
       emphasis: { disabled: true }
     })
 
@@ -1015,7 +1588,7 @@ const updateChart = (data: WaveDataPageDto) => {
       symbol: 'none',
       lineStyle: { width: 0 },
       areaStyle: { color: DIGITAL_RED_AREA },
-      tooltip: { show: false }, // 禁用此条 tooltip，避免重复
+      tooltip: { show: false },
       emphasis: { disabled: true }
     })
   })
@@ -1029,9 +1602,7 @@ const updateChart = (data: WaveDataPageDto) => {
       },
       formatter: tooltipFormatter
     },
-    axisPointer: {
-      link: { xAxisIndex: 'all' }
-    },
+    axisPointer: { link: { xAxisIndex: 'all' } },
     grid: grids,
     xAxis: xAxes,
     yAxis: yAxes,
@@ -1043,7 +1614,6 @@ const updateChart = (data: WaveDataPageDto) => {
         end: 100
       }
     ],
-    // 不使用 visualMap，避免与红色虚化区冲突
     series
   }
 
@@ -1116,7 +1686,7 @@ const formatJson = (jsonStr: string) => {
   overflow: hidden;
   padding: 10px;
   gap: 10px;
-  background-color: #f5f7fa; /* Ensure background in full screen */
+  background-color: #f5f7fa;
 }
 
 .left-panel {
@@ -1198,12 +1768,6 @@ const formatJson = (jsonStr: string) => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.group-header-col {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
 }
 
 .filter-options {
@@ -1368,5 +1932,114 @@ pre {
   color: #909399;
   text-align: center;
   margin-top: 20px;
+}
+
+.seq-layout {
+  display: flex;
+  height: 600px; /* 增加整体高度 */
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.seq-sidebar {
+  width: 300px;
+  background-color: #fcfcfc;
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+}
+
+.sidebar-actions {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sidebar-actions .el-button {
+  width: 100%;
+}
+
+.seq-sidebar .el-tree {
+  flex: 1;
+  overflow-y: auto;
+  background: transparent;
+}
+
+.seq-content {
+  flex: 1;
+  background-color: #fff;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.seq-container {
+  position: relative;
+  width: 100%;
+  height: 100%; /* 占满 seq-content */
+  background: #fff;
+  overflow: auto;
+  /* 移除原有的 border 和 radius，因为外层 seq-layout 已经有了 */
+  border: none; 
+  border-radius: 0;
+}
+
+.file-select-header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.file-table {
+  margin-bottom: 20px;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.custom-tree-node {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  width: 100%;
+}
+
+.seq-svg {
+  display: block;
+  min-width: 1000px;
+}
+
+.left-info {
+  position: absolute;
+  left: 30px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.fault-time {
+  font-size: 16px;
+  font-weight: 900;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.sub-info {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+  font-weight: bold;
+}
+
+.sequence-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+  background-color: #f8fafc;
 }
 </style>

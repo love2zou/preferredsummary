@@ -1,185 +1,919 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>ECharts 录波曲线 - 纵向拼接多纵轴（共用X轴）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>故障时序图（鱼骨图·可选数据·可编辑表格·完整版）</title>
   <style>
-    body{ margin:0; background:#f6f7fb; font-family: Arial,"Microsoft YaHei",sans-serif;}
-    .bar{ padding:12px 16px; background:#fff; border-bottom:1px solid #e6e8ef; font-size:12px; color:#333; }
-    #chart{ width:100%; height:720px; background:#fff; }
-    .hint{ padding:10px 16px; font-size:12px; color:#666; background:#fff; border-top:1px solid #eef0f5;}
-    .k{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; }
-  </style>
-</head>
-<body>
-  <div class="bar">
-    展示方式：4 个纵向拼接轨道（每轨道独立 Y 轴），X 轴时间一致并联动。支持：滚轮/框选缩放、十字准星联动。
-  </div>
+    :root{
+      --blue:#1677ff;          /* 经典蓝：节点 */
+      --axis:#cfe6ff;          /* 轴线淡蓝 */
+      --axis-2:#eaf4ff;        /* 轴带更淡 */
+      --muted:#6b7280;
 
-  <div id="chart"></div>
-  <div class="hint">
-    若离线无法加载 ECharts：把 <span class="k">echarts.min.js</span> 放到本地并修改 script src。
-  </div>
+      --purple:#b56be6;        /* 系列1：紫 */
+      --orange:#f6a04b;        /* 系列2：黄/橙 */
 
-  <!-- ECharts（CDN）。离线环境请改为本地 echarts.min.js -->
-  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+      --page:#ffffff;
+      --bg:#ffffff;
 
-  <script>
-  (function () {
-    // -------------------------
-    // 1) 构造示例录波数据（时间 + 4 通道）
-    // -------------------------
-    function makeDemoData() {
-      const fs = 10000;
-      const durationSec = 3;
-      const n = Math.floor(fs * durationSec);
-
-      const t = new Array(n);
-      const Va = new Array(n);
-      const Vb = new Array(n);
-      const Vc = new Array(n);
-      const Ia = new Array(n);
-
-      const f0 = 50;
-      const w0 = 2 * Math.PI * f0;
-      const w3 = 2 * Math.PI * (3 * f0);
-
-      for (let i = 0; i < n; i++) {
-        const ti = i / fs;
-        t[i] = ti;
-
-        const noise = (Math.random() - 0.5) * 0.02;
-
-        Va[i] = 311 * (Math.sin(w0 * ti) + 0.06 * Math.sin(w3 * ti)) + 311 * noise;
-        Vb[i] = 311 * (Math.sin(w0 * ti - 2*Math.PI/3) + 0.06 * Math.sin(w3 * ti - 2*Math.PI/3)) + 311 * noise;
-        Vc[i] = 311 * (Math.sin(w0 * ti + 2*Math.PI/3) + 0.06 * Math.sin(w3 * ti + 2*Math.PI/3)) + 311 * noise;
-        Ia[i] = 80  * (Math.sin(w0 * ti - Math.PI/8) + 0.1  * Math.sin(w3 * ti)) + 2 + 6 * noise;
-      }
-
-      const toXY = (xArr, yArr) => xArr.map((x, i) => [x, yArr[i]]);
-
-      return {
-        durationSec,
-        Va: toXY(t, Va),
-        Vb: toXY(t, Vb),
-        Vc: toXY(t, Vc),
-        Ia: toXY(t, Ia),
-      };
+      --card:#ffffff;
+      --border:#e5e7eb;
+      --soft:#f8fafc;
     }
 
-    const data = makeDemoData();
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:"Microsoft YaHei","PingFang SC",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      background: var(--page);
+      color:#111827;
+    }
 
-    // -------------------------
-    // 2) 初始化 ECharts
-    // -------------------------
-    const el = document.getElementById('chart');
-    const chart = echarts.init(el);
+    .wrap{
+      max-width: 1500px;
+      margin:0 auto;
+      padding: 14px 18px 18px;
+      background: var(--bg);
+    }
 
-    // 纵向 4 轨道布局（百分比最稳）
-    const grids = [
-      { top: '6%',  height: '18%' },
-      { top: '28%', height: '18%' },
-      { top: '50%', height: '18%' },
-      { top: '72%', height: '18%' },
+    /* ======================
+       Legend as toggles
+    ====================== */
+    .legend{
+      display:flex;
+      gap:14px;
+      align-items:center;
+      padding: 4px 0 12px;
+      user-select:none;
+      flex-wrap:wrap;
+    }
+    .legend-item{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-size:16px;
+      font-weight:700;
+      white-space:nowrap;
+      cursor:pointer;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid var(--border);
+      background:#fff;
+      transition: background .15s ease, opacity .15s ease, border-color .15s ease;
+    }
+    .legend-item:hover{
+      border-color: rgba(22,119,255,.35);
+      background: rgba(22,119,255,.04);
+    }
+    .legend-item.is-off{ opacity:.45; }
+
+    .legend-item input[type="checkbox"]{
+      appearance:none;
+      width:16px;
+      height:16px;
+      border-radius:4px;
+      border:2px solid #cbd5e1;
+      position:relative;
+      cursor:pointer;
+      display:inline-block;
+      background:#fff;
+      transition: all .12s ease;
+    }
+    .legend-item input[type="checkbox"]:checked{
+      background: var(--blue);
+      border-color: var(--blue);
+    }
+    .legend-item input[type="checkbox"]:checked::after{
+      content:"";
+      position:absolute;
+      left:4px; top:1px;
+      width:4px; height:8px;
+      border:2px solid #fff;
+      border-top:none;
+      border-left:none;
+      transform:rotate(45deg);
+    }
+
+    .legend-dot{
+      width:10px;height:10px;border-radius:999px;
+      background:var(--purple);
+      box-shadow:0 0 0 6px rgba(181,107,230,.12);
+    }
+    .legend-dot.orange{
+      background:var(--orange);
+      box-shadow:0 0 0 6px rgba(246,160,75,.14);
+    }
+
+    .grid{ display:grid; grid-template-columns: 1fr; gap:14px; }
+
+    .stage{
+      position:relative;
+      border-radius:14px;
+      overflow:hidden;
+      background:#fff;
+      border:1px solid var(--border);
+    }
+
+    .left-info{
+      position:absolute;
+      left:18px;
+      top:78px;
+      font-size:20px;
+      line-height:1.25;
+      white-space:nowrap;
+      color:#374151;
+      pointer-events:none;
+    }
+    .left-info .sub{
+      display:block;
+      font-size:16px;
+      color:var(--muted);
+      margin-top:6px;
+    }
+
+    svg{width:100%; display:block;} /* 高度由 JS 动态设置 */
+
+    .unit{fill:var(--muted); font-size:16px; font-weight:800;}
+    .node-num{fill:#fff; font-size:16px; font-weight:900; text-anchor:middle;}
+    .label-text{font-size:16px; font-weight:900;}
+
+    /* ======================
+       Tables
+    ====================== */
+    .tables{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:14px;
+    }
+    @media (max-width: 1100px){
+      .tables{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      border:1px solid var(--border);
+      border-radius:14px;
+      background:var(--card);
+      overflow:hidden;
+    }
+    .card-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:10px 12px;
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+      border-bottom:1px solid var(--border);
+      gap:10px;
+    }
+    .card-title{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:900;
+    }
+    .pill{
+      font-size:12px;
+      padding:2px 8px;
+      border-radius:999px;
+      background:rgba(22,119,255,.08);
+      color:#1f2937;
+      border:1px solid rgba(22,119,255,.18);
+      font-weight:800;
+    }
+    .btns{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    .btn{
+      border:1px solid var(--border);
+      background:#fff;
+      border-radius:10px;
+      padding:6px 10px;
+      font-weight:800;
+      cursor:pointer;
+      transition: all .12s ease;
+    }
+    .btn:hover{
+      border-color: rgba(22,119,255,.35);
+      background: rgba(22,119,255,.04);
+    }
+    .btn.danger:hover{
+      border-color: rgba(239,68,68,.35);
+      background: rgba(239,68,68,.04);
+    }
+
+    .table-wrap{
+      overflow:auto;
+      max-height: 340px;
+      background: var(--soft);
+    }
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width: 720px;
+    }
+    thead th{
+      position:sticky;
+      top:0;
+      z-index:2;
+      background:#fff;
+      border-bottom:1px solid var(--border);
+      padding:10px 10px;
+      text-align:left;
+      font-size:13px;
+      color:#374151;
+      white-space:nowrap;
+    }
+    tbody td{
+      border-bottom:1px solid var(--border);
+      padding:8px 10px;
+      background:#fff;
+      vertical-align:middle;
+      white-space:nowrap;
+    }
+    tbody tr:hover td{ background:#fbfdff; }
+
+    .col-seq{ width:80px; color:#6b7280; font-weight:800; }
+    .col-time{ width:160px; }
+    .col-action{ width:auto; min-width:360px;}
+    .col-ops{ width:120px; text-align:right; }
+
+    .inp{
+      width:100%;
+      box-sizing:border-box;
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:7px 10px;
+      font-weight:800;
+      outline:none;
+      background:#fff;
+      transition:border-color .12s ease, box-shadow .12s ease;
+    }
+    .inp:focus{
+      border-color: rgba(22,119,255,.55);
+      box-shadow: 0 0 0 4px rgba(22,119,255,.10);
+    }
+    .hint{
+      padding:10px 12px;
+      font-size:12px;
+      color:#6b7280;
+      border-top:1px dashed var(--border);
+      background: #fff;
+    }
+    .badge-series{ display:inline-flex; align-items:center; gap:8px; }
+    .dot-mini{ width:8px;height:8px;border-radius:999px;display:inline-block; background:var(--purple); }
+    .dot-mini.orange{ background: var(--orange); }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+  <div class="legend">
+    <label class="legend-item" id="togglePurple" title="勾选/取消：是否渲染紫色系列">
+      <input type="checkbox" checked data-series="purple" />
+      <span class="legend-dot"></span>
+      <span id="legendA" style="color:var(--purple)"></span>
+    </label>
+
+    <label class="legend-item" id="toggleOrange" title="勾选/取消：是否渲染黄色系列">
+      <input type="checkbox" checked data-series="orange" />
+      <span class="legend-dot orange"></span>
+      <span id="legendB" style="color:var(--orange)"></span>
+    </label>
+  </div>
+
+  <div class="grid">
+    <div class="stage">
+      <div class="left-info" id="leftInfo"></div>
+      <svg id="svg"></svg>
+    </div>
+
+    <div class="tables">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="badge-series"><span class="dot-mini"></span> 紫色系列数据</span>
+            <span class="pill" id="countPurple">0 条</span>
+          </div>
+          <div class="btns">
+            <button class="btn" id="addPurple">新增一行</button>
+            <button class="btn danger" id="clearPurple">清空</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-seq">序号</th>
+                <th class="col-time">时间(ms)</th>
+                <th class="col-action">保护动作</th>
+                <th class="col-ops">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyPurple"></tbody>
+          </table>
+        </div>
+        <div class="hint">同组：点/线/字同色；同一时间点多条动作：点与点竖向实线连接。</div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="badge-series"><span class="dot-mini orange"></span> 黄色系列数据</span>
+            <span class="pill" id="countOrange">0 条</span>
+          </div>
+          <div class="btns">
+            <button class="btn" id="addOrange">新增一行</button>
+            <button class="btn danger" id="clearOrange">清空</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-seq">序号</th>
+                <th class="col-time">时间(ms)</th>
+                <th class="col-action">保护动作</th>
+                <th class="col-ops">操作</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyOrange"></tbody>
+          </table>
+        </div>
+        <div class="hint">画布高度动态适配：不会再因高度不足导致标签/连线被裁剪。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+ * 示例数据：接入时替换 tableRows/legend/header
+ * ========================= */
+const legend = {
+  purple: "来宾 500kV来桐线主二集成辅B保护CSC-103C5-N",
+  orange: "来宾 500kV来桐线主一集成辅A保护PCS-931C5-N"
+};
+
+const header = {
+  faultStartTime: "2025-05-05 15:25:42.603",
+  line: "梧州变电站  来梧 I 线",
+  unit: "时间/ms"
+};
+
+let tableRows = [
+  { seq: 1,  time: "0ms",   action: "保护启动", series: "purple" },
+
+  { seq: 2,  time: "2ms",   action: "保护启动", series: "orange" },
+  { seq: 3,  time: "2ms",   action: "保护启动", series: "orange" },
+
+  { seq: 4,  time: "4ms",   action: "采样已同步", series: "purple" },
+  { seq: 5,  time: "4ms",   action: "C相纵联差动保护动作", series: "purple" },
+
+  { seq: 6,  time: "13ms",  action: "展开", series: "purple" },
+  { seq: 7,  time: "13ms",  action: "数据来源通道一（示例：较长文本用于测试自动换行与截断）", series: "purple" },
+
+  { seq: 8,  time: "13ms",  action: "C相跳闸动作", series: "orange" },
+  { seq: 9,  time: "13ms",  action: "展开", series: "orange" },
+  { seq: 10, time: "13ms",  action: "C相纵联差动保护动作（示例：较长文本用于测试）", series: "orange" },
+
+  { seq: 11, time: "14ms",  action: "对侧差动动作", series: "purple" },
+
+  { seq: 12, time: "29ms",  action: "三相差动电流", series: "purple" },
+  { seq: 13, time: "29ms",  action: "三相制动电流", series: "purple" },
+
+  { seq: 14, time: "30ms",  action: "测距阻抗", series: "purple" },
+  { seq: 15, time: "30ms",  action: "展开", series: "purple" },
+
+  { seq: 16, time: "34ms",  action: "故障相电压", series: "purple" }
+];
+
+document.getElementById("legendA").textContent = legend.purple || "系列A";
+document.getElementById("legendB").textContent = legend.orange || "系列B";
+document.getElementById("leftInfo").innerHTML =
+  `${header.faultStartTime}<span class="sub">${header.line}</span>`;
+
+/* =========================
+ * Series toggles
+ * ========================= */
+const seriesState = { purple: true, orange: true };
+function getActiveRows(){ return tableRows.filter(r => !!seriesState[r.series]); }
+function syncLegendUi(){
+  document.getElementById("togglePurple").classList.toggle("is-off", !seriesState.purple);
+  document.getElementById("toggleOrange").classList.toggle("is-off", !seriesState.orange);
+}
+
+/* =========================
+ * SVG helpers
+ * ========================= */
+const svg = document.getElementById("svg");
+const NS = "http://www.w3.org/2000/svg";
+function el(name, attrs={}, text){
+  const n = document.createElementNS(NS, name);
+  for (const [k,v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+  if (text != null) n.textContent = text;
+  return n;
+}
+function clearSvg(){ while(svg.firstChild) svg.removeChild(svg.firstChild); }
+function setViewBox(W,H){
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.style.height = `${H}px`;
+}
+
+/* =========================
+ * parsing & nodes
+ * ========================= */
+function parseMs(str){
+  if (str == null) return NaN;
+  const s = String(str).trim();
+  const m = s.match(/(\d+(\.\d+)?)/);
+  return m ? Number(m[1]) : NaN;
+}
+
+function buildNodesFromRows(rows){
+  const map = new Map();
+  for(const r of rows){
+    const t = parseMs(r.time);
+    if(!Number.isFinite(t)) continue;
+
+    if(!map.has(t)){
+      map.set(t, { timeMs: t, labels: { purple: [], orange: [] } });
+    }
+    const node = map.get(t);
+    const series = (r.series === "orange") ? "orange" : "purple";
+    const txt = String(r.action ?? "").trim();
+    if(!txt) continue;
+    node.labels[series].push({ text: txt });
+  }
+
+  const nodes = [...map.values()].sort((a,b)=>a.timeMs-b.timeMs);
+
+  // side assignment：两组同点存在 -> 紫上黄下；否则交替
+  let flip = false;
+  for(const n of nodes){
+    const hasP = n.labels.purple.length > 0;
+    const hasO = n.labels.orange.length > 0;
+
+    if(hasP && hasO){
+      n.labels.purple.forEach(x => x.side = "top");
+      n.labels.orange.forEach(x => x.side = "bottom");
+    }else{
+      const side = flip ? "bottom" : "top";
+      flip = !flip;
+      (hasP ? n.labels.purple : n.labels.orange).forEach(x => x.side = side);
+    }
+  }
+  return nodes;
+}
+
+function computeXPositions(times, x0, x1){
+  const n = times.length;
+  if(n === 0) return [];
+  if(n === 1) return [ (x0+x1)/2 ];
+
+  const sorted = [...times].sort((a,b)=>a-b);
+  const weights = sorted.map(t => Math.log(1 + Math.max(0,t)));
+  const minW = Math.min(...weights);
+  const maxW = Math.max(...weights);
+  const spanW = Math.max(1e-6, maxW-minW);
+
+  const xs = new Map();
+  for(let i=0;i<n;i++){
+    const eq = i/(n-1);
+    const wq = (weights[i]-minW)/spanW;
+    const mix = 0.84*eq + 0.16*wq;
+    xs.set(sorted[i], x0 + mix*(x1-x0));
+  }
+  return times.map(t => xs.get(t));
+}
+
+/* =========================
+ * Text wrapping for SVG
+ * ========================= */
+function splitTextByChars(text, maxChars){
+  const s = String(text ?? "").trim();
+  if(!s) return [""];
+  const out = [];
+  let i = 0;
+  while(i < s.length){
+    out.push(s.slice(i, i + maxChars));
+    i += maxChars;
+  }
+  return out;
+}
+function appendWrappedText(parentG, x, y, anchor, fill, text, maxChars=16, lineHeight=18){
+  const lines = splitTextByChars(text, maxChars);
+  const t = el("text", { x, y, fill, class:"label-text", "text-anchor": anchor });
+  lines.forEach((ln, idx) => {
+    const ts = el("tspan", { x, dy: idx === 0 ? "0" : String(lineHeight) }, ln);
+    t.appendChild(ts);
+  });
+  parentG.appendChild(t);
+  return { lines: lines.length, lineHeight };
+}
+
+/* =========================
+ * Label layout params
+ * ========================= */
+const LANES = [70, 110, 150];     // 上/下三轨道
+const SWAYS = [-34, 0, 34];
+const GAP = 22;
+
+/* 估算 label group 的向外占用，用于动态高度 */
+function estimateGroupExtent(itemsCount, maxLines){
+  const dotsSpan = (itemsCount <= 1) ? 0 : (itemsCount - 1) * GAP;
+  const textSpan = (maxLines <= 1) ? 0 : (maxLines - 1) * 18;
+  return dotsSpan + textSpan + 28;
+}
+function estimateVerticalNeeds(nodes){
+  let needTop = 0;
+  let needBot = 0;
+
+  nodes.forEach((node, idx) => {
+    const seriesList = [
+      { key:"purple", si:0 },
+      { key:"orange", si:1 }
     ];
 
-    const channels = [
-      { key: 'Va', name: 'Va', unit: 'V' },
-      { key: 'Vb', name: 'Vb', unit: 'V' },
-      { key: 'Vc', name: 'Vc', unit: 'V' },
-      { key: 'Ia', name: 'Ia', unit: 'A' },
+    for(const s of seriesList){
+      const arr = node.labels?.[s.key] || [];
+      if(!arr.length) continue;
+
+      const isTop = (arr[0].side || "top") === "top";
+      const lane = (idx + s.si) % 3;
+      const laneDist = LANES[lane];
+
+      const maxChars = (arr.length > 1) ? 14 : 16;
+      const maxLines = Math.max(...arr.map(x => splitTextByChars(x.text, maxChars).length));
+
+      const extent = laneDist + estimateGroupExtent(arr.length, maxLines);
+      if(isTop) needTop = Math.max(needTop, extent);
+      else needBot = Math.max(needBot, extent);
+    }
+  });
+
+  needTop = Math.max(needTop, 120);
+  needBot = Math.max(needBot, 120);
+  return { needTop, needBot };
+}
+
+/* =========================
+ * draw label group
+ * 规则：
+ * - 同一时间点多条：点与点之间竖向实线连接
+ * - 同组：点/线/字全部同色
+ * ========================= */
+function drawLabelGroup(cx, axisY, items, isTop, color, idx, seriesIndex){
+  const dir = isTop ? -1 : 1;
+  const lane = (idx + seriesIndex) % 3;
+  const laneDist = LANES[lane];
+
+  const seriesOffsetX = seriesIndex === 0 ? -18 : 18;
+  const sway = SWAYS[lane] * (idx % 2 === 0 ? 1 : -1);
+
+  const anchorX = cx + seriesOffsetX + sway;
+  const anchorY = axisY + dir * laneDist;
+
+  const g = el("g", {});
+  svg.appendChild(g);
+
+  // 轴线 -> 锚点（同色）
+  g.appendChild(el("line",{
+    x1: cx, y1: axisY,
+    x2: anchorX, y2: anchorY,
+    stroke: color,
+    "stroke-width":2,
+    "stroke-linecap":"round",
+    opacity:"0.95"
+  }));
+
+  const goLeft = anchorX > cx;
+  const hxLen = 42;
+
+  // 单条
+  if(items.length === 1){
+    g.appendChild(el("circle",{cx:anchorX,cy:anchorY,r:4,fill:color}));
+
+    const hx = anchorX + (goLeft ? -hxLen : hxLen);
+    g.appendChild(el("line",{
+      x1: anchorX, y1: anchorY,
+      x2: hx, y2: anchorY,
+      stroke: color,
+      "stroke-width":2,
+      "stroke-linecap":"round",
+      opacity:"0.95"
+    }));
+
+    const textX = hx + (goLeft ? -10 : 10);
+    appendWrappedText(g, textX, anchorY + 6, goLeft ? "end" : "start", color, items[0].text, 16, 18);
+    return;
+  }
+
+  // 多条：竖向实线连接点（同色）
+  const ys = [];
+  for(let i=0;i<items.length;i++){
+    ys.push(anchorY + dir * GAP * i);
+  }
+
+  g.appendChild(el("line",{
+    x1: anchorX, y1: Math.min(...ys),
+    x2: anchorX, y2: Math.max(...ys),
+    stroke: color,
+    "stroke-width":2,
+    "stroke-linecap":"round",
+    opacity:"0.95"
+  }));
+
+  for(let i=0;i<items.length;i++){
+    const y = ys[i];
+
+    g.appendChild(el("circle",{cx:anchorX,cy:y,r:3.2,fill:color,opacity:"0.98"}));
+
+    const hx = anchorX + (goLeft ? -hxLen : hxLen);
+    g.appendChild(el("line",{
+      x1: anchorX, y1: y,
+      x2: hx, y2: y,
+      stroke: color,
+      "stroke-width":2,
+      "stroke-linecap":"round",
+      opacity:"0.95"
+    }));
+
+    const textX = hx + (goLeft ? -10 : 10);
+    appendWrappedText(g, textX, y + 6, goLeft ? "end" : "start", color, items[i].text, 14, 18);
+  }
+}
+
+/* =========================
+ * Fishbone minimal (ONLY rectangle + triangle)
+ * ========================= */
+function drawFishMinimal(axisStart, axisY, xBodyEnd){
+  // 中线（你要的那条线）
+  svg.appendChild(el("line",{
+    x1: axisStart,
+    y1: axisY,
+    x2: xBodyEnd,
+    y2: axisY,
+    stroke: "var(--axis)",
+    "stroke-width":4,
+    "stroke-linecap":"round"
+  }));
+
+  // 鱼头：三角形
+  const headLen = 60;
+  const headHalf = 20;
+  const tipX = xBodyEnd + headLen;
+
+  svg.appendChild(el("polygon",{
+    points: `${tipX},${axisY} ${xBodyEnd},${axisY - headHalf} ${xBodyEnd},${axisY + headHalf}`,
+    fill: "var(--axis)"
+  }));
+
+  // 单位：鱼头右侧
+  svg.appendChild(el("text",{
+    x: tipX + 12,
+    y: axisY + 6,
+    class:"unit"
+  }, header.unit || "时间/ms"));
+
+  return { tipX };
+}
+
+
+function drawFaultTimeOutsideTail(axisStart, axisY){
+  // 文字放在鱼尾外侧（左侧），居中两行
+  const x = axisStart - 70;
+
+  const t = el("text",{
+    x,
+    y: axisY - 6,
+    fill: "#374151",
+    "text-anchor":"middle",
+    style: "font-weight:900; font-size:12px;"
+  });
+  t.appendChild(el("tspan",{ x, dy:"0" }, "故障发生时间"));
+  t.appendChild(el("tspan",{ x, dy:"16", style:"fill:#6b7280; font-weight:800;" }, header.faultStartTime || ""));
+  svg.appendChild(t);
+}
+
+/* =========================
+ * Main render (dynamic height)
+ * ========================= */
+function render(rows){
+  clearSvg();
+
+  const box = svg.getBoundingClientRect();
+  const W = Math.max(1100, Math.floor(box.width));
+
+  const nodes = buildNodesFromRows(rows);
+  const { needTop, needBot } = estimateVerticalNeeds(nodes);
+
+  const topPad = 36;
+  const botPad = 36;
+
+  // 轴线位置：保证顶部标签空间足够
+  const axisY = topPad + needTop;
+
+  // 动态高度：顶部需求 + 底部需求 + 边距
+  const H = axisY + needBot + botPad;
+  setViewBox(W, H);
+
+  // 轴布局：左侧留信息区；尾部还要给“故障发生时间”文字留空间
+  const xLeftPad = 330;   // 身子起点（鱼尾端）
+  const xRightPad = 220;  // 头部右侧要留单位文字空间
+
+  const axisStart = xLeftPad;
+  const xBodyEnd  = W - xRightPad;
+
+  // 鱼骨本体：只矩形 + 三角形
+  const bodyH = 18;
+  drawFishMinimal(axisStart, axisY, xBodyEnd, bodyH);
+
+  // 故障发生时间：鱼尾外侧
+  drawFaultTimeOutsideTail(axisStart, axisY);
+
+  // 节点 x 坐标
+  const times = nodes.map(n => n.timeMs);
+  const xs = computeXPositions(times, axisStart + 24, xBodyEnd - 24);
+
+  nodes.forEach((node, idx) => {
+    const cx = xs[idx];
+
+    // 节点外光晕
+    svg.appendChild(el("circle",{
+      cx, cy: axisY, r: 24,
+      fill: "rgba(22,119,255,.14)"
+    }));
+    // 蓝节点
+    svg.appendChild(el("circle",{
+      cx, cy: axisY, r: 20,
+      fill: "var(--blue)"
+    }));
+    // 数字
+    svg.appendChild(el("text",{
+      x: cx, y: axisY + 6,
+      class:"node-num"
+    }, String(node.timeMs)));
+
+    // labels
+    const seriesList = [
+      { key:"purple", color:"var(--purple)", si:0 },
+      { key:"orange", color:"var(--orange)", si:1 }
     ];
 
-    const option = {
-      animation: false,
-      backgroundColor: '#ffffff',
+    for(const s of seriesList){
+      const arr = node.labels?.[s.key] || [];
+      if(!arr.length) continue;
 
-      // 十字准星联动：所有 xAxis 同步
-      axisPointer: {
-        link: [{ xAxisIndex: 'all' }],
-        triggerTooltip: true
-      },
+      const isTop = (arr[0].side || "top") === "top";
+      drawLabelGroup(cx, axisY, arr, isTop, s.color, idx, s.si);
+    }
+  });
+}
 
-      tooltip: {
-        trigger: 'axis',
-        axisPointer: { type: 'cross' },
-        formatter: function (params) {
-          if (!params || !params.length) return '';
-          const x = params[0].value[0];
-          const lines = [`t = ${x.toFixed(6)} s`];
-          for (const p of params) {
-            const v = p.value[1];
-            lines.push(`${p.seriesName}: ${Number.isFinite(v) ? v.toFixed(3) : '-'}`);
-          }
-          return lines.join('<br/>');
-        }
-      },
+/* =========================
+ * Table editor
+ * ========================= */
+const tbodyPurple = document.getElementById("tbodyPurple");
+const tbodyOrange = document.getElementById("tbodyOrange");
+const countPurple = document.getElementById("countPurple");
+const countOrange = document.getElementById("countOrange");
 
-      // 缩放：同时控制 4 条 xAxis
-      dataZoom: [
-        { type: 'inside', xAxisIndex: [0,1,2,3], filterMode: 'none' },
-        { type: 'slider', xAxisIndex: [0,1,2,3], bottom: 8, height: 24, filterMode: 'none' }
-      ],
+function normalizeSeq(){
+  tableRows = tableRows.map((r, i) => ({ ...r, seq: i + 1 }));
+}
+function getRowsBySeries(series){ return tableRows.filter(r => r.series === series); }
+function fmtTimeInputToStore(v){
+  const s = String(v ?? "").trim();
+  if(!s) return "";
+  return /ms$/i.test(s) ? s : `${s}ms`;
+}
 
-      grid: grids.map(g => ({
-        left: 110,   // 左侧留空：放通道名 + y 轴刻度
-        right: 20,
-        top: g.top,
-        height: g.height
-      })),
+let renderTimer = null;
+function scheduleRefresh(){
+  if(renderTimer) clearTimeout(renderTimer);
+  renderTimer = setTimeout(() => {
+    normalizeSeq();
+    syncLegendUi();
+    drawTables();
+    render(getActiveRows());
+  }, 80);
+}
 
-      xAxis: grids.map((g, i) => ({
-        type: 'value',
-        min: 0,
-        max: data.durationSec,
-        gridIndex: i,
-        axisLine: { show: true },
-        axisTick: { show: true },
-        splitLine: { show: true, lineStyle: { color: '#f0f2f7' } },
-        axisLabel: { show: i === 3 },
-        name: i === 3 ? '时间 (s)' : '',
-        nameLocation: 'end',
-        nameGap: 22
-      })),
+function removeRowById(_id){
+  tableRows = tableRows.filter(r => r._id !== _id);
+  scheduleRefresh();
+}
+function addRow(series){
+  const id = crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random();
+  tableRows.push({
+    _id: id,
+    seq: tableRows.length + 1,
+    time: "0ms",
+    action: "新动作",
+    series
+  });
+  scheduleRefresh();
+}
+function clearSeries(series){
+  tableRows = tableRows.filter(r => r.series !== series);
+  scheduleRefresh();
+}
 
-      yAxis: channels.map((ch, i) => ({
-        type: 'value',
-        gridIndex: i,
-        scale: true,
-        splitNumber: 4,
-        splitLine: { show: true, lineStyle: { color: '#f0f2f7' } },
+function rowTr(seriesRow){
+  const tr = document.createElement("tr");
 
-        // 关键：通道名作为 yAxis.name 放在左侧中部
-        name: `${ch.name} (${ch.unit})`,
-        nameLocation: 'middle',
-        nameRotate: 0,
-        nameGap: 70,
-        nameTextStyle: { fontSize: 12, fontWeight: 600, color: '#333' },
+  const tdSeq = document.createElement("td");
+  tdSeq.className = "col-seq";
+  tdSeq.textContent = seriesRow.seq;
 
-        axisLine: { show: true, lineStyle: { color: '#e6e8ef' } },
-        axisTick: { show: true },
-        axisLabel: { show: true, color: '#666' }
-      })),
+  const tdTime = document.createElement("td");
+  tdTime.className = "col-time";
+  const inpTime = document.createElement("input");
+  inpTime.className = "inp";
+  inpTime.value = seriesRow.time ?? "";
+  inpTime.placeholder = "例如：13ms 或 13";
+  inpTime.addEventListener("input", (e) => {
+    const v = fmtTimeInputToStore(e.target.value);
+    const idx = tableRows.findIndex(x => x._id === seriesRow._id);
+    if(idx >= 0) tableRows[idx].time = v;
+    scheduleRefresh();
+  });
+  tdTime.appendChild(inpTime);
 
-      series: channels.map((ch, i) => ({
-        name: ch.name,
-        type: 'line',
-        xAxisIndex: i,
-        yAxisIndex: i,
-        showSymbol: false,
-        hoverAnimation: false,
-        lineStyle: { width: 1.5 },
-        sampling: 'lttb',
-        progressive: 2000,
-        data: data[ch.key]
-      }))
-    };
+  const tdAction = document.createElement("td");
+  tdAction.className = "col-action";
+  const inpAction = document.createElement("input");
+  inpAction.className = "inp";
+  inpAction.value = seriesRow.action ?? "";
+  inpAction.placeholder = "请输入保护动作描述";
+  inpAction.addEventListener("input", (e) => {
+    const idx = tableRows.findIndex(x => x._id === seriesRow._id);
+    if(idx >= 0) tableRows[idx].action = e.target.value;
+    scheduleRefresh();
+  });
+  tdAction.appendChild(inpAction);
 
-    chart.setOption(option);
+  const tdOps = document.createElement("td");
+  tdOps.className = "col-ops";
+  const btnDel = document.createElement("button");
+  btnDel.className = "btn danger";
+  btnDel.textContent = "删除";
+  btnDel.addEventListener("click", () => removeRowById(seriesRow._id));
+  tdOps.appendChild(btnDel);
 
-    window.addEventListener('resize', () => chart.resize());
-  })();
-  </script>
+  tr.appendChild(tdSeq);
+  tr.appendChild(tdTime);
+  tr.appendChild(tdAction);
+  tr.appendChild(tdOps);
+  return tr;
+}
+
+function drawTables(){
+  tableRows = tableRows.map(r => ({
+    ...r,
+    _id: r._id ?? (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random())
+  }));
+  normalizeSeq();
+
+  const pRows = getRowsBySeries("purple");
+  const oRows = getRowsBySeries("orange");
+
+  countPurple.textContent = `${pRows.length} 条`;
+  countOrange.textContent = `${oRows.length} 条`;
+
+  tbodyPurple.innerHTML = "";
+  tbodyOrange.innerHTML = "";
+
+  pRows.forEach(r => tbodyPurple.appendChild(rowTr(r)));
+  oRows.forEach(r => tbodyOrange.appendChild(rowTr(r)));
+}
+
+/* =========================
+ * bind events
+ * ========================= */
+document.querySelectorAll('.legend-item input[type="checkbox"]').forEach(cb=>{
+  cb.addEventListener('change', (e)=>{
+    const key = e.target.dataset.series;
+    seriesState[key] = e.target.checked;
+    syncLegendUi();
+    render(getActiveRows());
+  });
+});
+
+document.getElementById("addPurple").addEventListener("click", () => addRow("purple"));
+document.getElementById("addOrange").addEventListener("click", () => addRow("orange"));
+document.getElementById("clearPurple").addEventListener("click", () => clearSeries("purple"));
+document.getElementById("clearOrange").addEventListener("click", () => clearSeries("orange"));
+
+/* init */
+syncLegendUi();
+drawTables();
+render(getActiveRows());
+window.addEventListener("resize", () => render(getActiveRows()));
+</script>
 </body>
 </html>

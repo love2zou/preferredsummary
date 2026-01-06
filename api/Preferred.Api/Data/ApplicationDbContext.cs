@@ -390,7 +390,8 @@ namespace Preferred.Api.Data
                 // 设置 SampleNo 和 TimeRaw 为必填字段
                 entity.Property(e => e.SampleNo).IsRequired();
                 entity.Property(e => e.TimeRaw).IsRequired();
-
+                entity.Property(e => e.TimeMs).IsRequired();
+                
                 // 设置模拟量通道（最多70个，示例只显示几个，您可以根据需要继续扩展）
                 entity.Property(e => e.Channel1).HasColumnType("DOUBLE");
                 entity.Property(e => e.Channel2).HasColumnType("DOUBLE");

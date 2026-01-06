@@ -8,166 +8,6 @@ namespace Zwav.Application.Parsing
 {
     public class CfgParser
     {
-        public CfgParseResult Parse2(string cfgText)
-        {
-            var lines = cfgText
-                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(x => x.Trim())
-                .Where(x => x.Length > 0)
-                .ToList();
-
-            if (lines.Count < 5) throw new Exception("CFG content too short.");
-
-            int idx = 0;
-
-            // 1) station, device, rev
-            var head = SplitCsv(lines[idx++]);
-            var res = new CfgParseResult
-            {
-                FullText = cfgText,
-                StationName = head.ElementAtOrDefault(0),
-                DeviceId = head.ElementAtOrDefault(1),
-                Revision = head.ElementAtOrDefault(2)
-            };
-
-            // 2) channel counts: e.g. "6,3A,3D"
-            var cc = SplitCsv(lines[idx++]);
-            ParseADCount(cc.FirstOrDefault(), out var totalCh);
-            int analog = 0, digital = 0;
-            foreach (var token in cc.Skip(1))
-            {
-                var t = token.Trim().ToUpperInvariant();
-                if (t.EndsWith("A") && int.TryParse(t.TrimEnd('A'), out var a)) analog = a;
-                if (t.EndsWith("D") && int.TryParse(t.TrimEnd('D'), out var d)) digital = d;
-            }
-            res.AnalogCount = analog;
-            res.DigitalCount = digital;
-
-            // 3) analog channel lines
-            for (int i = 0; i < analog; i++)
-            {
-                var parts = SplitCsv(lines[idx++]);
-                // 常见格式: index, name, phase, ccbm, unit, a, b, skew, min, max, primary, secondary, ps
-                // 你前端是偏“显示+换算”，这里也做 A/B
-                var chIndex = TryInt(parts.ElementAtOrDefault(0), i + 1);
-                var nameOrCode = parts.ElementAtOrDefault(1);
-                var phase = parts.ElementAtOrDefault(2);
-                var unit = parts.ElementAtOrDefault(4);
-                var a = TryDec(parts.ElementAtOrDefault(5));
-                var b = TryDec(parts.ElementAtOrDefault(6));
-                var skew = TryDec(parts.ElementAtOrDefault(7));
-
-                res.Channels.Add(new ChannelDef
-                {
-                    ChannelIndex = chIndex,
-                    ChannelType = "Analog",
-                    Code = nameOrCode,
-                    Name = nameOrCode,
-                    Phase = phase,
-                    Unit = unit,
-                    A = a,
-                    B = b,
-                    Skew = skew
-                });
-            }
-
-            // 4) digital channel lines（可只保留定义，不做波形）
-            for (int i = 0; i < digital; i++)
-            {
-                var parts = SplitCsv(lines[idx++]);
-                // 常见格式: index, name, phase, ccbm, ...
-                var chIndex = TryInt(parts.ElementAtOrDefault(0), analog + i + 1);
-                var nameOrCode = parts.ElementAtOrDefault(1);
-                var phase = parts.ElementAtOrDefault(2);
-
-                res.Channels.Add(new ChannelDef
-                {
-                    ChannelIndex = chIndex,
-                    ChannelType = "Digital",
-                    Code = nameOrCode,
-                    Name = nameOrCode,
-                    Phase = phase,
-                    Unit = null
-                });
-            }
-
-            // 5) line frequency
-            res.FrequencyHz = TryDec(lines[idx++]);
-
-            // 6) sample rate blocks count
-            int nrates = TryInt(lines[idx++], 1);
-            var rates = new List<object>();
-            for (int i = 0; i < nrates; i++)
-            {
-                var r = SplitCsv(lines[idx++]);
-                // 常见: sampleRate, endSample
-                rates.Add(new
-                {
-                    sampleRate = TryDec(r.ElementAtOrDefault(0)),
-                    endSample = TryLong(r.ElementAtOrDefault(1))
-                });
-            }
-            res.SampleRateJson = JsonSerializer.Serialize(rates);
-
-            // 7) start/trigger time
-            res.StartTimeRaw = lines.ElementAtOrDefault(idx++);
-            res.TriggerTimeRaw = lines.ElementAtOrDefault(idx++);
-
-            // 8) data format: ASCII/BINARY
-            res.FormatType = lines.ElementAtOrDefault(idx++)?.ToUpperInvariant();
-
-            // 9) time mul（可能存在，也可能没有）
-            if (idx < lines.Count)
-                res.TimeMul = TryDec(lines[idx]);
-
-            // digital words (16bits per word)
-            res.DigitalWords = (int)Math.Ceiling(res.DigitalCount / 16.0);
-
-            // 虚拟通道示例：3I0（你前端也有）
-            res.Channels.Add(new ChannelDef
-            {
-                ChannelIndex = 0,
-                ChannelType = "Virtual",
-                Code = "3I0",
-                Name = "3I0",
-                Phase = "N",
-                Unit = null
-            });
-
-            // data type 简化：目前按常见 INT16
-            res.DataType = "INT16";
-            return res;
-        }
-
-        // private static string[] SplitCsv(string line)
-        //     => (line ?? "").Split(',').Select(x => x.Trim()).ToArray();
-
-        private static void ParseADCount(string token, out int total)
-        {
-            total = 0;
-            if (string.IsNullOrWhiteSpace(token)) return;
-            int.TryParse(token.Trim(), out total);
-        }
-
-        // private static int TryInt(string s, int def)
-        //     => int.TryParse(s, out var v) ? v : def;
-
-        // private static long TryLong(string s)
-        //     => long.TryParse(s, out var v) ? v : 0;
-
-        // private static decimal? TryDec(string s)
-        // {
-        //     if (string.IsNullOrWhiteSpace(s)) return null;
-        //     if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var v)) return v;
-        //     if (decimal.TryParse(s, NumberStyles.Any, CultureInfo.CurrentCulture, out v)) return v;
-        //     return null;
-        // }
-
-
-        // 你的表字段上限
-        // private const int MaxAnalog = 70;
-        // private const int MaxDigital = 700;
-
         public CfgParseResult Parse(string cfgText)
         {
             if (string.IsNullOrWhiteSpace(cfgText))
@@ -208,7 +48,6 @@ namespace Zwav.Application.Parsing
                 }
             }
 
-            // === 强制上限校验（你第 2 点要求）===
             if (analog > ZwavConstants.MaxAnalog)
                 throw new InvalidOperationException($"CFG analog channel count = {analog} exceeds supported max {ZwavConstants.MaxAnalog}. Storage schema has only {ZwavConstants.MaxAnalog} analog fields.");
 
@@ -223,7 +62,6 @@ namespace Zwav.Application.Parsing
             for (int i = 0; i < analog; i++)
             {
                 var parts = SplitCsv(lines[idx++]);
-                // 常见格式: index, name, phase, ccbm, unit, a, b, skew, ...
                 var chIndex = TryInt(Get(parts, 0), i + 1);
                 var nameOrCode = Get(parts, 1);
                 var phase = Get(parts, 2);
@@ -274,9 +112,7 @@ namespace Zwav.Application.Parsing
             EnsureEnoughLines(lines, idx, 1, "nrates");
             int nrates = TryInt(lines[idx++], 1);
 
-            // nrates 行必须存在
             EnsureEnoughLines(lines, idx, nrates, "sample rate blocks");
-
             var rates = new List<SampleRateBlock>(capacity: nrates);
             for (int i = 0; i < nrates; i++)
             {
@@ -289,34 +125,75 @@ namespace Zwav.Application.Parsing
             }
             res.SampleRateJson = JsonSerializer.Serialize(rates);
 
-            // 7) start/trigger time（允许缺失，但最好保护）
+            // 7) start/trigger time
             res.StartTimeRaw = idx < lines.Count ? lines[idx++] : null;
             res.TriggerTimeRaw = idx < lines.Count ? lines[idx++] : null;
 
-            // 8) data format: ASCII/BINARY
-            res.FormatType = idx < lines.Count ? (lines[idx++]?.ToUpperInvariant()) : null;
+            // 8) data format: ASCII / BINARY / BINARY32 / FLOAT32
+            // 兼容： "BINARY" 或 "BINARY,1" 或 "ASCII" 等
+            string fmtLine = idx < lines.Count ? lines[idx++] : null;
+            string fmt = null;
+            decimal? timeMul = null;
 
-            // 9) time mul（可选）
-            if (idx < lines.Count)
-                res.TimeMul = TryDec(lines[idx]);
+            if (!string.IsNullOrWhiteSpace(fmtLine))
+            {
+                var fmtParts = SplitCsv(fmtLine);
+                fmt = NormalizeFormat(Get(fmtParts, 0));
+
+                // 同行 timemult：BINARY,1
+                if (fmtParts.Count > 1)
+                    timeMul = TryDec(Get(fmtParts, 1));
+            }
+
+            res.FormatType = fmt; // 建议你后续按这四种值判断
+
+            // 9) time mul（可选：标准是下一行）
+            if (!timeMul.HasValue && idx < lines.Count)
+            {
+                // 只有当这一行能解析成数字，才吃掉作为 timemult
+                var maybe = TryDec(lines[idx]);
+                if (maybe.HasValue)
+                {
+                    timeMul = maybe;
+                    idx++;
+                }
+            }
+
+            res.TimeMul = timeMul;
 
             // digital words (16bits per word)
             res.DigitalWords = (res.DigitalCount + 15) / 16;
 
-            // 虚拟通道示例：3I0（如不需要可移除；这里保留你原意）
-            res.Channels.Add(new ChannelDef
+            // DataType：不再写死 INT16，按 FormatType 推导（供 DAT 解析使用）
+            res.DataType = fmt switch
             {
-                ChannelIndex = 0,
-                ChannelType = "Virtual",
-                Code = "3I0",
-                Name = "3I0",
-                Phase = "N",
-                Unit = null
-            });
+                "ASCII" => "ASCII",
+                "BINARY" => "INT16",
+                "BINARY32" => "INT32",
+                "FLOAT32" => "FLOAT32",
+                _ => "INT16"
+            };
 
-            // data type 简化：目前按常见 INT16
-            res.DataType = "INT16";
             return res;
+        }
+
+        private static string NormalizeFormat(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return null;
+
+            s = s.Trim().ToUpperInvariant();
+
+            // 兼容一些厂家写法
+            if (s == "BIN") return "BINARY";
+            if (s == "BINARY16") return "BINARY";
+            if (s == "FLOAT") return "FLOAT32";
+            if (s == "REAL32") return "FLOAT32";
+
+            // 标准集合
+            if (s == "ASCII" || s == "BINARY" || s == "BINARY32" || s == "FLOAT32")
+                return s;
+
+            return s; // 未知就原样返回
         }
 
         private static void EnsureEnoughLines(List<string> lines, int idx, int need, string sectionName)
@@ -341,14 +218,12 @@ namespace Zwav.Application.Parsing
                 }
             }
 
-            // last line
             if (start < text.Length)
             {
                 var line = text.Substring(start).Trim();
                 if (line.Length > 0) list.Add(line);
             }
 
-            // 兼容 \r\n：上面 Trim 已处理 \r
             return list;
         }
 

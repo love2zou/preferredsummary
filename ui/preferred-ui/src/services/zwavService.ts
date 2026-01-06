@@ -166,6 +166,7 @@ export interface HdrDto {
 export interface WaveDataRowDto {
   sampleNo: number
   timeRaw: number
+  timeMs: number
   analog: number[]
   digital: number[]
 }

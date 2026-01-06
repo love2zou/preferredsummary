@@ -3,45 +3,48 @@ using System.IO;
 using System.Linq;
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace Zwav.Application.Parsing
 {
     public static class DatMetaCalculator
     {
-        public enum AnalogEncoding
+        public enum AnalogEncoding { Int16, Int32, Float32 }
+
+        public enum DatDataType
         {
-            Int16,
-            Int32,
-            Float32
+            ASCII,
+            BINARY,     // 16-bit analog
+            BINARY32,   // 32-bit analog (int32)
+            FLOAT32,    // 32-bit analog (float)
+            Unknown
         }
 
         public sealed class DatLayoutInfo
         {
             public int StartOffset { get; set; }
             public AnalogEncoding AnalogEncoding { get; set; }
-            public int AnalogBytesPerSample { get; set; }  // 2 or 4
-            public int DvWords { get; set; }               // number of 16-bit words
-            public int RecordSize { get; set; }            // bytes per record
-            public int Score { get; set; }                 // diagnostic
-            public string Reason { get; set; }             // diagnostic
+            public int AnalogBytesPerSample { get; set; }
+            public int DvWords { get; set; }
+            public int RecordSize { get; set; }
+            public int Score { get; set; }
+            public string Reason { get; set; }
         }
 
         // =========================
-        // 你已有的 InspectDat（保留）
-        // 注意：你原 InspectDat 返回顺序是 (dvWords, recordSize, totalRecords)
+        // InspectDat（保留）
         // =========================
         public static (int dvWords, int recordSize, int totalRecords) InspectDat(
             byte[] datBytes, int analogCount, int digitalCount)
         {
             if (datBytes == null) throw new ArgumentNullException(nameof(datBytes));
 
-            int dvWords = (digitalCount + 15) / 16; // ceil(D/16)
+            int dvWords = (digitalCount + 15) / 16;
             int recordSize = 4 + 4 + (analogCount * 2) + (dvWords * 2);
             int totalRecords = recordSize <= 0 ? 0 : (datBytes.Length / recordSize);
             return (dvWords, recordSize, totalRecords);
         }
 
-        // 强化版 Inspect（可选：按 analogBytesPerSample 计算 recordSize）
         private static (int dvWords, int recordSize, int totalRecords) InspectDat(
             ReadOnlySpan<byte> datBytes, int analogCount, int digitalCount, int analogBytesPerSample, int startOffset, int dvWordsOverride)
         {
@@ -54,9 +57,53 @@ namespace Zwav.Application.Parsing
             return (dvWords, recordSize, totalRecords);
         }
 
-        /// <summary>
-        /// 更强的布局探测：起始偏移 + 模拟量编码 + dvWords 搜索。
-        /// </summary>
+        private static (AnalogEncoding enc, int bytesPerSample) GetAnalogEncodingFromCfg(DatDataType dt)
+        {
+            return dt switch
+            {
+                DatDataType.BINARY => (AnalogEncoding.Int16, 2),
+                DatDataType.BINARY32 => (AnalogEncoding.Int32, 4),
+                DatDataType.FLOAT32 => (AnalogEncoding.Float32, 4),
+                _ => (AnalogEncoding.Int16, 2)
+            };
+        }
+
+        // =========================
+        // 关键：按你现有 CfgParseResult 解析 DataType/TimeMul
+        // =========================
+        private static DatDataType ResolveDatDataType(CfgParseResult cfg)
+        {
+            if (cfg == null) return DatDataType.Unknown;
+
+            var s = (cfg.FormatType ?? string.Empty).Trim().ToUpperInvariant();
+
+            // 兼容一些厂家写法
+            if (s == "BIN") s = "BINARY";
+            if (s == "BINARY16") s = "BINARY";
+            if (s == "FLOAT") s = "FLOAT32";
+            if (s == "REAL32") s = "FLOAT32";
+
+            return s switch
+            {
+                "ASCII" => DatDataType.ASCII,
+                "BINARY" => DatDataType.BINARY,
+                "BINARY32" => DatDataType.BINARY32,
+                "FLOAT32" => DatDataType.FLOAT32,
+                _ => DatDataType.Unknown
+            };
+        }
+
+        private static double ResolveTimeMultiplier(CfgParseResult cfg)
+        {
+            if (cfg?.TimeMul is decimal m && m > 0) return (double)m;
+            return 1d;
+        }
+
+        // ==========================================================
+        // DetectLayoutStrong / ScoreLayout（保持你原逻辑即可，这里省略：若你已有就不动）
+        // 你可以继续用你现有版本的 DetectLayoutStrong / ScoreLayout
+        // ==========================================================
+
         public static DatLayoutInfo DetectLayoutStrong(
             ReadOnlySpan<byte> dat,
             int analogCount,
@@ -68,25 +115,15 @@ namespace Zwav.Application.Parsing
             if (digitalCount < 0) throw new ArgumentOutOfRangeException(nameof(digitalCount));
             if (dat.Length < 32) throw new ArgumentException("DAT too small.", nameof(dat));
 
-            int[] offsets =
-            {
-                0,2,4,6,8,10,12,14,16,20,24,28,32,40,48,56,64,96,128,256
-            };
-
-            var encodings = new[]
-            {
-                AnalogEncoding.Int16,
-                AnalogEncoding.Int32,
-                AnalogEncoding.Float32
-            };
+            int[] offsets = { 0, 2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28, 32, 40, 48, 56, 64, 96, 128, 256 };
+            var encodings = new[] { AnalogEncoding.Int16, AnalogEncoding.Int32, AnalogEncoding.Float32 };
 
             int dvMin, dvMax;
             int dvCeil = (digitalCount + 15) / 16;
 
             if (digitalCount == 0)
             {
-                dvMin = 0;
-                dvMax = 0;
+                dvMin = 0; dvMax = 0;
             }
             else
             {
@@ -105,7 +142,6 @@ namespace Zwav.Application.Parsing
                 {
                     int analogBytesPerSample = enc == AnalogEncoding.Int16 ? 2 : 4;
 
-                    // 粗过滤：过大 record 直接跳过
                     if (analogCount > 0 && (8 + analogCount * analogBytesPerSample) > 65535)
                         continue;
 
@@ -138,21 +174,16 @@ namespace Zwav.Application.Parsing
                 }
             }
 
-            if (best == null)
+            return best ?? new DatLayoutInfo
             {
-                best = new DatLayoutInfo
-                {
-                    StartOffset = 0,
-                    AnalogEncoding = AnalogEncoding.Int16,
-                    AnalogBytesPerSample = 2,
-                    DvWords = dvCeil,
-                    RecordSize = 8 + analogCount * 2 + dvCeil * 2,
-                    Score = int.MinValue,
-                    Reason = "No layout matched. Consider non-standard DAT or ASCII format."
-                };
-            }
-
-            return best;
+                StartOffset = 0,
+                AnalogEncoding = AnalogEncoding.Int16,
+                AnalogBytesPerSample = 2,
+                DvWords = dvCeil,
+                RecordSize = 8 + analogCount * 2 + dvCeil * 2,
+                Score = int.MinValue,
+                Reason = "No layout matched. Consider non-standard DAT or ASCII format."
+            };
         }
 
         private static int ScoreLayout(
@@ -214,7 +245,6 @@ namespace Zwav.Application.Parsing
                     else score -= 3;
                 }
 
-                // 模拟量粗验（抽样少量通道）
                 if (analogCount > 0)
                 {
                     int analogBase = off + 8;
@@ -255,7 +285,6 @@ namespace Zwav.Application.Parsing
                     }
                 }
 
-                // 数字字粗验
                 if (dvWords > 0)
                 {
                     int digitalBase = off + 8 + analogCount * analogBytesPerSample;
@@ -310,7 +339,7 @@ namespace Zwav.Application.Parsing
         }
 
         // ==========================================================
-        // 这是你要的：ParseDatAllChannels —— 完整代码（强 DetectLayout 用法）
+        // ParseDatAllChannels —— 按你当前 CfgParseResult 修正版本
         // ==========================================================
         public static WaveDataParseResult ParseDatAllChannels(
             byte[] datBytes,
@@ -326,17 +355,20 @@ namespace Zwav.Application.Parsing
             int aCount = cfg.AnalogCount;
             int dCount = cfg.DigitalCount;
 
-            ReadOnlySpan<byte> span = datBytes;
+            // 1) 只从 Analog 通道提取 A/B（避免 Digital/Virtual 干扰）
+            var analogCh = (cfg.Channels ?? new List<ChannelDef>())
+                .Where(c => c != null && string.Equals(c.ChannelType, "Analog", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(c => c.ChannelIndex)
+                .ToList();
 
-            // ===== 1) 预取系数：A 默认 1，B 默认 0 =====
             double[] aCoef = new double[aCount];
             double[] bCoef = new double[aCount];
             for (int k = 0; k < aCount; k++)
             {
-                if (cfg.Channels != null && k < cfg.Channels.Count && cfg.Channels[k] != null)
+                if (k < analogCh.Count)
                 {
-                    aCoef[k] = (double)(cfg.Channels[k].A ?? 1m);
-                    bCoef[k] = (double)(cfg.Channels[k].B ?? 0m);
+                    aCoef[k] = (double)(analogCh[k].A ?? 1m);
+                    bCoef[k] = (double)(analogCh[k].B ?? 0m);
                 }
                 else
                 {
@@ -345,21 +377,39 @@ namespace Zwav.Application.Parsing
                 }
             }
 
-            // ===== 2) 强布局探测 =====
-            int dvHint = (dCount + 15) / 16;
-            var layout = DetectLayoutStrong(span, aCount, dCount, dvWordsHint: (dCount > 0 ? (int?)dvHint : 0), maxCheckRecords: 40);
+            // 2) DataType / TimeMult（直接用 cfg.FormatType + cfg.TimeMul）
+            DatDataType dt = ResolveDatDataType(cfg);
+            double timeMult = ResolveTimeMultiplier(cfg);
 
-            int dvWords = layout.DvWords;
-            int recordSize = layout.RecordSize;
-            int startOffset = layout.StartOffset;
-            int analogBytesPerSample = layout.AnalogBytesPerSample;
-            var analogEnc = layout.AnalogEncoding;
+            if (dt == DatDataType.ASCII)
+            {
+                return ParseAsciiDat(datBytes, cfg, aCoef, bCoef, timeMult, maxRecords);
+            }
 
-            // ===== 3) 计算记录数 =====
+            ReadOnlySpan<byte> span = datBytes;
+
+            // 3) 二进制解析：优先用 cfg.FormatType，只有 Unknown 才强探测
+            (AnalogEncoding encFromCfg, int analogBytesPerSampleFromCfg) = GetAnalogEncodingFromCfg(dt);
+
+            int dvWordsCeil = (dCount + 15) / 16;
+            int dvWords = dvWordsCeil;
+            int startOffset = 0;
+
+            AnalogEncoding analogEnc = encFromCfg;
+            int analogBytesPerSample = analogBytesPerSampleFromCfg;
+
+            if (dt == DatDataType.Unknown)
+            {
+                var layout = DetectLayoutStrong(span, aCount, dCount, dvWordsHint: (dCount > 0 ? (int?)dvWordsCeil : 0), maxCheckRecords: 40);
+                dvWords = layout.DvWords;
+                startOffset = layout.StartOffset;
+                analogEnc = layout.AnalogEncoding;
+                analogBytesPerSample = layout.AnalogBytesPerSample;
+            }
+
             var (dvWords2, recordSize2, totalRecords) = InspectDat(span, aCount, dCount, analogBytesPerSample, startOffset, dvWords);
-            // 强制以探测结果为准（防止 Inspect 与探测不一致）
             dvWords = dvWords2;
-            recordSize = recordSize2;
+            int recordSize = recordSize2;
 
             int take = Math.Min(maxRecords, totalRecords);
             var rows = new List<DatRowAll>(capacity: take);
@@ -367,22 +417,16 @@ namespace Zwav.Application.Parsing
             int analogBytes = aCount * analogBytesPerSample;
             int digitalBytes = dvWords * 2;
 
-            // ===== 4) 逐条解析 =====
             int offset = startOffset;
 
             for (int i = 0; i < take; i++)
             {
                 if (offset + recordSize > span.Length) break;
 
-                // sampleNo/timeRaw：依旧按小端 int32 读
                 int sampleNoRaw = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(offset, 4));
                 int timeRaw = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(offset + 4, 4));
                 offset += 8;
 
-                // 业务需求：样本号按解析序号从 1 开始
-                int sampleNo = i + 1;
-
-                // ===== 模拟量换算 =====
                 var analogVals = new double[aCount];
                 int analogBase = offset;
 
@@ -391,56 +435,37 @@ namespace Zwav.Application.Parsing
                     int pos = analogBase + (k * analogBytesPerSample);
                     if (pos + analogBytesPerSample > analogBase + analogBytes) break;
 
-                    double rawVal;
-
-                    switch (analogEnc)
+                    double rawVal = analogEnc switch
                     {
-                        case AnalogEncoding.Int16:
-                            rawVal = BinaryPrimitives.ReadInt16LittleEndian(span.Slice(pos, 2));
-                            break;
-
-                        case AnalogEncoding.Int32:
-                            rawVal = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(pos, 4));
-                            break;
-
-                        case AnalogEncoding.Float32:
-                            {
-                                int bits = BinaryPrimitives.ReadInt32LittleEndian(span.Slice(pos, 4));
-                                rawVal = BitConverter.Int32BitsToSingle(bits);
-                                break;
-                            }
-
-                        default:
-                            rawVal = 0d;
-                            break;
-                    }
+                        AnalogEncoding.Int16 => BinaryPrimitives.ReadInt16LittleEndian(span.Slice(pos, 2)),
+                        AnalogEncoding.Int32 => BinaryPrimitives.ReadInt32LittleEndian(span.Slice(pos, 4)),
+                        AnalogEncoding.Float32 => BitConverter.Int32BitsToSingle(BinaryPrimitives.ReadInt32LittleEndian(span.Slice(pos, 4))),
+                        _ => 0d
+                    };
 
                     analogVals[k] = aCoef[k] * rawVal + bCoef[k];
                 }
 
                 offset += analogBytes;
 
-                // ===== 数字量：读取原始字节（用于落库 VARBINARY）=====
                 byte[] digitalWords = null;
-
                 if (dvWords > 0)
                 {
                     if (offset + digitalBytes > span.Length) break;
-
                     digitalWords = new byte[digitalBytes];
                     span.Slice(offset, digitalBytes).CopyTo(digitalWords);
-
-                    // 如你后续确实需要 digitalBits(0/1)，建议放到前端或按需计算，避免这里每条都展开影响性能
-                    // short[] digitalBits = ExpandDigitalBits(digitalWords, dCount);
                 }
-
                 offset += digitalBytes;
+
+                long timeUs = (long)Math.Round(timeRaw * timeMult, MidpointRounding.AwayFromZero);
+                double timeMs = timeUs / 1000.0;
 
                 rows.Add(new DatRowAll
                 {
                     Index = i + 1,
-                    SampleNo = sampleNo,
+                    SampleNo = sampleNoRaw,
                     TimeRaw = timeRaw,
+                    TimeMs = timeMs,
                     Channels = analogVals,
                     DigitalWords = digitalWords
                 });
@@ -452,34 +477,132 @@ namespace Zwav.Application.Parsing
                 DigitalWords = dvWords,
                 RecordSize = recordSize,
                 TotalRecords = totalRecords
-                // 你若希望把 layout 诊断信息带出去，可在 WaveDataParseResult 新增字段
-                // LayoutScore = layout.Score,
-                // LayoutReason = layout.Reason,
-                // LayoutStartOffset = layout.StartOffset,
-                // AnalogEncoding = layout.AnalogEncoding.ToString(),
             };
         }
 
-        // （可选）如果你需要展开 digitalBits，可提供工具函数
-        private static short[] ExpandDigitalBits(byte[] digitalWords, int digitalCount)
+        // ==========================================================
+        // ASCII DAT 解析（鹏城站关键）
+        // ==========================================================
+        private static WaveDataParseResult ParseAsciiDat(
+            byte[] datBytes,
+            CfgParseResult cfg,
+            double[] aCoef,
+            double[] bCoef,
+            double timeMult,
+            int maxRecords)
         {
-            if (digitalWords == null || digitalWords.Length == 0 || digitalCount <= 0) return Array.Empty<short>();
+            int aCount = cfg.AnalogCount;
+            int dCount = cfg.DigitalCount;
 
-            int dvWords = digitalWords.Length / 2;
-            var bits = new short[digitalCount];
+            string text;
+            try { text = System.Text.Encoding.ASCII.GetString(datBytes); }
+            catch { text = System.Text.Encoding.GetEncoding("GBK").GetString(datBytes); }
+
+            var rows = new List<DatRowAll>(capacity: Math.Min(256, maxRecords));
+            using var sr = new StringReader(text);
+
+            string line;
+            int outIdx = 0;
+
+            while (outIdx < maxRecords && (line = sr.ReadLine()) != null)
+            {
+                if (string.IsNullOrWhiteSpace(line)) continue;
+
+                // 去掉潜在的 \0 / 控制字符
+                line = line.Trim().TrimEnd('\0');
+
+                // 优先按逗号（标准 COMTRADE ASCII）
+                string[] parts = line.Contains(',')
+                    ? line.Split(',')
+                    : line.Split((char[])null, StringSplitOptions.RemoveEmptyEntries); // fallback：空白分隔的非标准
+
+                int minCols = 2 + aCount;
+                if (parts.Length < minCols) continue;
+
+                if (!TryParseInt32Invariant(parts[0], out int sampleNo)) continue;
+                if (!TryParseInt32Invariant(parts[1], out int timeRaw)) continue;
+
+                var analogVals = new double[aCount];
+                for (int k = 0; k < aCount; k++)
+                {
+                    int col = 2 + k;
+                    if (col >= parts.Length) break;
+
+                    if (TryParseDoubleInvariant(parts[col], out double rawVal))
+                        analogVals[k] = aCoef[k] * rawVal + bCoef[k];
+                    else
+                        analogVals[k] = 0d;
+                }
+
+                byte[] digitalWords = null;
+                if (dCount > 0 && parts.Length >= 2 + aCount + dCount)
+                {
+                    digitalWords = PackAsciiDigitalBits(parts, startIndex: 2 + aCount, digitalCount: dCount);
+                }
+
+                long timeUs = (long)Math.Round(timeRaw * timeMult, MidpointRounding.AwayFromZero);
+                double timeMs = timeUs / 1000.0;
+
+                rows.Add(new DatRowAll
+                {
+                    Index = outIdx + 1,
+                    SampleNo = sampleNo,
+                    TimeRaw = timeRaw,
+                    TimeMs = timeMs,
+                    Channels = analogVals,
+                    DigitalWords = digitalWords
+                });
+
+                outIdx++;
+            }
+
+            int dvWords = (dCount + 15) / 16;
+
+            return new WaveDataParseResult
+            {
+                Rows = rows,
+                DigitalWords = dvWords,
+                RecordSize = 0,
+                TotalRecords = rows.Count
+            };
+        }
+
+        private static bool TryParseInt32Invariant(string s, out int v)
+        {
+            s = (s ?? string.Empty).Trim();
+            return int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out v);
+        }
+
+        private static bool TryParseDoubleInvariant(string s, out double v)
+        {
+            s = (s ?? string.Empty).Trim();
+            return double.TryParse(s, NumberStyles.Float | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out v);
+        }
+
+        private static byte[] PackAsciiDigitalBits(string[] parts, int startIndex, int digitalCount)
+        {
+            int dvWords = (digitalCount + 15) / 16;
+            var bytes = new byte[dvWords * 2];
 
             int bitIndex = 0;
-            for (int w = 0; w < dvWords && bitIndex < digitalCount; w++)
+            for (int w = 0; w < dvWords; w++)
             {
-                int bi = w * 2;
-                ushort word = (ushort)(digitalWords[bi] | (digitalWords[bi + 1] << 8));
-
+                ushort word = 0;
                 for (int b = 0; b < 16 && bitIndex < digitalCount; b++, bitIndex++)
                 {
-                    bits[bitIndex] = (short)(((word >> b) & 1) == 1 ? 1 : 0);
+                    int col = startIndex + bitIndex;
+                    int bit = 0;
+                    if (col < parts.Length && TryParseInt32Invariant(parts[col], out int tmp) && tmp != 0)
+                        bit = 1;
+
+                    if (bit == 1) word |= (ushort)(1 << b);
                 }
+
+                bytes[w * 2] = (byte)(word & 0xFF);
+                bytes[w * 2 + 1] = (byte)((word >> 8) & 0xFF);
             }
-            return bits;
+
+            return bytes;
         }
     }
 }
