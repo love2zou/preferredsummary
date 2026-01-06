@@ -38,6 +38,22 @@
               <Histogram />
             </el-icon>
           </el-tooltip>
+
+          <el-tooltip content="故障时序图" placement="top">
+            <el-icon
+              class="stats-icon"
+              :class="{ disabled: !hdrData || !hdrData.tripInfoJSON || hdrData.tripInfoJSON.length === 0 }"
+              @click="openSequenceDialog"
+            >
+              <Timer />
+            </el-icon>
+          </el-tooltip>
+
+          <el-tooltip :content="isFullScreen ? '退出全屏' : '全屏显示'" placement="top">
+            <el-icon class="stats-icon" @click="toggleFullScreen">
+              <FullScreen />
+            </el-icon>
+          </el-tooltip>
         </div>
 
         <div class="main-body">
@@ -369,6 +385,8 @@ const detailData = ref<AnalysisDetailDto | null>(null)
 const activeHdrNames = ref(['1', '2', '3', '4', '5', '6', '7'])
 const channelStats = ref<{ name: string; max: number; min: number }[]>([])
 const showStatsDialog = ref(false)
+const showSequenceDialog = ref(false)
+const isFullScreen = ref(false)
 
 // Sidebar Logic
 const channelSearchKeyword = ref('')
@@ -558,7 +576,30 @@ const applyAxisSettings = () => {
   fetchWaveData()
 }
 
+const openSequenceDialog = () => {
+  showSequenceDialog.value = true
+}
+
+const toggleFullScreen = () => {
+  const el = document.querySelector('.left-panel')
+  if (!el) return
+
+  if (!document.fullscreenElement) {
+    el.requestFullscreen().catch((err) => {
+      ElMessage.error(`无法进入全屏模式: ${err.message}`)
+    })
+  } else {
+    document.exitFullscreen()
+  }
+}
+
+const onFullScreenChange = () => {
+  isFullScreen.value = !!document.fullscreenElement
+}
+
 onMounted(async () => {
+  document.addEventListener('fullscreenchange', onFullScreenChange)
+
   if (!analysisGuid) {
     ElMessage.error('缺少任务ID')
     return
@@ -601,6 +642,7 @@ onMounted(async () => {
 onUnmounted(() => {
   myChart?.dispose()
   window.removeEventListener('resize', handleResize)
+  document.removeEventListener('fullscreenchange', onFullScreenChange)
 })
 
 const handleResize = () => {
@@ -734,7 +776,7 @@ const updateChart = (data: WaveDataPageDto) => {
   if (!myChart || !chartRef.value) return
 
   // X 轴数据
-  const xAxisData = data.rows.map((r) => r.timeRaw)
+  const xAxisData = data.rows.map((r) => r.timeMs)
 
   const stats: { name: string; max: number; min: number }[] = []
 
@@ -1074,6 +1116,7 @@ const formatJson = (jsonStr: string) => {
   overflow: hidden;
   padding: 10px;
   gap: 10px;
+  background-color: #f5f7fa; /* Ensure background in full screen */
 }
 
 .left-panel {
@@ -1326,4 +1369,4 @@ pre {
   text-align: center;
   margin-top: 20px;
 }
-</style><>
+</style>
