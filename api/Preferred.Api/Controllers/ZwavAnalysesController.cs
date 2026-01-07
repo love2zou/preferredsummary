@@ -229,7 +229,7 @@ namespace Preferred.Api.Controllers
             [FromRoute] string analysisGuid,
             [FromQuery] int? fromSample,
             [FromQuery] int? toSample,
-            [FromQuery] int? limit = 2000,
+            [FromQuery] int? limit = 20000,
             [FromQuery] string channels = null,
             [FromQuery] string digitals = null,
             [FromQuery] int downSample = 1)

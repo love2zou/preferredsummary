@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Threading.Channels;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -25,10 +25,13 @@ namespace Zwav.Application.Workers
         private readonly CfgParser _cfgParser = new CfgParser();
         private readonly HdrParser _hdrParser = new HdrParser();
 
-        public AnalysisWorker(
-            ILogger<AnalysisWorker> logger,
-            IAnalysisQueue queue,
-            IServiceScopeFactory scopeFactory)
+        // 反射缓存：Channel1..Channel70
+        private static readonly System.Reflection.PropertyInfo[] ChannelProps =
+            Enumerable.Range(1, ZwavConstants.MaxAnalog) // MaxAnalog=70
+                .Select(i => typeof(ZwavData).GetProperty($"Channel{i}"))
+                .ToArray();
+
+        public AnalysisWorker(ILogger<AnalysisWorker> logger, IAnalysisQueue queue, IServiceScopeFactory scopeFactory)
         {
             _logger = logger;
             _queue = queue;
@@ -45,19 +48,11 @@ namespace Zwav.Application.Workers
                 {
                     item = await _queue.DequeueAsync(stoppingToken);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    break;
-                }
-                catch (ChannelClosedException)
-                {
-                    // 写端已完成（应用关闭或队列完成）
-                    break;
-                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+                catch (ChannelClosedException) { break; }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Dequeue failed.");
-                    // 避免死循环打日志：短暂让出执行权
                     await Task.Delay(200, stoppingToken);
                     continue;
                 }
@@ -66,11 +61,7 @@ namespace Zwav.Application.Workers
                 {
                     await ProcessOneAsync(item, stoppingToken);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    // 应用停机，直接退出
-                    break;
-                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Analysis failed. guid={guid}, fileId={fileId}", item?.AnalysisGuid, item?.FileId);
@@ -102,23 +93,19 @@ namespace Zwav.Application.Workers
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-             // 1) 取任务（保留：用于状态更新、保存解析结果等）
-            var analysis = await context.ZwavAnalyses
-                .FirstOrDefaultAsync(x => x.AnalysisGuid == item.AnalysisGuid, ct);
 
+            var analysis = await context.ZwavAnalyses.FirstOrDefaultAsync(x => x.AnalysisGuid == item.AnalysisGuid, ct);
             if (analysis == null) return;
 
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingRead, 5, null, DateTime.UtcNow, null, ct);
 
-            // 3) 解压目录逻辑
             var baseDir = Path.GetDirectoryName(item.StoragePath);
             var extractDir = string.IsNullOrWhiteSpace(item.ExtractPath)
-                ? Path.Combine(baseDir, $"extracted_{item.AnalysisGuid}") // 生成唯一目录名
+                ? Path.Combine(baseDir, $"extracted_{item.AnalysisGuid}")
                 : item.ExtractPath;
 
             ZwavZipHelper.EnsureExtract(item.StoragePath, extractDir);
 
-            // 4) 若原 ExtractPath 为空，需要回写 Tb_ZwavFile：用 Attach 更新，避免再查询
             if (string.IsNullOrWhiteSpace(item.ExtractPath))
             {
                 var stub = new ZwavFile { Id = item.FileId, ExtractPath = extractDir, UpdTime = DateTime.UtcNow };
@@ -130,53 +117,163 @@ namespace Zwav.Application.Workers
 
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingExtract, 20, null, null, null, ct);
 
-            // 4) 后续核心文件查找、CFG/HDR/DAT 解析照旧
             var (cfgPath, hdrPath, datPath) = ZwavZipHelper.FindCoreFiles(extractDir);
             if (string.IsNullOrWhiteSpace(cfgPath)) throw new Exception("CFG not found in archive.");
             if (string.IsNullOrWhiteSpace(datPath)) throw new Exception("DAT not found in archive.");
 
-            // 5) 解析 CFG
+            // CFG
             var cfgText = ZwavZipHelper.ReadTextWithFallbacks(cfgPath, "cfg");
             var cfg = _cfgParser.Parse(cfgText);
-
-            // Upsert Tb_ZwavCfg
             await UpsertCfgAsync(context, analysis.Id, cfg, ct);
-
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingCfg, 45, null, null, null, ct);
 
-            // 6) 解析 HDR（可选）
+            // HDR
             if (!string.IsNullOrWhiteSpace(hdrPath))
             {
                 var hdrText = ZwavZipHelper.ReadTextWithFallbacks(hdrPath, "hdr");
                 var hdr = _hdrParser.Parse(hdrText);
-
                 await UpsertHdrAsync(context, analysis.Id, hdr, ct);
             }
-
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingHdr, 65, null, null, null, ct);
 
-            // 7) 通道落库（覆盖式：先删后插，使用事务）
+            // Channels
             await ReplaceChannelsAsync(context, analysis.Id, cfg, ct);
-
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingChannel, 80, null, null, null, ct);
 
-            // 8) DAT 元信息
-            byte[] datBuf = File.ReadAllBytes(datPath);
-            var (recordSize, totalRecords, digitalWords) =
-                DatMetaCalculator.InspectDat(datBuf, cfg.AnalogCount, cfg.DigitalCount);
-            
-            analysis.RecordSize = recordSize;
-            analysis.TotalRecords = (int)Math.Min(totalRecords, int.MaxValue); // 你表是 INT，先保护；建议后面改 BIGINT
-            analysis.DigitalWords = digitalWords;
-            analysis.UpdTime = DateTime.UtcNow;
-
-            int maxRows = 50000;       
-            var waveResult = DatMetaCalculator.ParseDatAllChannels(datBuf, cfg, maxRows);
+            // DAT 全量入库
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingDat, 90, null, null, null, ct);
-            //DAT数据落库
-            await UpsertWaveDataAsync(context, analysis.Id, waveResult, ct);
-            // 9) 完成
+
+            await ImportDatAllAsync(datPath, cfg, analysis.Id, ct);
+
             await UpdateStatusAsync(context, analysis, ZwavConstants.Completed, 100, null, null, DateTime.UtcNow, ct);
+        }
+
+        private async Task ImportDatAllAsync(string datPath, CfgParseResult cfg, int analysisId, CancellationToken ct)
+        {
+            // 建议做成配置
+            const int batchSize = 5000;
+            const int progressEveryBatches = 2;
+
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // 覆盖式导入：先删旧数据（大任务建议用 ExecuteDeleteAsync）
+            var old = context.ZwavDatas.Where(x => x.AnalysisId == analysisId);
+            context.ZwavDatas.RemoveRange(old);
+            await context.SaveChangesAsync(ct);
+
+            var oldAutoDetect = context.ChangeTracker.AutoDetectChangesEnabled;
+            context.ChangeTracker.AutoDetectChangesEnabled = false;
+
+            long imported = 0;
+            int batchIndex = 0;
+            bool metaWritten = false;
+
+            try
+            {
+                await using var fs = new FileStream(datPath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 1024 * 1024, useAsync: false);
+
+                DatMetaCalculator.ParseDatAllChannelsStream(fs, cfg, batchSize, batch =>
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    // 第一次批次写回元信息（只写一次）
+                    if (!metaWritten)
+                    {
+                        WriteAnalysisMetaSync(analysisId, batch.RecordSize, batch.TotalRecords, batch.DigitalWords);
+                        metaWritten = true;
+                    }
+
+                    var now = DateTime.UtcNow;
+                    var entities = new List<ZwavData>(batch.BatchCount);
+
+                    foreach (var r in batch.Rows)
+                    {
+                        var e = new ZwavData
+                        {
+                            AnalysisId = analysisId,
+                            SampleNo = r.SampleNo,
+                            TimeRaw = r.TimeRaw,
+                            TimeMs = r.TimeMs,
+                            DigitalWords = r.DigitalWords,
+                            SeqNo = 0,
+                            CrtTime = now,
+                            UpdTime = now
+                        };
+
+                        if (r.Channels != null)
+                        {
+                            int len = Math.Min(r.Channels.Length, ChannelProps.Length);
+                            for (int i = 0; i < len; i++)
+                                ChannelProps[i]?.SetValue(e, r.Channels[i]);
+                        }
+
+                        entities.Add(e);
+                    }
+
+                    context.ZwavDatas.AddRange(entities);
+                    context.SaveChanges();
+                    context.ChangeTracker.Entries<ZwavData>().ToList().ForEach(e => e.State = EntityState.Detached);
+
+                    imported += batch.BatchCount;
+                    batchIndex++;
+
+                    if (batchIndex % progressEveryBatches == 0 || imported == batch.TotalRecords)
+                    {
+                        int pct = 90 + (int)Math.Min(9, imported * 9.0 / Math.Max(1, batch.TotalRecords));
+                        UpdateProgressSync(analysisId, pct);
+                    }
+                });
+
+                // 导入结束：这里不写 100，外层 Completed 会写 100
+                UpdateProgressSync(analysisId, 99);
+            }
+            finally
+            {
+                context.ChangeTracker.AutoDetectChangesEnabled = oldAutoDetect;
+            }
+        }
+
+        private void WriteAnalysisMetaSync(int analysisId, int recordSize, long totalRecords, int digitalWords)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var stub = new ZwavAnalysis
+            {
+                Id = analysisId,
+                RecordSize = recordSize,
+                DigitalWords = digitalWords,
+                TotalRecords = totalRecords > int.MaxValue ? int.MaxValue : (int)totalRecords, // 兼容你当前表结构
+                UpdTime = DateTime.UtcNow
+            };
+
+            context.ZwavAnalyses.Attach(stub);
+            context.Entry(stub).Property(x => x.RecordSize).IsModified = true;
+            context.Entry(stub).Property(x => x.DigitalWords).IsModified = true;
+            context.Entry(stub).Property(x => x.TotalRecords).IsModified = true;
+            context.Entry(stub).Property(x => x.UpdTime).IsModified = true;
+
+            context.SaveChanges();
+        }
+
+        private void UpdateProgressSync(int analysisId, int pct)
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            var stub = new ZwavAnalysis
+            {
+                Id = analysisId,
+                Progress = pct,
+                UpdTime = DateTime.UtcNow
+            };
+
+            context.ZwavAnalyses.Attach(stub);
+            context.Entry(stub).Property(x => x.Progress).IsModified = true;
+            context.Entry(stub).Property(x => x.UpdTime).IsModified = true;
+
+            context.SaveChanges();
         }
 
         private static async Task UpdateStatusAsync(
@@ -211,11 +308,7 @@ namespace Zwav.Application.Workers
             var entity = await context.ZwavCfgs.FirstOrDefaultAsync(x => x.AnalysisId == analysisId, ct);
             if (entity == null)
             {
-                entity = new ZwavCfg
-                {
-                    AnalysisId = analysisId,
-                    CrtTime = now
-                };
+                entity = new ZwavCfg { AnalysisId = analysisId, CrtTime = now };
                 context.ZwavCfgs.Add(entity);
             }
 
@@ -223,21 +316,15 @@ namespace Zwav.Application.Workers
             entity.StationName = cfg.StationName;
             entity.DeviceId = cfg.DeviceId;
             entity.Revision = cfg.Revision;
-
             entity.AnalogCount = cfg.AnalogCount;
             entity.DigitalCount = cfg.DigitalCount;
-
             entity.FrequencyHz = cfg.FrequencyHz;
             entity.TimeMul = cfg.TimeMul;
-
             entity.StartTimeRaw = cfg.StartTimeRaw;
             entity.TriggerTimeRaw = cfg.TriggerTimeRaw;
-
             entity.FormatType = cfg.FormatType;
             entity.DataType = cfg.DataType;
-
             entity.SampleRateJson = cfg.SampleRateJson;
-
             entity.SeqNo = 0;
             entity.UpdTime = now;
 
@@ -251,11 +338,7 @@ namespace Zwav.Application.Workers
             var entity = await context.ZwavHdrs.FirstOrDefaultAsync(x => x.AnalysisId == analysisId, ct);
             if (entity == null)
             {
-                entity = new ZwavHdr
-                {
-                    AnalysisId = analysisId,
-                    CrtTime = now
-                };
+                entity = new ZwavHdr { AnalysisId = analysisId, CrtTime = now };
                 context.ZwavHdrs.Add(entity);
             }
 
@@ -311,101 +394,5 @@ namespace Zwav.Application.Workers
 
             await tx.CommitAsync(ct);
         }
-
-        private static readonly System.Reflection.PropertyInfo[] ChannelProps =
-            Enumerable.Range(1, ZwavConstants.MaxAnalog) // 这里填你最大通道数
-                .Select(i => typeof(ZwavData).GetProperty($"Channel{i}"))
-                .ToArray();
-
-          private static async Task UpsertWaveDataAsync(
-            ApplicationDbContext context,
-            int analysisId,
-            WaveDataParseResult result,
-            CancellationToken ct)
-        {
-            if (result?.Rows == null || result.Rows.Count == 0) return;
-
-            var now = DateTime.UtcNow;
-
-            // 1) 一次性取出本次涉及的 SampleNo
-            var sampleNos = result.Rows.Select(r => r.SampleNo).Distinct().ToList();
-
-            // 2) 一次性查询已有数据，构建字典（避免 N 次查询）
-            var existing = await context.ZwavDatas
-                .Where(x => x.AnalysisId == analysisId && sampleNos.Contains(x.SampleNo))
-                .ToListAsync(ct);
-
-            var map = existing.ToDictionary(x => x.SampleNo);
-
-            // 3) 大批量写入优化：关闭 AutoDetectChanges + 分批提交
-            var oldAuto = context.ChangeTracker.AutoDetectChangesEnabled;
-            context.ChangeTracker.AutoDetectChangesEnabled = false;
-
-            try
-            {
-                const int batchSize = 1000;
-                int pending = 0;
-
-                foreach (var row in result.Rows)
-                {
-                    if (!map.TryGetValue(row.SampleNo, out var entity))
-                    {
-                        entity = new ZwavData
-                        {
-                            AnalysisId = analysisId,
-                            SampleNo = row.SampleNo,
-                            CrtTime = now
-                        };
-                        context.ZwavDatas.Add(entity);
-                        map[row.SampleNo] = entity;
-                    }
-
-                    entity.TimeRaw = row.TimeRaw;
-                    entity.TimeMs = row.TimeMs;
-                    entity.UpdTime = now;
-
-                    // Channels：使用缓存的 PropertyInfo，避免重复 GetProperty
-                    if (row.Channels != null)
-                    {
-                        var len = Math.Min(row.Channels.Length, ChannelProps.Length);
-                        for (int i = 0; i < len; i++)
-                        {
-                            var p = ChannelProps[i];
-                            if (p != null) p.SetValue(entity, row.Channels[i]);
-                        }
-                    }
-
-                    // Digitals
-                    if (row.DigitalWords != null)
-                    {
-                        entity.DigitalWords = row.DigitalWords;
-                    }
-
-                    pending++;
-                    if (pending >= batchSize)
-                    {
-                        await context.SaveChangesAsync(ct);
-                        pending = 0;
-
-                        // 如果数据极大，且你不需要继续更新已跟踪实体，可以定期清理跟踪，降低内存
-                        // 在 EF Core 5.0 以下版本没有 ChangeTracker.Clear()，可手动分离已跟踪实体
-                        foreach (var entry in context.ChangeTracker.Entries<ZwavData>().ToList())
-                        {
-                            entry.State = EntityState.Detached;
-                        }
-                        // Clear 后 map 里的 entity 可能失效（变成 detached），如果你需要后续继续更新同一 SampleNo，
-                        // 不建议 Clear；或改成批内 map。
-                    }
-                }
-
-                if (pending > 0)
-                    await context.SaveChangesAsync(ct);
-            }
-            finally
-            {
-                context.ChangeTracker.AutoDetectChangesEnabled = oldAuto;
-            }
-        }
-
     }
 }

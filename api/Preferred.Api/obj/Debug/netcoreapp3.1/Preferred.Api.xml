@@ -3185,6 +3185,18 @@
             完成写端：应用关闭时通知消费者退出。
             </summary>
         </member>
+        <member name="T:Zwav.Application.Parsing.DatMetaCalculator">
+            <summary>
+            DAT 解析工具：
+            1) ParseDatAllChannels(byte[]...)：用于“预览/抽样”（保留 maxRecords）
+            2) ParseDatAllChannelsStream(Stream...)：用于“全量入库/全量扫描”（批回调）
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Parsing.DatMetaCalculator.ResolveDatDataTypeStrong(System.IO.Stream,Zwav.Application.Parsing.CfgParseResult)">
+            <summary>
+            增强：当 cfg.FormatType 不可靠时，通过 dat 头部 probe 判断 ASCII
+            </summary>
+        </member>
         <member name="M:Zwav.Application.Parsing.HdrParser.Parse(System.String,System.String@)">
             <summary>
             解析 HDR XML 文本。遇到不规范 XML（前导控制字符/多根/片段）会自动容错。
