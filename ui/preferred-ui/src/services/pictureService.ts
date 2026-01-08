@@ -1,5 +1,5 @@
-import axios, { AxiosResponse } from 'axios'
 import { API_CONFIG } from '@/config/api'
+import axios, { AxiosResponse } from 'axios'
 
 interface Picture {
   id: number
@@ -41,7 +41,7 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    
+
     // 添加时间戳防止缓存
     if (config.method === 'get') {
       config.params = {
@@ -49,7 +49,7 @@ api.interceptors.request.use(
         _t: Date.now()
       }
     }
-    
+
     return config
   },
   error => {
@@ -84,4 +84,5 @@ export const pictureService = {
   }
 }
 
-export type { Picture, PictureListParams, PagedResponse }
+export type { PagedResponse, Picture, PictureListParams }
+

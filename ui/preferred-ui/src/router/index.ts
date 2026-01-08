@@ -12,12 +12,12 @@ const router = createRouter({
     {
       path: '/zwav-analysis',
       name: 'ZwavAnalysis',
-      component: () => import('@/views/subpages/ZwavAnalysis.vue')
+      component: () => import('@/views/zwavpages/ZwavAnalysis.vue')
     },
     {
       path: '/zwav-analysis/viewer/:guid',
       name: 'ZwavOnlineViewer',
-      component: () => import('@/views/subpages/ZwavOnlineViewer.vue')
+      component: () => import('@/views/zwavpages/ZwavOnlineViewer.vue'),
     }
     // 如果需要保留登录功能但不作为主要入口，可以保留这些路由
     // {
