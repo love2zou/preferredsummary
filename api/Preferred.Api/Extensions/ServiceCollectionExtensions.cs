@@ -4,6 +4,7 @@ using Preferred.Api.Services;
 using Zwav.Infrastructure.Storage;
 using Zwav.Application.Workers;
 using Zwav.Application.Processing;
+using Video.Application.Processing;
 using Preferred.Api.Models;
 
 namespace Preferred.Api.Extensions
@@ -31,6 +32,12 @@ namespace Preferred.Api.Extensions
             services.AddScoped<IZwavAnalysisAppService, ZwavAnalysisAppService>();
             services.AddHostedService<AnalysisWorker>();
             //录波文件服务
+            //视频分析服务
+            services.AddScoped<IVideoAnalyticsService,VideoAnalyticsService>();
+            services.AddSingleton<IVideoAnalysisQueue, VideoAnalysisQueue>();
+            services.AddScoped<SparkDetectionService>();
+            services.AddHostedService<VideoAnalysisWorker>();
+            //视频分析服务
 
             // 注册后台服务
             services.AddHostedService<ScheduledTaskBackgroundService>();

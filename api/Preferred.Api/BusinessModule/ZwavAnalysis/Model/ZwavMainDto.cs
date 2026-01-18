@@ -53,7 +53,7 @@ namespace Zwav.Application.Parsing
         public string Status { get; set; }
         public string ErrorMessage { get; set; }
 
-        public long? TotalRecords { get; set; }
+        public int? TotalRecords { get; set; }
         public int? RecordSize { get; set; }
         public int? DigitalWords { get; set; }
 
@@ -65,7 +65,7 @@ namespace Zwav.Application.Parsing
     public class SavedFileResult
     {
         public string FullPath { get; set; }
-        public long FileSize { get; set; }
+        public int FileSize { get; set; }
     }
 
     /// <summary>

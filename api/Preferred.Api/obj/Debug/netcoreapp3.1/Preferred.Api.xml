@@ -29,6 +29,11 @@
             执行定时任务
             </summary>
         </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.ProcessFileAsync(System.Int32,System.Threading.CancellationToken)">
+            <summary>
+            新模式：处理单个视频文件（fileId 出队）
+            </summary>
+        </member>
         <member name="M:Preferred.Api.Services.IZwavAnalysisAppService.CreateAnalysisByFileIdAsync(System.Int32,System.Boolean,System.Threading.CancellationToken)">
             <summary>
             基于已上传文件(FileId)创建解析任务：读 Tb_ZwavFile -> 写 Tb_ZwavAnalysis -> 入队后台解析
@@ -865,6 +870,141 @@
             组合中文姓名，确保流畅性和意境
             </summary>
         </member>
+        <member name="T:Preferred.Api.Models.VideoAnalysisEvent">
+            <summary>
+            视频闪光/火花识别事件结果表
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.VideoFileId">
+            <summary>
+            视频文件ID（Tb_VideoAnalysisFile.Id）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.EventType">
+            <summary>
+            事件类型：1=闪光，2=火花
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.StartTimeSec">
+            <summary>
+            事件开始时间点（秒）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.EndTimeSec">
+            <summary>
+            事件结束时间点（秒）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.PeakTimeSec">
+            <summary>
+            事件峰值时间点（秒）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.FrameIndex">
+            <summary>
+            峰值帧序号
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.Confidence">
+            <summary>
+            识别置信度（0-1）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisEvent.BBoxJson">
+            <summary>
+            事件边界框信息(JSON：x,y,w,h)
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.VideoAnalysisFile">
+            <summary>
+            视频分析任务关联的视频文件表
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.JobId">
+            <summary>
+            视频分析任务ID（Tb_VideoAnalysisJob.Id）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.FileName">
+            <summary>
+            视频原始文件名
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.FilePath">
+            <summary>
+            视频文件存储路径
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.EventCount">
+            <summary>
+            识别事件数
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.AnalyzeMs">
+            <summary>
+            分析耗时(秒)
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.DurationSec">
+            <summary>
+            视频时长（秒）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisFile.Status">
+            <summary>
+            视频处理状态：0=待处理，1=处理中，2=完成，3=失败
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.VideoAnalysisJob">
+            <summary>
+            视频智能分析任务表（多视频闪光/火花检测）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisJob.Status">
+            <summary>
+            任务状态：0=待处理，1=处理中，2=完成，3=失败，4=取消
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisJob.Progress">
+            <summary>
+            任务执行进度（0-100）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisJob.AlgoCode">
+            <summary>
+            算法标识（如 spark_v1）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisJob.AlgoParamsJson">
+            <summary>
+            算法参数配置(JSON)
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Models.VideoAnalysisSnapshot">
+            <summary>
+            视频闪光/火花事件截图表（已画框，人工复核用）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisSnapshot.EventId">
+            <summary>
+            所属识别事件ID（Tb_VideoAnalysisEvent.Id）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisSnapshot.ImagePath">
+            <summary>
+            已画框截图文件路径
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisSnapshot.TimeSec">
+            <summary>
+            截图对应视频时间点（秒）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.VideoAnalysisSnapshot.FrameIndex">
+            <summary>
+            截图对应帧序号
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Models.ZwavData">
             <summary>
             录波数据
@@ -1387,6 +1527,11 @@
         <member name="P:Preferred.Api.Models.FileStorageConfig.ZwavRootPath">
             <summary>
             Zwav 存储根路径
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.FileStorageConfig.VideoRootPath">
+            <summary>
+            视频分析 存储根路径
             </summary>
         </member>
         <member name="M:Preferred.Api.Models.FileStorageConfig.GetImageUrl(System.String)">
@@ -3110,6 +3255,25 @@
             生成用户名和姓名对
             </summary>
         </member>
+        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.CreateJob(Video.Application.Dto.CreateVideoJobRequest,System.Threading.CancellationToken)">
+            <summary>
+            创建一个“持续上传会话(Job)”
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.UploadOne(System.String,Microsoft.AspNetCore.Http.IFormFile,System.Threading.CancellationToken)">
+            <summary>
+            单视频上传：上传完成即入队分析（满足：不断上传、服务端不知道何时结束）
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.Analyze(Microsoft.AspNetCore.Http.IFormFile[],System.String,System.Threading.CancellationToken)">
+            <summary>旧接口：批量上传并创建任务（保留兼容）</summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.CloseJob(System.String,System.Threading.CancellationToken)">
+            <summary>
+            显式关闭上传：表示“我不再上传了”
+            Close 后，当所有视频处理完（完成+失败=总数）自动把 Job 置为 done
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Controllers.ZwavAnalysesController">
             <summary>
             录波文件解析控制器
@@ -3154,6 +3318,29 @@
         </member>
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportAsync(System.String,System.Boolean)">
             <summary>导出波形数据（CSV）</summary>
+        </member>
+        <member name="P:Video.Application.Dto.AlgoParams.SampleEverySec">
+            <summary>每隔多少秒抽一帧（默认1秒1帧）</summary>
+        </member>
+        <member name="P:Video.Application.Dto.AlgoParams.DiffThreshold">
+            <summary>帧差二值化阈值（越大越不敏感）</summary>
+        </member>
+        <member name="P:Video.Application.Dto.AlgoParams.MinContourArea">
+            <summary>最小轮廓面积（像素），过滤噪声</summary>
+        </member>
+        <member name="P:Video.Application.Dto.AlgoParams.FlashAreaRatio">
+            <summary>最大轮廓面积占比（用于区分全局闪光）</summary>
+        </member>
+        <member name="P:Video.Application.Dto.AlgoParams.GlobalBrightnessDelta">
+            <summary>全局亮度变化阈值（用于闪光判定）</summary>
+        </member>
+        <member name="P:Video.Application.Dto.DeleteJobResultDto.FailedFiles">
+            <summary>物理文件删除失败列表（可选，用于排障）</summary>
+        </member>
+        <member name="T:Video.Application.Processing.VideoAnalysisQueue">
+            <summary>
+            基于 Channel 的内存队列：存放 fileId
+            </summary>
         </member>
         <member name="T:Zwav.Application.Processing.AnalysisQueue">
             <summary>

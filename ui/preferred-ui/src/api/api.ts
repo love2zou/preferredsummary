@@ -1,6 +1,6 @@
+import AutoLoginService from '@/services/autoLoginService';
 import axios, { AxiosResponse } from 'axios';
 import { ElMessage } from 'element-plus';
-import AutoLoginService from '@/services/autoLoginService';
 
 // 统一的 API 基础配置
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
@@ -22,12 +22,12 @@ api.interceptors.request.use(
   async (config) => {
     // 优先使用用户token
     let token = localStorage.getItem('token');
-    
+
     // 如果没有用户token，尝试获取访客token
     if (!token) {
       token = await AutoLoginService.autoLogin();
     }
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -57,14 +57,14 @@ api.interceptors.response.use(
   async (error) => {
     if (error.response) {
       const { status } = error.response;
-      
+
       switch (status) {
         case 401:
           // 清除所有token
           localStorage.removeItem('token');
           localStorage.removeItem('username');
           AutoLoginService.clearGuestToken();
-          
+
           // 尝试重新自动登录
           const newToken = await AutoLoginService.autoLogin();
           if (newToken) {

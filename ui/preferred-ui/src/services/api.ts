@@ -1,5 +1,5 @@
-import axios, { AxiosResponse } from 'axios'
 import { API_CONFIG } from '@/config/api'
+import axios, { AxiosResponse } from 'axios'
 
 const api = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -23,13 +23,18 @@ api.interceptors.request.use(
       // 如果没有token，可以尝试添加访客标识
       config.headers['X-Guest-Mode'] = 'true'
     }
-    
+
     // 为每个请求添加时间戳，防止缓存
     config.params = {
       ...config.params,
       _t: Date.now()
     }
-    
+
+    // 如果是 FormData，删除 Content-Type，让浏览器自动设置 (带 boundary)
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
+
     return config
   },
   error => {

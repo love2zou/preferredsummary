@@ -30,7 +30,14 @@ namespace Preferred.Api.Data
         public DbSet<ZwavHdr> ZwavHdrs { get; set; }
         public DbSet<ZwavData> ZwavDatas { get; set; }
         // ====================== ZWAV 录波分析表映射 - End ======================
-        
+
+        // ====================== 视频分析表映射- Start======================
+        public DbSet<VideoAnalysisJob> VideoAnalysisJobs { get; set; }
+        public DbSet<VideoAnalysisFile> VideoAnalysisFiles { get; set; }
+        public DbSet<VideoAnalysisEvent> VideoAnalysisEvents { get; set; }
+        public DbSet<VideoAnalysisSnapshot> VideoAnalysisSnapshots { get; set; }
+        // ====================== 视频分析表映射 - End ======================
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -470,7 +477,179 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
             });
+            
+            // ====================== 视频分析表映射 ======================
+            modelBuilder.Entity<VideoAnalysisJob>(entity =>
+            {
+                entity.ToTable("Tb_VideoAnalysisJob");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
 
+                entity.Property(e => e.JobNo).IsRequired().HasMaxLength(64)
+                    .HasComment("视频分析任务编号（业务唯一）");
+
+                entity.Property(e => e.Status).IsRequired()
+                    .HasComment("任务状态：0=待处理，1=处理中，2=完成，3=失败，4=取消");
+
+                entity.Property(e => e.Progress).IsRequired().HasDefaultValue(0)
+                    .HasComment("任务执行进度（0-100）");
+
+                entity.Property(e => e.AlgoCode).IsRequired().HasMaxLength(50)
+                    .HasComment("算法标识（如 spark_v1）");
+
+                // 表结构是 TEXT，这里用 TEXT 映射（不要用 JSON，以免和你DDL不一致）
+                entity.Property(e => e.AlgoParamsJson).HasColumnType("TEXT")
+                    .HasComment("算法参数配置(JSON)");
+
+                entity.Property(e => e.TotalVideoCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("视频总数量");
+
+                entity.Property(e => e.FinishedVideoCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("已完成分析的视频数量");
+
+                entity.Property(e => e.TotalEventCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("识别出的事件总数");
+
+                entity.Property(e => e.ErrorMessage).HasColumnType("TEXT")
+                    .HasComment("任务失败或异常信息");
+
+                entity.Property(e => e.StartTime)
+                    .HasComment("任务开始时间");
+
+                entity.Property(e => e.FinishTime)
+                    .HasComment("任务完成时间");
+
+                entity.Property(e => e.SeqNo).IsRequired().HasDefaultValue(0)
+                    .HasComment("排序号");
+
+                entity.Property(e => e.CrtTime).IsRequired()
+                    .HasComment("创建时间");
+
+                entity.Property(e => e.UpdTime).IsRequired()
+                    .HasComment("最后修改时间");
+            });
+
+            modelBuilder.Entity<VideoAnalysisFile>(entity =>
+            {
+                entity.ToTable("Tb_VideoAnalysisFile");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.JobId).IsRequired()
+                    .HasComment("视频分析任务ID");
+
+                entity.Property(e => e.FileName).IsRequired().HasMaxLength(255)
+                    .HasComment("视频原始文件名");
+
+                entity.Property(e => e.FilePath).IsRequired().HasMaxLength(1024)
+                    .HasComment("视频文件存储路径");
+
+                entity.Property(e => e.EventCount)
+                    .HasComment("识别事件数");
+
+                entity.Property(e => e.AnalyzeMs)
+                    .HasComment("分析耗时(秒)");
+                entity.Property(e => e.DurationSec)
+                    .HasComment("视频时长（秒）");
+
+                entity.Property(e => e.Width)
+                    .HasComment("视频宽度（像素）");
+
+                entity.Property(e => e.Height)
+                    .HasComment("视频高度（像素）");
+
+                entity.Property(e => e.Status).IsRequired()
+                    .HasComment("视频处理状态：0=待处理，1=处理中，2=完成，3=失败");
+
+                entity.Property(e => e.ErrorMessage).HasColumnType("TEXT")
+                    .HasComment("视频处理失败原因");
+
+                entity.Property(e => e.SeqNo).IsRequired().HasDefaultValue(0)
+                    .HasComment("视频顺序号");
+
+                entity.Property(e => e.CrtTime).IsRequired()
+                    .HasComment("创建时间");
+
+                entity.Property(e => e.UpdTime).IsRequired()
+                    .HasComment("最后修改时间");
+            });
+
+            modelBuilder.Entity<VideoAnalysisEvent>(entity =>
+            {
+                entity.ToTable("Tb_VideoAnalysisEvent");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.JobId).IsRequired()
+                    .HasComment("视频分析任务ID");
+
+                entity.Property(e => e.VideoFileId).IsRequired()
+                    .HasComment("视频文件ID");
+
+                entity.Property(e => e.EventType).IsRequired()
+                    .HasComment("事件类型：1=闪光，2=火花");
+
+                entity.Property(e => e.StartTimeSec).IsRequired()
+                    .HasComment("事件开始时间点（秒）");
+
+                entity.Property(e => e.EndTimeSec).IsRequired()
+                    .HasComment("事件结束时间点（秒）");
+
+                entity.Property(e => e.PeakTimeSec).IsRequired()
+                    .HasComment("事件峰值时间点（秒）");
+
+                entity.Property(e => e.FrameIndex).IsRequired()
+                    .HasComment("峰值帧序号");
+
+                entity.Property(e => e.Confidence).HasColumnType("decimal(5,4)").IsRequired()
+                    .HasComment("识别置信度（0-1）");
+
+                entity.Property(e => e.BBoxJson).HasColumnType("TEXT").IsRequired()
+                    .HasComment("事件边界框信息(JSON：x,y,w,h)");
+
+                entity.Property(e => e.SeqNo).IsRequired().HasDefaultValue(0)
+                    .HasComment("视频顺序号");
+
+                entity.Property(e => e.CrtTime).IsRequired()
+                    .HasComment("创建时间");
+
+                entity.Property(e => e.UpdTime).IsRequired()
+                    .HasComment("最后修改时间");
+            });
+
+            modelBuilder.Entity<VideoAnalysisSnapshot>(entity =>
+            {
+                entity.ToTable("Tb_VideoAnalysisSnapshot");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.EventId).IsRequired()
+                    .HasComment("所属识别事件ID");
+
+                entity.Property(e => e.ImagePath).IsRequired().HasMaxLength(1024)
+                    .HasComment("已画框截图文件路径");
+
+                entity.Property(e => e.TimeSec).IsRequired()
+                    .HasComment("截图对应视频时间点（秒）");
+
+                entity.Property(e => e.FrameIndex).IsRequired()
+                    .HasComment("截图对应帧序号");
+
+                entity.Property(e => e.ImageWidth).IsRequired()
+                    .HasComment("截图宽度（像素）");
+
+                entity.Property(e => e.ImageHeight).IsRequired()
+                    .HasComment("截图高度（像素）");
+
+                entity.Property(e => e.SeqNo).IsRequired().HasDefaultValue(0)
+                    .HasComment("视频顺序号");
+
+                entity.Property(e => e.CrtTime).IsRequired()
+                    .HasComment("创建时间");
+
+                entity.Property(e => e.UpdTime).IsRequired()
+                    .HasComment("最后修改时间");
+            });
         }
     }
 }

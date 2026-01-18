@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavFile (
    OriginalName 	 	VARCHAR(255)         NOT NULL COMMENT '原始文件名',
    StoragePath          VARCHAR(1024)        NOT NULL COMMENT '文件存储路径',
    ExtractPath          VARCHAR(1024)        NOT NULL COMMENT '解压路径',
-   FileSize             BIGINT                NOT NULL COMMENT '文件大小(b)',
+   FileSize             INT                NOT NULL COMMENT '文件大小(b)',
    SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
    CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavAnalysis (
    Progress             INT      DEFAULT 0  NOT NULL COMMENT '解析进度(0-100)',
    ErrorMessage         TEXT                NULL COMMENT '错误信息',
    FileId               INT              NOT NULL COMMENT '关联文件ID',
-   TotalRecords         BIGINT              NULL COMMENT 'DAT总记录数',
+   TotalRecords         INT              NULL COMMENT 'DAT总记录数',
    RecordSize           INT                 NULL COMMENT '单条记录字节长度',
    DigitalWords         INT                 NULL COMMENT '数字量字长度',
    StartTime            DATETIME            NULL COMMENT '解析开始时间',
@@ -372,3 +372,81 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavData (
 	CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
 	UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV波形数据表';
+
+/*==============================================================*/
+/* 视频分析: Tb_VideoAnalysisJob  视频智能分析任务表             */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_VideoAnalysisJob (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   JobNo                VARCHAR(64)        NOT NULL COMMENT '视频分析任务编号（业务唯一）',
+   Status               TINYINT            NOT NULL COMMENT '任务状态：0=待处理，1=处理中，2=完成，3=失败，4=取消',
+   Progress             INT    DEFAULT 0    NOT NULL COMMENT '任务执行进度（0-100）',
+   AlgoCode             VARCHAR(50)         NOT NULL COMMENT '算法标识（如 spark_v1）',
+   AlgoParamsJson       TEXT                NULL COMMENT '算法参数配置(JSON)',
+   TotalVideoCount      INT    DEFAULT 0    NOT NULL COMMENT '视频总数量',
+   FinishedVideoCount   INT    DEFAULT 0    NOT NULL COMMENT '已完成分析的视频数量',
+   TotalEventCount      INT    DEFAULT 0    NOT NULL COMMENT '识别出的事件总数',
+   ErrorMessage         TEXT                NULL COMMENT '任务失败或异常信息',
+   StartTime            DATETIME            NULL COMMENT '任务开始时间',
+   FinishTime           DATETIME            NULL COMMENT '任务完成时间',
+   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME            NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME            NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='视频智能分析任务表（多视频闪光/火花检测）';
+/*==============================================================*/
+/* 视频分析: Tb_VideoAnalysisFile  分析任务视频文件表            */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_VideoAnalysisFile (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   JobId                INT                 NOT NULL COMMENT '视频分析任务ID',
+   FileName             VARCHAR(255)        NOT NULL COMMENT '视频原始文件名',
+   FilePath             VARCHAR(1024)       NOT NULL COMMENT '视频文件存储路径',
+   EventCount        	INT 				NULL COMMENT '识别事件数',
+   AnalyzeMs 			INT 				NULL COMMENT '分析耗时(毫秒)',
+   DurationSec          INT                 NULL COMMENT '视频时长（秒）',
+   Width                INT                 NULL COMMENT '视频宽度（像素）',
+   Height               INT                 NULL COMMENT '视频高度（像素）',
+   Status               TINYINT             NOT NULL COMMENT '视频处理状态：0=待处理，1=处理中，2=完成，3=失败',
+   ErrorMessage         TEXT                NULL COMMENT '视频处理失败原因',
+   SeqNo                INT    DEFAULT 0    NOT NULL COMMENT '视频顺序号',
+   CrtTime              DATETIME            NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME            NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='视频分析任务关联的视频文件表';
+/*==============================================================*/
+/* 视频分析: Tb_VideoAnalysisEvent  闪光/火花识别事件表          */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_VideoAnalysisEvent (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   JobId                INT                 NOT NULL COMMENT '视频分析任务ID',
+   VideoFileId          INT                 NOT NULL COMMENT '视频文件ID',
+   EventType            TINYINT             NOT NULL COMMENT '事件类型：1=闪光，2=火花',
+   StartTimeSec         INT                 NOT NULL COMMENT '事件开始时间点（秒）',
+   EndTimeSec           INT                 NOT NULL COMMENT '事件结束时间点（秒）',
+   PeakTimeSec          INT                 NOT NULL COMMENT '事件峰值时间点（秒）',
+   FrameIndex           INT                 NOT NULL COMMENT '峰值帧序号',
+   Confidence           DECIMAL(5,4)         NOT NULL COMMENT '识别置信度（0-1）',
+   BBoxJson             TEXT                NOT NULL COMMENT '事件边界框信息(JSON：x,y,w,h)',
+   SeqNo                INT    DEFAULT 0    NOT NULL COMMENT '视频顺序号',
+   CrtTime              DATETIME            NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME            NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='视频闪光/火花识别事件结果表';
+/*==============================================================*/
+/* 视频分析: Tb_VideoAnalysisSnapshot  事件截图结果表            */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_VideoAnalysisSnapshot (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   EventId              INT                 NOT NULL COMMENT '所属识别事件ID',
+   ImagePath            VARCHAR(1024)       NOT NULL COMMENT '已画框截图文件路径',
+   TimeSec              INT                 NOT NULL COMMENT '截图对应视频时间点（秒）',
+   FrameIndex           INT                 NOT NULL COMMENT '截图对应帧序号',
+   ImageWidth           INT                 NOT NULL COMMENT '截图宽度（像素）',
+   ImageHeight          INT                 NOT NULL COMMENT '截图高度（像素）',
+   SeqNo                INT    DEFAULT 0    NOT NULL COMMENT '视频顺序号',
+   CrtTime              DATETIME            NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME            NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='视频闪光/火花事件截图表（已画框，人工复核用）';
+

@@ -36,6 +36,10 @@ namespace Preferred.Api.Models
         /// </summary>
         public string ZwavRootPath { get; set; } = "/upload/zwav";
         /// <summary>
+        /// 视频分析 存储根路径
+        /// </summary>
+        public string VideoRootPath  { get; set; } = "/upload/video";
+        /// <summary>
         /// 获取完整的服务器图片URL
         /// </summary>
         /// <param name="fileName">文件名</param>

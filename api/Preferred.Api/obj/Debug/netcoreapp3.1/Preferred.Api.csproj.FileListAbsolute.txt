@@ -178,3 +178,8 @@ D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.A
 D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.xml
 D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.pdb
 D:\github\preferredsummary\api\Preferred.Api\obj\Debug\netcoreapp3.1\Preferred.Api.genruntimeconfig.cache
+D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\OpenCvSharp.dll
+D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win-x64\native\OpenCvSharpExtern.dll
+D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win-x64\native\opencv_videoio_ffmpeg4110_64.dll
+D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win-x86\native\OpenCvSharpExtern.dll
+D:\github\preferredsummary\api\Preferred.Api\bin\Debug\netcoreapp3.1\runtimes\win-x86\native\opencv_videoio_ffmpeg4110.dll
