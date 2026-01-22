@@ -1,5 +1,7 @@
+// =========================
+// File: Preferred.Api/Controllers/VideoAnalyticsController.cs
+// =========================
 using System;
-using System.IO;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,20 +22,36 @@ namespace Preferred.Api.Controllers
         private readonly IVideoAnalyticsService _svc;
 
         private const string DefaultAlgoParamsJson =
-            "{\"SampleEverySec\":1," +
-            "\"DiffThreshold\":40," +
-            "\"MinContourArea\":60," +
-            "\"FlashAreaRatio\":0.25," +
-            "\"GlobalBrightnessDelta\":25}";
+        "{"
+        + "\"SampleFps\":8,"
+        + "\"DiffThreshold\":35,"
+        + "\"DiffThresholdMin\":12,"
+        + "\"AdaptiveDiffK\":2.2,"
+        + "\"MinContourArea\":60,"
+        + "\"MeanDeltaRise\":6.0,"
+        + "\"MeanDeltaFall\":4.0,"
+        + "\"BrightStdK\":2.0,"
+        + "\"BrightThrMin\":170,"
+        + "\"BrightThrMax\":250,"
+        + "\"BrightRatioDelta\":0.0012,"
+        + "\"FlashAreaRatio\":0.22,"
+        + "\"GlobalBrightnessDelta\":12,"
+        + "\"MaxPulseSec\":1.3,"
+        + "\"SustainRejectSec\":2.0,"
+        + "\"ResizeMaxWidth\":640,"
+        + "\"BlurKernel\":5,"
+        + "\"RequireConsecutiveHits\":1,"
+        + "\"CooldownSec\":1,"
+        + "\"MergeGapSec\":2,"
+        + "\"MaxMotionRatioPerSec\":0.12"
+        + "}";
+
 
         public VideoAnalyticsController(IVideoAnalyticsService svc)
         {
             _svc = svc;
         }
 
-        /// <summary>
-        /// 创建一个“持续上传会话(Job)”
-        /// </summary>
         [HttpPost("job")]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(ApiResponse<CreateJobResultDto>), StatusCodes.Status200OK)]
@@ -57,9 +75,6 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// 单视频上传：上传完成即入队分析（满足：不断上传、服务端不知道何时结束）
-        /// </summary>
         [HttpPost("job/{jobNo}/upload")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(1024L * 1024 * 1024)]
@@ -95,7 +110,6 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        /// <summary>旧接口：批量上传并创建任务（保留兼容）</summary>
         [HttpPost("analyze")]
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(1024L * 1024 * 1024)]
@@ -124,8 +138,6 @@ namespace Preferred.Api.Controllers
                 return StatusCode(500, new ApiErrorResponse { Message = "创建分析任务失败", Details = ex.Message });
             }
         }
-
-        // ===== 下面这些接口你原来都有，可保持不变（此处只保留你最关键的两个示例） =====
 
         [HttpGet("job/{jobNo}")]
         public async Task<IActionResult> GetJob([FromRoute] string jobNo, CancellationToken ct)
@@ -251,15 +263,9 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// 显式关闭上传：表示“我不再上传了”
-        /// Close 后，当所有视频处理完（完成+失败=总数）自动把 Job 置为 done
-        /// </summary>
         [HttpPost("job/{jobNo}/close")]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> CloseJob([FromRoute] string jobNo, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
@@ -312,6 +318,5 @@ namespace Preferred.Api.Controllers
                 return StatusCode(500, new ApiErrorResponse { Message = "重新分析失败", Details = ex.Message });
             }
         }
-
     }
 }

@@ -1,10 +1,8 @@
 <template>
   <div class="workbench-view" :class="{ 'as-dialog': !!props.asDialog }">
-    <!-- 顶部工具栏 -->
+    <!-- 顶部工具栏（公共：只保留任务信息+帮助） -->
     <div class="wb-toolbar">
       <div class="wb-nav">
-        <el-button link :icon="ArrowLeft" @click="$emit('back')">{{ props.asDialog ? '关闭' : '返回列表' }}</el-button>
-        <el-divider direction="vertical" />
         <span class="job-title">{{ currentDetailJob?.jobNo }}</span>
         <el-tag v-if="currentDetailJob" size="small" :type="getStatusType(currentDetailJob.status)" class="ml-2">
           {{ getJobStatusText(currentDetailJob) }}
@@ -15,242 +13,426 @@
         </el-tag>
       </div>
 
-      <div class="wb-filters">
-        <span class="filter-label">置信度阈值:</span>
-        <el-slider v-model="filterConf" :min="0" :max="1" :step="0.05" style="width: 120px; margin: 0 12px" />
-
-        <el-checkbox v-model="filterHasEvents" label="仅看有事件" border size="small" />
-
-        <el-radio-group v-model="filterType" size="small" class="ml-2">
-          <el-radio-button label="ALL">全部</el-radio-button>
-          <el-radio-button label="Spark"><span class="text-danger">火花</span></el-radio-button>
-          <el-radio-button label="Flash"><span class="text-warning">闪光</span></el-radio-button>
-        </el-radio-group>
-
-        <el-button class="ml-4" :icon="Refresh" circle size="small" @click="refreshDetail" />
+      <div class="wb-actions">
+        <el-tooltip content="使用说明" placement="bottom" :show-after="200">
+          <el-button class="help-btn" :icon="QuestionFilled" circle size="small" @click="helpVisible = true" />
+        </el-tooltip>
       </div>
     </div>
 
-    <!-- 主体三栏 -->
-    <div class="wb-body" v-loading="loadingDetail">
-      <!-- 左栏：上传区 + 视频列表 -->
-      <div class="wb-col-left">
-        <div class="panel-header">
-          <span>持续上传</span>
-        </div>
+    <!-- Tabs -->
+    <div class="tabs-wrap" v-loading="loadingDetail">
+      <el-tabs v-model="activeTab" class="wb-tabs" type="card">
+        <!-- 1) 视频清单（第一个选项卡） -->
+        <el-tab-pane name="list" label="视频清单">
+          <div class="list-body">
+            <!-- 左侧：表格分页 + 异常筛选 -->
+            <div class="list-left">
+              <div class="panel-header">
+                <div class="lh-title">
+                  <span>视频清单</span>
+                  <span class="sub-text">（共 {{ listTotal }} 条）</span>
+                </div>
 
-        <div class="upload-box">
-          <el-upload
-            drag
-            multiple
-            action="#"
-            accept="video/*"
-            :auto-upload="true"
-            :show-file-list="true"
-            :limit="1000"
-            :disabled="uploadClosed || !canUpload"
-            :http-request="doUploadRequest"
-            :before-upload="beforeUpload"
-            @exceed="onExceed"
-          >
-            <div class="el-upload__text">
-              拖拽视频到此处或点击上传<br />
-              <span class="upload-sub">单文件上传完成即入队分析（服务端不知道何时结束）</span>
-            </div>
-          </el-upload>
+                <div class="lh-controls">
+                  <el-checkbox v-model="onlyAbnormal" label="仅异常" border size="small" />
+                </div>
+              </div>
 
-          <div class="upload-actions">
-            <el-button
-              type="warning"
-              plain
-              :disabled="uploadClosed || !currentDetailJob"
-              :loading="closing"
-              @click="closeUpload"
-            >
-              关闭上传（我不再上传了）
-            </el-button>
-            <div class="upload-hint">
-              <span>已上传: {{ (currentDetailJob?.videos?.length || 0) }} 个</span>
-              <el-divider direction="vertical" />
-              <span>完成/失败: {{ doneCount }}/{{ totalCount }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="panel-header" style="border-top: 1px solid #ebeef5">
-          <span>视频列表 ({{ filteredVideos.length }})</span>
-          <div class="video-actions">
-            <el-checkbox
-              :indeterminate="selectAllIndeterminate"
-              :model-value="selectAllChecked"
-              @change="toggleSelectAll"
-            >
-              全选
-            </el-checkbox>
-            <el-popconfirm
-              title="将清空所选视频的历史事件/截图，并重新入队分析，是否继续？"
-              @confirm="reanalyzeSelected"
-            >
-              <template #reference>
-                <el-button
-                  size="small"
-                  type="danger"
-                  plain
-                  :disabled="selectedFileIds.length === 0 || reanalyzing || !currentDetailJob"
-                  :loading="reanalyzing"
+              <div class="table-wrap">
+                <el-table
+                  :data="listPageVideos"
+                  height="100%"
+                  stripe
+                  highlight-current-row
+                  :row-class-name="rowClassName"
+                  @row-click="onRowClick"
                 >
-                  重新分析 ({{ selectedFileIds.length }})
-                </el-button>
-              </template>
-            </el-popconfirm>
-          </div>
-        </div>
+                  <el-table-column type="index" label="#" width="55">
+                    <template #default="{ $index }">
+                      {{ (listPageNo - 1) * listPageSize + $index + 1 }}
+                    </template>
+                  </el-table-column>
 
-        <el-scrollbar>
-          <div class="video-list">
-            <div
-              v-for="vid in filteredVideos"
-              :key="vid.id"
-              class="video-card"
-              :class="{ active: currentFileId === vid.id }"
-              @click="selectVideo(vid.id)"
-            >
-              <div class="vc-check" @click.stop>
-                <el-checkbox
-                  :model-value="isSelected(vid.id)"
-                  @change="toggleSelected(vid.id, $event)"
-                />
-              </div>
-              <div class="vc-row1">
-                <span class="vc-name" :title="vid.fileName">{{ vid.fileName }}</span>
-                <el-tag size="small" effect="plain">{{ getVideoStatusText(vid.status) }}</el-tag>
+                  <el-table-column prop="fileName" label="文件名" min-width="220" show-overflow-tooltip />
+
+                  <el-table-column label="异常" width="90">
+                    <template #default="{ row }">
+                      <el-tag v-if="row.stats.total > 0" type="danger" size="small" effect="dark">有异常</el-tag>
+                      <el-tag v-else type="success" size="small" effect="plain">正常</el-tag>
+                    </template>
+                  </el-table-column>
+
+                  <el-table-column label="火/闪" width="110">
+                    <template #default="{ row }">
+                      <span class="mini-kpi">
+                        <span class="kpi kpi-danger">火 {{ row.stats.spark }}</span>
+                        <span class="kpi kpi-warning">闪 {{ row.stats.flash }}</span>
+                      </span>
+                    </template>
+                  </el-table-column>
+
+                  <el-table-column label="Max" width="90">
+                    <template #default="{ row }">
+                      <span v-if="row.stats.maxConf > 0">{{ (row.stats.maxConf * 100).toFixed(0) }}%</span>
+                      <span v-else class="text-gray">-</span>
+                    </template>
+                  </el-table-column>
+
+                  <el-table-column label="操作" width="110" fixed="right">
+                    <template #default="{ row }">
+                      <el-button size="small" type="primary" link @click.stop="openDetail(row.id)">
+                        查看详情
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
               </div>
 
-              <div class="vc-row2">
-                <div class="vc-badges">
-                  <el-tag v-if="vid.stats.spark > 0" type="danger" size="small" effect="dark">
-                    火 {{ vid.stats.spark }}
-                  </el-tag>
-                  <el-tag v-if="vid.stats.flash > 0" type="warning" size="small" effect="dark">
-                    闪 {{ vid.stats.flash }}
-                  </el-tag>
-                  <span v-if="vid.stats.total === 0" class="text-gray">无异常</span>
+              <!-- 清单分页：与 4/9/16 画面完全一致（同 pageNo、同 pageSize） -->
+              <div class="pager">
+                <div class="pager-left">
+                  <span class="sub-text">每页 {{ listPageSize }} 条（随 4/9/16 画面自动变化）</span>
                 </div>
-                <div v-if="vid.stats.maxConf > 0" class="vc-conf">
-                  Max: {{ (vid.stats.maxConf * 100).toFixed(0) }}%
+                <div class="pager-right">
+                  <el-button size="small" :disabled="listPageNo <= 1" @click="goPrevPage">上一页</el-button>
+                  <span class="pager-mid">{{ listPageNo }} / {{ listPageCount }}</span>
+                  <el-button size="small" :disabled="listPageNo >= listPageCount" @click="goNextPage">下一页</el-button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧：4/9/16 多画面（严格限制数量，翻页，不滚动显示更多） -->
+            <div class="list-right">
+              <div class="panel-header">
+                <div class="lr-title">
+                  <span>多画面预览</span>
+                  <span class="sub-text">（本页 {{ listPageVideos.length }} / {{ listPageSize }}）</span>
+                </div>
+
+                <div class="lr-controls">
+                  <el-segmented v-model="gridMode" :options="gridModeOptions" size="small" />
                 </div>
               </div>
 
-              <div class="vc-row3">
-                <span class="vc-meta">时长: {{ formatDuration(vid.analysisDurationMs) }}</span>
-                <span class="vc-meta" v-if="vid.status === 1">处理中...</span>
+              <div class="grid-stage">
+                <div class="video-grid" :class="gridClass">
+                  <!-- 实际视频画面 -->
+                  <div
+                    v-for="v in listPageVideos"
+                    :key="v.id"
+                    class="grid-cell"
+                    :class="{ active: listSelectedId === v.id }"
+                    @click="selectFromGrid(v.id)"
+                  >
+                    <!-- 异常标识：右上角🔥；正常不显示 -->
+                    <div class="grid-flame" v-if="v.stats.total > 0" title="该视频存在异常事件">🔥</div>
+
+                    <video
+                      class="grid-video"
+                      :src="videoAnalyticsService.getVideoContentUrl(v.id)"
+                      muted
+                      preload="metadata"
+                      controls
+                    ></video>
+                  </div>
+
+                  <!-- 补足空格：确保 4/9/16 画面固定布局 -->
+                  <div
+                    v-for="k in emptyCells"
+                    :key="'empty-' + k"
+                    class="grid-cell empty"
+                  >
+                    <div class="empty-tip">空</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid-hint">
+                <span class="sub-text">
+                  提示：右上角 🔥 表示有异常；点击任意画面可选中；分页与左侧表格同步。
+                </span>
               </div>
             </div>
           </div>
-        </el-scrollbar>
-      </div>
+        </el-tab-pane>
 
-      <!-- 中栏：事件预览墙 -->
-      <div class="wb-col-center">
-        <div class="panel-header">
-          <span>事件预览 - {{ currentFileName }}</span>
-          <span class="sub-text"> (共 {{ currentVideoFilteredEvents.length }} 个事件)</span>
-        </div>
+        <!-- 2) 视频分析详情（第二个选项卡；置信度阈值放在这里） -->
+        <el-tab-pane name="detail" label="视频分析详情">
+          <!-- 详情页筛选栏（包含置信度阈值） -->
+          <div class="detail-filter-bar">
+            <div class="df-left">
+              <span class="filter-label">置信度阈值:</span>
+              <el-slider v-model="filterConf" :min="0" :max="1" :step="0.05" style="width: 160px; margin: 0 12px" />
 
-        <el-scrollbar>
-          <div v-if="currentVideoFilteredEvents.length > 0" class="event-grid">
-            <div
-              v-for="evt in currentVideoFilteredEvents"
-              :key="evt.id"
-              class="event-card"
-              @click="seekToEvent(evt)"
-            >
-              <div class="ec-thumb" v-loading="snapshotLoading[evt.id]">
-                <el-image
-                  v-if="snapshotCache[evt.id]"
-                  :src="snapshotCache[evt.id]"
-                  fit="cover"
-                  class="ec-img"
-                />
-                <div v-else class="ec-placeholder">
-                  <el-icon><Picture /></el-icon>
+              <el-checkbox v-model="filterHasEvents" label="仅看有事件" border size="small" />
+
+              <el-radio-group v-model="filterType" size="small" class="ml-2">
+                <el-radio-button label="ALL">全部</el-radio-button>
+                <el-radio-button label="Spark"><span class="text-danger">火花</span></el-radio-button>
+                <el-radio-button label="Flash"><span class="text-warning">闪光</span></el-radio-button>
+              </el-radio-group>
+            </div>
+
+            <div class="df-right">
+              <span class="sub-text">筛选仅作用于“事件墙/详情查看”，不影响清单页的🔥标识（🔥基于是否存在事件）。</span>
+            </div>
+          </div>
+
+          <div class="wb-body">
+            <!-- 左栏：视频列表 -->
+            <div class="wb-col-left">
+              <div class="panel-header">
+                <span>视频列表 ({{ filteredVideos.length }})</span>
+                <div class="video-actions">
+                  <el-checkbox
+                    :indeterminate="selectAllIndeterminate"
+                    :model-value="selectAllChecked"
+                    @change="toggleSelectAll"
+                  >
+                    全选
+                  </el-checkbox>
+
+                  <el-popconfirm title="将清空所选视频的历史事件/截图，并重新入队分析，是否继续？" @confirm="reanalyzeSelected">
+                    <template #reference>
+                      <el-button
+                        size="small"
+                        type="danger"
+                        plain
+                        :disabled="selectedFileIds.length === 0 || reanalyzing || !currentDetailJob"
+                        :loading="reanalyzing"
+                      >
+                        重新分析 ({{ selectedFileIds.length }})
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
                 </div>
-                <div class="ec-time">{{ formatTime(evt.peakTimeSec) }}</div>
               </div>
-              <div class="ec-info">
-                <div class="ec-row">
-                  <el-tag size="small" :type="evt.eventType === 2 ? 'danger' : 'warning'" effect="dark">
-                    {{ evt.eventType === 2 ? 'Spark' : 'Flash' }}
-                  </el-tag>
-                  <span class="ec-conf">{{ (Number(evt.confidence) * 100).toFixed(1) }}%</span>
+
+              <el-scrollbar>
+                <div class="video-list">
+                  <div
+                    v-for="vid in filteredVideos"
+                    :key="vid.id"
+                    class="video-card"
+                    :class="{ active: currentFileId === vid.id }"
+                    @click="selectVideo(vid.id)"
+                  >
+                    <div class="vc-row1">
+                      <div class="vc-left">
+                        <el-checkbox
+                          :model-value="isSelected(vid.id)"
+                          @change="toggleSelected(vid.id, $event)"
+                          @click.stop
+                        />
+                        <span class="vc-name" :title="vid.fileName">{{ vid.fileName }}</span>
+                      </div>
+
+                      <div class="vc-right">
+                        <el-tag v-if="vid.stats.total > 0" type="danger" size="small" effect="dark">异常</el-tag>
+                        <el-tag v-else type="success" size="small" effect="plain">正常</el-tag>
+                        <el-tag size="small" effect="plain" class="ml-2">{{ getVideoStatusText(vid.status) }}</el-tag>
+                      </div>
+                    </div>
+
+                    <div class="vc-row2">
+                      <div class="vc-badges">
+                        <el-tag v-if="vid.stats.spark > 0" type="danger" size="small" effect="dark">火 {{ vid.stats.spark }}</el-tag>
+                        <el-tag v-if="vid.stats.flash > 0" type="warning" size="small" effect="dark">闪 {{ vid.stats.flash }}</el-tag>
+                        <span v-if="vid.stats.total === 0" class="text-gray">无异常事件</span>
+                      </div>
+                      <div v-if="vid.stats.maxConf > 0" class="vc-conf">
+                        Max: {{ (vid.stats.maxConf * 100).toFixed(0) }}%
+                      </div>
+                    </div>
+
+                    <div class="vc-row3">
+                      <span class="vc-meta">时长: {{ formatDuration(vid.analysisDurationMs) }}</span>
+                      <span class="vc-meta" v-if="vid.status === 1">处理中...</span>
+                    </div>
+                  </div>
                 </div>
-                <el-progress
-                  :percentage="Math.round(Number(evt.confidence) * 100)"
-                  :show-text="false"
-                  class="mt-1"
-                />
+              </el-scrollbar>
+            </div>
+
+            <!-- 中栏：全量事件墙（按视频分组） -->
+            <div class="wb-col-center">
+              <div class="panel-header">
+                <span>全量事件预览</span>
+                <span class="sub-text">（筛选后共 {{ allFilteredEvents.length }} 个事件，{{ allEventGroups.length }} 个视频分组）</span>
+              </div>
+
+              <el-scrollbar>
+                <div v-if="allEventGroups.length" class="group-wall">
+                  <div v-for="g in allEventGroups" :key="g.videoId" class="group-block">
+                    <div class="group-header" @click="selectVideo(g.videoId)">
+                      <div class="gh-left">
+                        <span class="gh-title" :title="g.fileName">{{ g.fileName }}</span>
+                        <el-tag size="small" effect="plain" class="ml-2">{{ getVideoStatusText(g.status) }}</el-tag>
+                        <el-tag type="danger" size="small" effect="dark" class="ml-2">异常</el-tag>
+                      </div>
+
+                      <div class="gh-right">
+                        <el-tag v-if="g.spark > 0" type="danger" size="small" effect="dark">火 {{ g.spark }}</el-tag>
+                        <el-tag v-if="g.flash > 0" type="warning" size="small" effect="dark">闪 {{ g.flash }}</el-tag>
+                        <span class="gh-meta">事件 {{ g.total }}</span>
+                        <span v-if="g.maxConf > 0" class="gh-meta strong">Max {{ (g.maxConf * 100).toFixed(0) }}%</span>
+                      </div>
+                    </div>
+
+                    <div class="event-grid">
+                      <div
+                        v-for="evt in g.events"
+                        :key="evt.id"
+                        class="event-card"
+                        :class="{ selected: currentFileId === g.videoId }"
+                        @click="seekToEventFromWall(g.videoId, evt)"
+                      >
+                        <div class="ec-thumb" v-loading="snapshotLoading[evt.id]">
+                          <el-image
+                            v-if="snapshotCache[evt.id]"
+                            :src="snapshotCache[evt.id]"
+                            fit="cover"
+                            class="ec-img"
+                          />
+                          <div v-else class="ec-placeholder">
+                            <el-icon><Picture /></el-icon>
+                          </div>
+                          <div class="ec-time">{{ formatTime(evt.peakTimeSec) }}</div>
+                        </div>
+
+                        <div class="ec-info">
+                          <div class="ec-row">
+                            <el-tag size="small" :type="evt.eventType === 2 ? 'danger' : 'warning'" effect="dark">
+                              {{ evt.eventType === 2 ? 'Spark' : 'Flash' }}
+                            </el-tag>
+                            <span class="ec-conf">{{ (Number(evt.confidence) * 100).toFixed(1) }}%</span>
+                          </div>
+                          <el-progress :percentage="Math.round(Number(evt.confidence) * 100)" :show-text="false" class="mt-1" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <el-empty v-else description="当前筛选条件下无事件" />
+              </el-scrollbar>
+            </div>
+
+            <!-- 右栏：播放器 + 右下角持续上传 -->
+            <div class="wb-col-right">
+              <div class="panel-header">
+                <span>播放器 - {{ currentFileName }}</span>
+              </div>
+
+              <div class="player-wrapper">
+                <video
+                  ref="videoRef"
+                  class="html-video"
+                  controls
+                  :src="currentVideoUrl"
+                  @timeupdate="onTimeUpdate"
+                ></video>
+
+                <div class="player-controls">
+                  <span class="time-display">{{ formatTime(currentTime) }}</span>
+                  <div class="quick-seek">
+                    <el-button size="small" @click="seekDelta(-5)">-5s</el-button>
+                    <el-button size="small" @click="seekDelta(5)">+5s</el-button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="upload-panel">
+                <div class="panel-header small">
+                  <span>持续上传</span>
+                </div>
+
+                <div class="upload-box">
+                  <el-upload
+                    drag
+                    multiple
+                    action="#"
+                    accept="video/*"
+                    :auto-upload="true"
+                    :show-file-list="true"
+                    :limit="1000"
+                    :disabled="uploadClosed || !canUpload"
+                    :http-request="doUploadRequest"
+                    :before-upload="beforeUpload"
+                    @exceed="onExceed"
+                  >
+                    <div class="el-upload__text">
+                      拖拽视频到此处或点击上传<br />
+                      <span class="upload-sub">单文件上传完成即入队分析（服务端不知道何时结束）</span>
+                    </div>
+                  </el-upload>
+
+                  <div class="upload-actions">
+                    <el-button
+                      type="warning"
+                      plain
+                      :disabled="uploadClosed || !currentDetailJob"
+                      :loading="closing"
+                      @click="closeUpload"
+                    >
+                      关闭上传（我不再上传了）
+                    </el-button>
+
+                    <div class="upload-hint">
+                      <span>已上传: {{ (currentDetailJob?.videos?.length || 0) }} 个</span>
+                      <el-divider direction="vertical" />
+                      <span>完成/失败: {{ doneCount }}/{{ totalCount }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="right-footer-hint">
+                <span class="sub-text">提示：点击事件墙中的任意截图，将自动切换视频并定位到该事件前 2 秒。</span>
               </div>
             </div>
           </div>
-          <el-empty v-else description="当前筛选条件下无事件" />
-        </el-scrollbar>
-      </div>
-
-      <!-- 右栏：播放器与时间轴 -->
-      <div class="wb-col-right">
-        <div class="player-wrapper">
-          <video
-            ref="videoRef"
-            class="html-video"
-            controls
-            :src="currentVideoUrl"
-            @timeupdate="onTimeUpdate"
-          ></video>
-
-          <div class="player-controls">
-            <span class="time-display">{{ formatTime(currentTime) }}</span>
-            <div class="quick-seek">
-              <el-button size="small" @click="seekDelta(-5)">-5s</el-button>
-              <el-button size="small" @click="seekDelta(5)">+5s</el-button>
-            </div>
-          </div>
-        </div>
-
-        <div class="timeline-wrapper">
-          <div class="panel-header small">事件时间轴</div>
-          <el-scrollbar>
-            <ul class="timeline-list">
-              <li
-                v-for="evt in currentVideoFilteredEvents"
-                :key="evt.id"
-                class="timeline-item"
-                :class="{ active: isEventActive(evt) }"
-                @click="seekToEvent(evt)"
-              >
-                <div class="tl-time">{{ formatTime(evt.peakTimeSec) }}</div>
-                <div class="tl-type" :class="evt.eventType === 2 ? 'Spark' : 'Flash'">
-                  {{ evt.eventType === 2 ? '火花' : '闪光' }}
-                </div>
-                <div class="tl-conf">{{ (Number(evt.confidence) * 100).toFixed(0) }}%</div>
-              </li>
-            </ul>
-          </el-scrollbar>
-        </div>
-      </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
+
+    <!-- 使用说明弹窗 -->
+    <el-dialog v-model="helpVisible" title="使用说明" width="780px" append-to-body>
+      <div class="help-content">
+        <h4>1. 视频清单</h4>
+        <ul>
+          <li>左侧表格可按“仅异常”筛选；右侧为 4/9/16 多画面预览。</li>
+          <li>右侧画面右上角 🔥 表示该视频存在异常事件。</li>
+          <li>多画面严格限制数量，翻页与左侧分页同步。</li>
+        </ul>
+
+        <h4>2. 视频分析详情</h4>
+        <ul>
+          <li>置信度阈值等筛选器仅在该选项卡生效，用于筛选事件墙与详情查看。</li>
+        </ul>
+      </div>
+
+      <template #footer>
+        <el-button type="primary" @click="helpVisible = false">我知道了</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { videoAnalyticsService, type EventDto, type JobDetailDto, type JobVideoDto } from '@/services/videoAnalyticsService';
-import { ArrowLeft, Picture, Refresh } from '@element-plus/icons-vue';
+import { Picture, QuestionFilled } from '@element-plus/icons-vue';
 import { ElMessage } from 'element-plus';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 
 const props = defineProps<{ job: JobDetailDto; asDialog?: boolean }>()
 defineEmits(['back'])
 
-// ================= 类型定义 =================
+// ============ Tabs ============
+const activeTab = ref<'list' | 'detail'>('list') // 默认先看“视频清单”
+
+// ============ 类型 ============
 interface VideoStats {
   spark: number
   flash: number
@@ -265,17 +447,31 @@ interface EnrichedVideo extends JobVideoDto {
   analysisDurationMs: number
 }
 
-// ================= 状态管理 =================
+interface WallGroup {
+  videoId: number
+  fileName: string
+  status: number
+  spark: number
+  flash: number
+  total: number
+  maxConf: number
+  firstEventTime: number
+  events: EventDto[]
+}
+
+// ============ 状态 ============
 const currentDetailJob = ref<JobDetailDto | null>(null)
 const loadingDetail = ref(false)
 const allEvents = ref<EventDto[]>([])
 const currentFileId = ref<number | null>(null)
 
-const snapshotCache = ref<Record<number, string>>({}) // eventId -> snapshotUrl
-const snapshotLoading = ref<Record<number, boolean>>({}) // eventId -> loading
+const snapshotCache = ref<Record<number, string>>({})
+const snapshotLoading = ref<Record<number, boolean>>({})
+
+const helpVisible = ref(false)
 
 // 上传/关闭
-const uploadClosed = ref(false) // 前端态：关闭后禁用上传（后端也应拒绝）
+const uploadClosed = ref(false)
 const closing = ref(false)
 const canUpload = ref(true)
 
@@ -283,7 +479,7 @@ const canUpload = ref(true)
 const selectedFileIds = ref<number[]>([])
 const reanalyzing = ref(false)
 
-// 过滤器（默认不过滤，确保持续上传能“立刻看到视频列表”）
+// 详情页筛选器（置信度阈值在 detail）
 const filterConf = ref(0)
 const filterHasEvents = ref(false)
 const filterType = ref<'ALL' | 'Spark' | 'Flash'>('ALL')
@@ -293,7 +489,20 @@ const videoRef = ref<HTMLVideoElement>()
 const currentTime = ref(0)
 let pollTimer: number | null = null
 
-// ================= 工具函数 =================
+// 清单页：异常筛选 + 分页（pageSize = gridMode）
+const onlyAbnormal = ref(false)
+const listPageNo = ref(1)
+const listSelectedId = ref<number | null>(null)
+
+// 多画面：4/9/16（pageSize 绑定它）
+const gridMode = ref<4 | 9 | 16>(9)
+const gridModeOptions = [
+  { label: '4画面', value: 4 },
+  { label: '9画面', value: 9 },
+  { label: '16画面', value: 16 }
+]
+
+// ============ 工具函数 ============
 const toNum = (v: any) => Number(v ?? 0)
 
 const getStatusText = (s: number) => {
@@ -360,22 +569,13 @@ const formatDuration = (ms: number) => {
 }
 
 const normalizeDurationMs = (file: any) => {
-  // 说明：你当前 DTO 没有“分析耗时”字段，这里做兜底：
-  // - 若后端补了 analysisDurationMs/durationMs 等字段，会自动显示
-  // - 否则用 durationSec(视频时长) 作为展示，避免一直是 '-'
-  const ms =
-    file?.analysisDurationMs ??
-    file?.durationMs ??
-    file?.costMs ??
-    file?.elapsedMs
-
+  const ms = file?.analysisDurationMs ?? file?.durationMs ?? file?.costMs ?? file?.elapsedMs
   if (ms != null) return Number(ms || 0)
-
   const sec = Number(file?.durationSec ?? 0)
   return sec > 0 ? sec * 1000 : 0
 }
 
-// ================= 统计信息 =================
+// ============ 统计 ============
 const totalCount = computed(() => currentDetailJob.value?.videos?.length || 0)
 const doneCount = computed(() => {
   const vids = currentDetailJob.value?.videos || []
@@ -395,7 +595,7 @@ const selectAllIndeterminate = computed(() => {
   return hit > 0 && hit < list.length
 })
 
-// ================= 计算属性 =================
+// ============ enrichedVideos ============
 const enrichedVideos = computed<EnrichedVideo[]>(() => {
   if (!currentDetailJob.value || !currentDetailJob.value.videos) return []
 
@@ -428,6 +628,7 @@ const enrichedVideos = computed<EnrichedVideo[]>(() => {
   })
 })
 
+// ============ 详情页：视频列表过滤（含阈值/类型/仅看有事件） ============
 const filteredVideos = computed(() => {
   let list = enrichedVideos.value
 
@@ -448,26 +649,99 @@ const filteredVideos = computed(() => {
 const currentVideo = computed(() => enrichedVideos.value.find(v => v.id === currentFileId.value))
 const currentFileName = computed(() => currentVideo.value?.fileName || '-')
 
-const currentVideoFilteredEvents = computed(() => {
-  if (!currentVideo.value) return []
-
-  let evts = currentVideo.value.events
-  if (filterType.value === 'Spark') evts = evts.filter(e => e.eventType === 2)
-  if (filterType.value === 'Flash') evts = evts.filter(e => e.eventType === 1)
-  evts = evts.filter(e => toNum(e.confidence) >= filterConf.value)
-
-  return evts.slice().sort((a, b) => a.peakTimeSec - b.peakTimeSec)
-})
-
 const currentVideoUrl = computed(() => {
   if (!currentFileId.value) return ''
   return videoAnalyticsService.getVideoContentUrl(currentFileId.value)
 })
 
-// ================= 生命周期与方法 =================
+// ============ 详情页：全量事件筛选 + 分组 ============
+const allFilteredEvents = computed(() => {
+  let evts = allEvents.value.slice()
+
+  if (filterType.value === 'Spark') evts = evts.filter(e => e.eventType === 2)
+  if (filterType.value === 'Flash') evts = evts.filter(e => e.eventType === 1)
+  evts = evts.filter(e => toNum(e.confidence) >= filterConf.value)
+
+  return evts.sort((a, b) => a.videoFileId - b.videoFileId || a.peakTimeSec - b.peakTimeSec)
+})
+
+const allEventGroups = computed<WallGroup[]>(() => {
+  const videos = enrichedVideos.value
+  if (!videos.length) return []
+
+  const vmap = new Map<number, EnrichedVideo>()
+  videos.forEach(v => vmap.set(v.id, v))
+
+  const gmap = new Map<number, EventDto[]>()
+  allFilteredEvents.value.forEach(e => {
+    const vid = Number(e.videoFileId)
+    if (!gmap.has(vid)) gmap.set(vid, [])
+    gmap.get(vid)!.push(e)
+  })
+
+  let groups: WallGroup[] = []
+  for (const [videoId, events] of gmap.entries()) {
+    const v = vmap.get(videoId)
+    if (!v) continue
+
+    const spark = events.filter(x => x.eventType === 2).length
+    const flash = events.filter(x => x.eventType === 1).length
+    const maxConf = events.reduce((m, x) => Math.max(m, toNum(x.confidence)), 0)
+    const firstEventTime = events.reduce((m, x) => Math.min(m, x.peakTimeSec), Infinity)
+    groups.push({
+      videoId,
+      fileName: (v as any).fileName ?? (v as any).originalName ?? String(videoId),
+      status: Number((v as any).status ?? 0),
+      spark,
+      flash,
+      total: events.length,
+      maxConf,
+      firstEventTime: firstEventTime === Infinity ? 0 : firstEventTime,
+      events
+    })
+  }
+
+  if (filterHasEvents.value) groups = groups.filter(g => g.total > 0)
+
+  return groups.sort((a, b) => {
+    if (b.total !== a.total) return b.total - a.total
+    if (b.maxConf !== a.maxConf) return b.maxConf - a.maxConf
+    return a.firstEventTime - b.firstEventTime
+  })
+})
+
+// ============ 清单页：分页与网格（pageSize = gridMode） ============
+const listPageSize = computed(() => gridMode.value)
+
+const listAllVideos = computed(() => {
+  let list = enrichedVideos.value.slice().sort((a, b) => a.id - b.id)
+  if (onlyAbnormal.value) list = list.filter(v => v.stats.total > 0)
+  return list
+})
+
+const listTotal = computed(() => listAllVideos.value.length)
+const listPageCount = computed(() => Math.max(1, Math.ceil(listTotal.value / listPageSize.value)))
+
+const listPageVideos = computed(() => {
+  const start = (listPageNo.value - 1) * listPageSize.value
+  return listAllVideos.value.slice(start, start + listPageSize.value)
+})
+
+const emptyCells = computed(() => {
+  const n = listPageSize.value - listPageVideos.value.length
+  return n > 0 ? Array.from({ length: n }, (_, i) => i + 1) : []
+})
+
+const gridClass = computed(() => {
+  const v = gridMode.value
+  if (v === 4) return 'grid-2'
+  if (v === 9) return 'grid-3'
+  return 'grid-4'
+})
+
+// ============ 生命周期 ============
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
-
   if (props.job) {
     currentDetailJob.value = props.job
     uploadClosed.value = Number((props.job as any).totalVideoCount ?? 0) > 0
@@ -480,24 +754,48 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
 })
 
-// 当“当前视频事件列表”变化时（轮询刷新后常见），自动加载快照，让事件墙立刻更新
+// 全量筛选事件变化：预热快照（详情页用）
 watch(
-  () => currentVideoFilteredEvents.value.map(e => e.id).join(','),
+  () => allFilteredEvents.value.map(e => e.id).join(','),
   async () => {
-    if (!currentFileId.value) return
     await nextTick()
-    loadSnapshotsForCurrentVideo()
+    preloadSnapshots(allFilteredEvents.value.slice(0, 60))
   }
 )
 
+// gridMode 改变：分页大小改变 -> 回到第一页，并保证选中项合理
 watch(
-  () => currentDetailJob.value?.videos?.map(v => v.id).join(',') || '',
+  () => gridMode.value,
   () => {
-    const ids = new Set((currentDetailJob.value?.videos || []).map(v => v.id))
-    selectedFileIds.value = selectedFileIds.value.filter(id => ids.has(id))
+    listPageNo.value = 1
+    nextTick(() => {
+      if (!listSelectedId.value) listSelectedId.value = listPageVideos.value[0]?.id ?? null
+    })
   }
 )
 
+// 仅异常开关：数据集变化 -> 回到第一页
+watch(
+  () => onlyAbnormal.value,
+  () => {
+    listPageNo.value = 1
+    nextTick(() => {
+      listSelectedId.value = listPageVideos.value[0]?.id ?? null
+    })
+  }
+)
+
+// 数据刷新后：清单保底选中
+watch(
+  () => enrichedVideos.value.map(v => v.id).join(','),
+  () => {
+    if (!listSelectedId.value) listSelectedId.value = listPageVideos.value[0]?.id ?? null
+    // 若当前页越界（比如切换仅异常后总数变少），修正页码
+    if (listPageNo.value > listPageCount.value) listPageNo.value = listPageCount.value
+  }
+)
+
+// ============ 详情页：选中/重新分析 ============
 const isSelected = (id: number) => selectedFileIds.value.includes(id)
 
 const toggleSelected = (id: number, checked: any) => {
@@ -544,20 +842,23 @@ const reanalyzeSelected = async () => {
   }
 }
 
+// ============ 初始化/轮询/刷新 ============
 const initWorkbench = async () => {
   loadingDetail.value = true
   await refreshDetail()
   await nextTick()
 
-  // 初次进入：如果有视频但未选中，默认选第一个（持续上传场景更符合直觉）
+  // 详情页保底选中
   if (!currentFileId.value && currentDetailJob.value?.videos?.length) {
     const first = currentDetailJob.value.videos[0]
     if (first?.id) selectVideo(first.id)
   }
 
+  // 清单页保底选中
+  if (!listSelectedId.value) listSelectedId.value = listPageVideos.value[0]?.id ?? null
+
   loadingDetail.value = false
 
-  // 轮询：只要 job 还在等待/分析，就持续刷新
   if (currentDetailJob.value && [0, 1].includes(Number(currentDetailJob.value.status))) {
     startPolling()
   }
@@ -575,12 +876,10 @@ const refreshDetail = async () => {
     if (jobRes.success) {
       currentDetailJob.value = jobRes.data
       uploadClosed.value = Number((jobRes.data as any).totalVideoCount ?? 0) > 0
-      // 可选：如果后端提供了 uploadClosed 字段，可同步
-      // uploadClosed.value = !!(jobRes.data as any).uploadClosed
     }
     if (evtRes.success) allEvents.value = evtRes.data
 
-    // 确保有选中视频（持续上传时，刷新可能先于 selectVideo）
+    // 详情页：保底选中视频
     if (!currentFileId.value) {
       const first = currentDetailJob.value?.videos?.[0]
       if (first?.id) selectVideo(first.id)
@@ -592,7 +891,9 @@ const refreshDetail = async () => {
       }
     }
 
-    // 分析结束则停
+    // 清单页：页码校正
+    if (listPageNo.value > listPageCount.value) listPageNo.value = listPageCount.value
+
     if (currentDetailJob.value && ![0, 1].includes(Number(currentDetailJob.value.status))) {
       stopPolling()
     }
@@ -601,12 +902,46 @@ const refreshDetail = async () => {
   }
 }
 
+const startPolling = () => {
+  if (pollTimer) return
+  pollTimer = window.setInterval(async () => {
+    if (!currentDetailJob.value) {
+      stopPolling()
+      return
+    }
+    await refreshDetail()
+  }, 3000)
+}
+
+const stopPolling = () => {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+// ============ 详情页：选视频/事件定位 ============
 const selectVideo = (fileId: number) => {
   currentFileId.value = fileId
-  loadSnapshotsForCurrentVideo()
+  listSelectedId.value = fileId
+
+  const v = enrichedVideos.value.find(x => x.id === fileId)
+  if (v?.events?.length) {
+    const evts = v.events
+      .filter(e => toNum(e.confidence) >= filterConf.value)
+      .filter(e => (filterType.value === 'ALL' ? true : filterType.value === 'Spark' ? e.eventType === 2 : e.eventType === 1))
+      .slice()
+      .sort((a, b) => a.peakTimeSec - b.peakTimeSec)
+      .slice(0, 30)
+
+    preloadSnapshots(evts)
+  }
 
   nextTick(() => {
-    const evts = currentVideoFilteredEvents.value
+    if (!v) return
+    const evts = v.events
+      .filter(e => toNum(e.confidence) >= filterConf.value)
+      .filter(e => (filterType.value === 'ALL' ? true : filterType.value === 'Spark' ? e.eventType === 2 : e.eventType === 1))
     if (evts.length > 0) {
       const bestEvt = evts.reduce((prev, curr) => (toNum(curr.confidence) > toNum(prev.confidence) ? curr : prev), evts[0])
       seekToEvent(bestEvt, false)
@@ -614,11 +949,19 @@ const selectVideo = (fileId: number) => {
   })
 }
 
-const loadSnapshotsForCurrentVideo = async () => {
-  const evts = currentVideoFilteredEvents.value
-  const pending = evts.filter(e => !snapshotCache.value[e.id] && !snapshotLoading.value[e.id])
+const seekToEventFromWall = async (videoId: number, evt: EventDto) => {
+  if (currentFileId.value !== videoId) {
+    selectVideo(videoId)
+    await nextTick()
+  }
+  seekToEvent(evt, true)
+}
 
-  const chunkSize = 5
+const preloadSnapshots = async (events: EventDto[]) => {
+  const pending = events.filter(e => !snapshotCache.value[e.id] && !snapshotLoading.value[e.id])
+  if (!pending.length) return
+
+  const chunkSize = 6
   for (let i = 0; i < pending.length; i += chunkSize) {
     const chunk = pending.slice(i, i + chunkSize)
     await Promise.all(chunk.map(async (e) => {
@@ -662,27 +1005,35 @@ const onTimeUpdate = (e: Event) => {
   currentTime.value = v.currentTime
 }
 
-const isEventActive = (evt: EventDto) => Math.abs(currentTime.value - evt.peakTimeSec) < 1
-
-const startPolling = () => {
-  if (pollTimer) return
-  pollTimer = window.setInterval(async () => {
-    if (!currentDetailJob.value) {
-      stopPolling()
-      return
-    }
-    await refreshDetail()
-  }, 3000)
+// ============ 清单页：表格/网格联动 + 翻页 ============
+const onRowClick = (row: EnrichedVideo) => {
+  listSelectedId.value = row.id
 }
 
-const stopPolling = () => {
-  if (pollTimer) {
-    clearInterval(pollTimer)
-    pollTimer = null
-  }
+const selectFromGrid = (id: number) => {
+  listSelectedId.value = id
 }
 
-// ================= 上传相关 =================
+const openDetail = (id: number) => {
+  activeTab.value = 'detail'
+  nextTick(() => selectVideo(id))
+}
+
+const rowClassName = ({ row }: any) => {
+  return listSelectedId.value === row.id ? 'is-selected-row' : ''
+}
+
+const goPrevPage = () => {
+  if (listPageNo.value > 1) listPageNo.value--
+  listSelectedId.value = listPageVideos.value[0]?.id ?? null
+}
+
+const goNextPage = () => {
+  if (listPageNo.value < listPageCount.value) listPageNo.value++
+  listSelectedId.value = listPageVideos.value[0]?.id ?? null
+}
+
+// ============ 上传相关 ============
 const beforeUpload = (file: File) => {
   if (!currentDetailJob.value?.jobNo) {
     ElMessage.warning('Job 未就绪')
@@ -705,17 +1056,13 @@ const doUploadRequest = async (options: any) => {
     const res = await videoAnalyticsService.uploadOne(currentDetailJob.value.jobNo, file)
     if (res.success) {
       ElMessage.success(`上传成功：${file.name}，已入队分析`)
-
-      // 上传后立刻刷新，让“视频列表”立刻出现
       await refreshDetail()
 
-      // 每次上传成功都选中新视频（体验最佳）
       if (currentDetailJob.value?.videos?.length) {
         const last = currentDetailJob.value.videos[currentDetailJob.value.videos.length - 1]
         if (last?.id) selectVideo(last.id)
       }
 
-      // 确保轮询开启（事件异步产生）
       startPolling()
     } else {
       ElMessage.error(res.message || `上传失败：${file.name}`)
@@ -748,7 +1095,7 @@ const closeUpload = async () => {
   }
 }
 
-// ================= 快捷键 =================
+// ============ 快捷键 ============
 const handleKeydown = (e: KeyboardEvent) => {
   if (!videoRef.value) return
   if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return
@@ -778,27 +1125,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   background-color: #f5f7fa;
 }
 
-.workbench-view.as-dialog {
-  height: 100%;
-  background-color: transparent;
-}
-
-.workbench-view.as-dialog .wb-body {
-  padding: 0;
-}
-
-.workbench-view.as-dialog .wb-toolbar {
-  border-bottom: 0;
-  padding: 6px 6px 10px;
-  background: transparent;
-}
-
-.workbench-view.as-dialog .wb-col-left,
-.workbench-view.as-dialog .wb-col-center,
-.workbench-view.as-dialog .wb-col-right {
-  border-radius: 8px;
-}
-
 .wb-toolbar {
   height: 50px;
   background: #fff;
@@ -810,32 +1136,167 @@ const handleKeydown = (e: KeyboardEvent) => {
   flex-shrink: 0;
 }
 
-.wb-nav {
-  display: flex;
-  align-items: center;
-}
+.wb-nav { display: flex; align-items: center; }
+.wb-actions { display: flex; align-items: center; gap: 10px; }
 
-.job-title {
+.job-title { font-weight: 700; font-size: 16px; }
+.help-btn { border-color: #dcdfe6; }
+
+.tabs-wrap { flex: 1; overflow: hidden; padding: 10px; }
+.wb-tabs { height: 100%; }
+
+:deep(.el-tabs__content) { height: calc(100% - 42px); overflow: hidden; }
+:deep(.el-tab-pane) { height: 100%; }
+
+.panel-header {
+  padding: 10px 15px;
+  border-bottom: 1px solid #ebeef5;
   font-weight: 700;
-  font-size: 16px;
-  margin-left: 10px;
-}
-
-.wb-filters {
+  font-size: 14px;
+  background: #fafafa;
   display: flex;
+  justify-content: space-between;
   align-items: center;
 }
 
-.filter-label {
-  font-size: 12px;
-  color: #606266;
+.panel-header.small { font-size: 12px; padding: 8px 10px; }
+
+.sub-text { font-weight: 400; color: #909399; font-size: 12px; }
+.text-gray { color: #909399; }
+
+.ml-2 { margin-left: 8px; }
+.mt-1 { margin-top: 4px; }
+.text-danger { color: #f56c6c; }
+.text-warning { color: #e6a23c; }
+
+/* ===== 清单页 ===== */
+.list-body {
+  height: 100%;
+  display: flex;
+  gap: 10px;
+  overflow: hidden;
 }
 
-.wb-body {
+.list-left, .list-right {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.list-left { width: 560px; flex-shrink: 0; }
+.list-right { flex: 1; min-width: 640px; }
+
+.lh-title { display: flex; align-items: baseline; gap: 8px; }
+.lh-controls { display: flex; align-items: center; gap: 8px; }
+
+.table-wrap { flex: 1; overflow: hidden; padding: 10px; }
+
+.pager {
+  padding: 10px;
+  border-top: 1px solid #ebeef5;
+  background: #fafafa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pager-right { display: flex; align-items: center; gap: 10px; }
+.pager-mid { font-size: 12px; color: #606266; }
+
+:deep(.is-selected-row td) { background-color: #ecf5ff !important; }
+
+.mini-kpi { display: inline-flex; gap: 6px; }
+.kpi { font-size: 12px; font-weight: 700; }
+.kpi-danger { color: #f56c6c; }
+.kpi-warning { color: #e6a23c; }
+
+.lr-title { display: flex; align-items: baseline; gap: 8px; }
+.lr-controls { display: flex; align-items: center; gap: 8px; }
+
+.grid-stage {
   flex: 1;
+  padding: 10px;
+  overflow: hidden; /* 关键：不允许滚动出现更多画面 */
+}
+
+.video-grid { height: 100%; display: grid; gap: 10px; }
+
+.video-grid.grid-2 { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; }
+.video-grid.grid-3 { grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; }
+.video-grid.grid-4 { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; }
+
+.grid-cell {
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #000;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  min-height: 160px;
+}
+
+.grid-cell:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); transform: translateY(-1px); }
+.grid-cell.active { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64,158,255,0.15) inset; }
+
+.grid-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.grid-flame {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 2;
+  font-size: 18px;
+  line-height: 1;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+
+.grid-cell.empty {
+  background: #f5f7fa;
+  border-style: dashed;
+  cursor: default;
+}
+
+.empty-tip {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #c0c4cc;
+  font-size: 12px;
+}
+
+.grid-hint { padding: 8px 10px; border-top: 1px solid #ebeef5; background: #fafafa; }
+
+/* ===== 详情页筛选栏（置信度阈值在这里） ===== */
+.detail-filter-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.df-left { display: flex; align-items: center; }
+.filter-label { font-size: 12px; color: #606266; }
+
+/* ===== 详情页布局 ===== */
+.wb-body {
+  height: calc(100% - 58px);
   display: flex;
   overflow: hidden;
-  padding: 10px;
   gap: 10px;
 }
 
@@ -849,57 +1310,10 @@ const handleKeydown = (e: KeyboardEvent) => {
 }
 
 .wb-col-left { width: 320px; flex-shrink: 0; }
-.wb-col-center { flex: 1; min-width: 420px; }
-.wb-col-right { width: 360px; flex-shrink: 0; }
+.wb-col-center { flex: 1; min-width: 520px; }
+.wb-col-right { width: 380px; flex-shrink: 0; }
 
-.panel-header {
-  padding: 10px 15px;
-  border-bottom: 1px solid #ebeef5;
-  font-weight: 700;
-  font-size: 14px;
-  background: #fafafa;
-  display: flex;
-  justify-content: space-between;
-}
-
-.video-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.panel-header.small {
-  font-size: 12px;
-  padding: 8px 10px;
-}
-
-.sub-text {
-  font-weight: 400;
-  color: #909399;
-  font-size: 12px;
-}
-
-.upload-box {
-  padding: 10px;
-}
-
-.upload-sub {
-  font-size: 12px;
-  color: #909399;
-}
-
-.upload-actions {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.upload-hint {
-  font-size: 12px;
-  color: #606266;
-}
-
+.video-actions { display: flex; align-items: center; gap: 10px; }
 .video-list { padding: 10px; }
 
 .video-card {
@@ -909,31 +1323,15 @@ const handleKeydown = (e: KeyboardEvent) => {
   margin-bottom: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  position: relative;
 }
 
-.vc-check {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 2;
-}
+.video-card:hover { border-color: #c0c4cc; background-color: #fdfdfd; }
+.video-card.active { border-color: #409eff; background-color: #ecf5ff; }
 
-.video-card:hover {
-  border-color: #c0c4cc;
-  background-color: #fdfdfd;
-}
+.vc-row1 { display: flex; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
 
-.video-card.active {
-  border-color: #409eff;
-  background-color: #ecf5ff;
-}
-
-.vc-row1 {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
+.vc-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.vc-right { display: flex; align-items: center; flex-shrink: 0; }
 
 .vc-name {
   font-size: 13px;
@@ -941,40 +1339,44 @@ const handleKeydown = (e: KeyboardEvent) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 190px;
+  flex: 1;
 }
 
-.vc-row2 {
+.vc-row2 { display: flex; justify-content: space-between; align-items: center; }
+.vc-row3 { margin-top: 6px; display: flex; justify-content: space-between; align-items: center; }
+
+.vc-meta { font-size: 12px; color: #909399; }
+.vc-conf { font-size: 12px; color: #67c23a; font-weight: 700; }
+
+/* 事件墙 */
+.group-wall { padding: 12px; }
+.group-block { border: 1px solid #ebeef5; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }
+
+.group-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fafafa;
+  border-bottom: 1px solid #ebeef5;
+  padding: 10px 12px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  cursor: pointer;
 }
 
-.vc-row3 {
-  margin-top: 6px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+.gh-left { display: flex; align-items: center; min-width: 0; flex: 1; }
+.gh-title { font-weight: 700; font-size: 13px; color: #303133; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gh-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 
-.vc-meta {
-  font-size: 12px;
-  color: #909399;
-}
-
-.vc-conf {
-  font-size: 12px;
-  color: #67c23a;
-  font-weight: 700;
-}
-
-.text-gray { color: #909399; font-size: 12px; }
+.gh-meta { font-size: 12px; color: #606266; }
+.gh-meta.strong { font-weight: 700; color: #67c23a; }
 
 .event-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 15px;
-  padding: 15px;
+  gap: 12px;
+  padding: 12px;
 }
 
 .event-card {
@@ -983,15 +1385,14 @@ const handleKeydown = (e: KeyboardEvent) => {
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.2s;
+  background: #fff;
 }
 
-.event-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
-}
+.event-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.10); }
+.event-card.selected { border-color: #409eff; }
 
 .ec-thumb {
-  height: 100px;
+  height: 104px;
   background: #f5f7fa;
   position: relative;
   display: flex;
@@ -1013,32 +1414,12 @@ const handleKeydown = (e: KeyboardEvent) => {
 }
 
 .ec-info { padding: 8px; }
+.ec-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+.ec-conf { font-size: 12px; font-weight: 700; color: #606266; }
 
-.ec-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.ec-conf {
-  font-size: 12px;
-  font-weight: 700;
-  color: #606266;
-}
-
-.player-wrapper {
-  background: #000;
-  height: 240px;
-  display: flex;
-  flex-direction: column;
-}
-
-.html-video {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
+/* 播放器 + 上传 */
+.player-wrapper { background: #000; height: 260px; display: flex; flex-direction: column; }
+.html-video { width: 100%; height: 100%; object-fit: contain; }
 
 .player-controls {
   height: 40px;
@@ -1051,7 +1432,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 .time-display { color: #fff; font-size: 12px; }
 
-.timeline-wrapper {
+.upload-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -1059,33 +1440,17 @@ const handleKeydown = (e: KeyboardEvent) => {
   border-top: 1px solid #dcdfe6;
 }
 
-.timeline-list {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
+.upload-box { padding: 10px; overflow: auto; }
+.upload-sub { font-size: 12px; color: #909399; }
 
-.timeline-item {
-  display: flex;
-  padding: 10px 15px;
-  border-bottom: 1px solid #f0f0f0;
-  cursor: pointer;
-  font-size: 13px;
-  align-items: center;
-}
+.upload-actions { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.upload-hint { font-size: 12px; color: #606266; }
 
-.timeline-item:hover { background-color: #f5f7fa; }
-.timeline-item.active { background-color: #ecf5ff; border-left: 3px solid #409eff; }
+.right-footer-hint { padding: 8px 10px; border-top: 1px solid #ebeef5; background: #fafafa; }
 
-.tl-time { width: 60px; font-family: monospace; color: #606266; }
-.tl-type { flex: 1; font-weight: 700; }
-.tl-type.Spark { color: #f56c6c; }
-.tl-type.Flash { color: #e6a23c; }
-.tl-conf { color: #909399; font-size: 12px; }
-
-.ml-2 { margin-left: 8px; }
-.ml-4 { margin-left: 16px; }
-.mt-1 { margin-top: 4px; }
-.text-danger { color: #f56c6c; }
-.text-warning { color: #e6a23c; }
+/* help */
+.help-content { line-height: 1.7; color: #303133; }
+.help-content h4 { margin: 10px 0 6px; font-size: 14px; }
+.help-content ul { margin: 0 0 10px 18px; padding: 0; }
+.help-content li { margin: 4px 0; }
 </style>

@@ -39,15 +39,16 @@ namespace Preferred.Api.Services
             if (string.IsNullOrWhiteSpace(algoParamsJson))
                 throw new ArgumentException("algoParamsJson 不能为空");
 
-            var now = DateTime.Now;
+            // 先 parse 一遍，确保 JSON 合法（不合法则抛出给前端）
+            _ = AlgoParams.ParseOrDefault(algoParamsJson);
 
-            // JobNo：尽量确保唯一
+            var now = DateTime.Now;
             var jobNo = "VJOB" + now.ToString("yyyyMMddHHmmssfff");
 
             var job = new VideoAnalysisJob
             {
                 JobNo = jobNo,
-                AlgoCode = "spark_v1", // 默认算法
+                AlgoCode = "spark_v2", // 版本提升
                 AlgoParamsJson = algoParamsJson,
 
                 Status = 0,             // pending
@@ -85,17 +86,14 @@ namespace Preferred.Api.Services
             if (job == null)
                 throw new ArgumentException("任务不存在: " + jobNo);
 
-            // 取消/完成/失败：不可上传
             if (job.Status == 2 || job.Status == 3 || job.Status == 4)
                 throw new InvalidOperationException("任务当前状态不可上传");
 
-            // Close 后禁止上传：用 TotalVideoCount>0 作为“已关闭上传”的标记
             if (job.TotalVideoCount > 0)
                 throw new InvalidOperationException("任务已关闭上传，不再接收新视频");
 
             var now = DateTime.Now;
 
-            // 任务目录：{root}/{jobNo}/videos
             string jobDir = Path.Combine(_fs.VideoRootPath, jobNo);
             string videoDir = Path.Combine(jobDir, "videos");
             Directory.CreateDirectory(videoDir);
@@ -106,7 +104,6 @@ namespace Preferred.Api.Services
             string saveName = $"{Guid.NewGuid():N}{ext}";
             string filePath = Path.Combine(videoDir, saveName);
 
-            // 保存文件（失败要清理半成品）
             try
             {
                 await using var fs = new FileStream(
@@ -125,7 +122,6 @@ namespace Preferred.Api.Services
                 throw;
             }
 
-            // SeqNo 自增
             int nextSeq = 1;
             var maxSeq = await _db.VideoAnalysisFiles
                 .Where(x => x.JobId == job.Id)
@@ -153,7 +149,6 @@ namespace Preferred.Api.Services
 
             _db.VideoAnalysisFiles.Add(vf);
 
-            // job 进入处理中
             if (job.Status == 0)
             {
                 job.Status = 1;
@@ -163,7 +158,6 @@ namespace Preferred.Api.Services
             job.UpdTime = now;
 
             await _db.SaveChangesAsync(ct);
-
             await _queue.EnqueueAsync(vf.Id, ct);
 
             return new UploadVideoResultDto
@@ -194,9 +188,6 @@ namespace Preferred.Api.Services
 
                 await UploadAndEnqueueAsync(job.JobNo, f, ct);
             }
-
-            // 旧接口是否自动 close：按你需求决定
-            // await CloseJobAsync(job.JobNo, ct);
 
             return job;
         }
@@ -240,7 +231,6 @@ namespace Preferred.Api.Services
             }
 
             int clearedEvt = eventIds.Count;
-
             var now = DateTime.Now;
 
             using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -283,9 +273,7 @@ namespace Preferred.Api.Services
             }
 
             foreach (var vf in files)
-            {
                 await _queue.EnqueueAsync(vf.Id, ct);
-            }
 
             await RecomputeJobAggregateAsync(job.Id, ct);
 
@@ -350,17 +338,14 @@ namespace Preferred.Api.Services
             var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
             if (job == null) return false;
 
-            // done/failed/cancelled 不需要 close
             if (job.Status == 2 || job.Status == 3 || job.Status == 4) return false;
-
-            // 已 close
             if (job.TotalVideoCount > 0) return true;
 
             var total = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == job.Id)
                 .CountAsync(ct);
 
-            job.TotalVideoCount = total; // 作为 Close 标记（固定总数）
+            job.TotalVideoCount = total;
             job.UpdTime = DateTime.Now;
 
             if (job.Status == 0)
@@ -370,8 +355,8 @@ namespace Preferred.Api.Services
             }
 
             await _db.SaveChangesAsync(ct);
-
             await TryFinalizeJobIfClosedAsync(job.Id, ct);
+
             return true;
         }
 
@@ -380,8 +365,8 @@ namespace Preferred.Api.Services
             var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId, ct);
             if (job == null) return;
 
-            if (job.Status == 4) return; // cancelled
-            if (job.TotalVideoCount <= 0) return; // not closed
+            if (job.Status == 4) return;
+            if (job.TotalVideoCount <= 0) return;
             if (job.Status == 2 || job.Status == 3) return;
 
             var files = await _db.VideoAnalysisFiles.AsNoTracking()
@@ -398,16 +383,12 @@ namespace Preferred.Api.Services
 
             job.FinishedVideoCount = finished;
             job.TotalEventCount = totalEvents;
-
-            job.Progress = job.TotalVideoCount <= 0
-                ? 0
-                : (int)Math.Round(finished * 100.0 / job.TotalVideoCount);
-
+            job.Progress = job.TotalVideoCount <= 0 ? 0 : (int)Math.Round(finished * 100.0 / job.TotalVideoCount);
             job.UpdTime = DateTime.Now;
 
             if (finished + failed >= job.TotalVideoCount)
             {
-                job.Status = 2; // done
+                job.Status = 2;
                 job.Progress = 100;
                 job.FinishTime = DateTime.Now;
                 job.UpdTime = DateTime.Now;
@@ -440,7 +421,6 @@ namespace Preferred.Api.Services
             if (job == null)
                 return new DeleteJobResultDto { Success = false, Message = "任务不存在", FailedFiles = Array.Empty<string>() };
 
-            // 标取消，减少并发写入
             if (job.Status == 1)
             {
                 job.Status = 4;

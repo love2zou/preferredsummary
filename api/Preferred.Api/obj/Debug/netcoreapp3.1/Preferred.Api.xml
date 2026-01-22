@@ -29,9 +29,38 @@
             执行定时任务
             </summary>
         </member>
-        <member name="M:Preferred.Api.Services.SparkDetectionService.ProcessFileAsync(System.Int32,System.Threading.CancellationToken)">
+        <member name="T:Preferred.Api.Services.SparkDetectionService">
             <summary>
-            新模式：处理单个视频文件（fileId 出队）
+            闪光/火花检测服务（峰值对齐截图版）
+            核心特性：
+            1) 每个采样帧都入 window（保证回落帧存在）
+            2) pending 观察期满再 ConfirmPulse（避免“永远等不到回落”）
+            3) ring buffer 缓存最近几秒采样帧，按 peakTimeMs 取最接近帧做截图（时间点对齐）
+            4) resize 检测的 bbox 映射回原图坐标（截图框不偏）
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.BBox">
+            <summary>bbox 统一是“原图坐标”</summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.BuildStatsPoint(OpenCvSharp.Mat,OpenCvSharp.Mat,Video.Application.Dto.AlgoParams)">
+            <summary>
+            统计点：MeanDelta + 动态高亮比例（thr = mean + K*std clamp）
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.TryDetectCandidate(OpenCvSharp.Mat,OpenCvSharp.Mat,Video.Application.Dto.AlgoParams,Preferred.Api.Services.SparkDetectionService.SamplePoint,Preferred.Api.Services.SparkDetectionService.SamplePoint@)">
+            <summary>
+            候选触发：三路任一路满足即可触发
+            1) MeanDelta 足够大（全局突亮/突暗）
+            2) BrightDelta 足够大（动态高亮比例突变）
+            3) diff + contour（局部变化）
+            其中 diff/contour 的 bbox 会从 resize 坐标映射到原图坐标
+            </summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "M:Preferred.Api.Services.SparkDetectionService.ConfirmPulse(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},Video.Application.Dto.AlgoParams,System.Int32,System.Boolean@,System.Double@,OpenCvSharp.Rect@,System.Int32@,System.Boolean@,System.Boolean@)" -->
+        <member name="M:Preferred.Api.Services.SparkDetectionService.CheckMotionReject(Preferred.Api.Services.SparkDetectionService.SamplePoint[],System.Int32,Video.Application.Dto.AlgoParams)">
+            <summary>
+            移动光源抑制：在 peak 前后 1s 内，bbox 中心累计位移超过画面宽度比例则拒绝
+            注意：如果窗口内有效 bbox 点很少（例如全局闪光），不拒绝
             </summary>
         </member>
         <member name="M:Preferred.Api.Services.IZwavAnalysisAppService.CreateAnalysisByFileIdAsync(System.Int32,System.Boolean,System.Threading.CancellationToken)">
@@ -3255,25 +3284,6 @@
             生成用户名和姓名对
             </summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.CreateJob(Video.Application.Dto.CreateVideoJobRequest,System.Threading.CancellationToken)">
-            <summary>
-            创建一个“持续上传会话(Job)”
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.UploadOne(System.String,Microsoft.AspNetCore.Http.IFormFile,System.Threading.CancellationToken)">
-            <summary>
-            单视频上传：上传完成即入队分析（满足：不断上传、服务端不知道何时结束）
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.Analyze(Microsoft.AspNetCore.Http.IFormFile[],System.String,System.Threading.CancellationToken)">
-            <summary>旧接口：批量上传并创建任务（保留兼容）</summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.VideoAnalyticsController.CloseJob(System.String,System.Threading.CancellationToken)">
-            <summary>
-            显式关闭上传：表示“我不再上传了”
-            Close 后，当所有视频处理完（完成+失败=总数）自动把 Job 置为 done
-            </summary>
-        </member>
         <member name="T:Preferred.Api.Controllers.ZwavAnalysesController">
             <summary>
             录波文件解析控制器
@@ -3318,29 +3328,6 @@
         </member>
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportAsync(System.String,System.Boolean)">
             <summary>导出波形数据（CSV）</summary>
-        </member>
-        <member name="P:Video.Application.Dto.AlgoParams.SampleEverySec">
-            <summary>每隔多少秒抽一帧（默认1秒1帧）</summary>
-        </member>
-        <member name="P:Video.Application.Dto.AlgoParams.DiffThreshold">
-            <summary>帧差二值化阈值（越大越不敏感）</summary>
-        </member>
-        <member name="P:Video.Application.Dto.AlgoParams.MinContourArea">
-            <summary>最小轮廓面积（像素），过滤噪声</summary>
-        </member>
-        <member name="P:Video.Application.Dto.AlgoParams.FlashAreaRatio">
-            <summary>最大轮廓面积占比（用于区分全局闪光）</summary>
-        </member>
-        <member name="P:Video.Application.Dto.AlgoParams.GlobalBrightnessDelta">
-            <summary>全局亮度变化阈值（用于闪光判定）</summary>
-        </member>
-        <member name="P:Video.Application.Dto.DeleteJobResultDto.FailedFiles">
-            <summary>物理文件删除失败列表（可选，用于排障）</summary>
-        </member>
-        <member name="T:Video.Application.Processing.VideoAnalysisQueue">
-            <summary>
-            基于 Channel 的内存队列：存放 fileId
-            </summary>
         </member>
         <member name="T:Zwav.Application.Processing.AnalysisQueue">
             <summary>
@@ -3479,6 +3466,19 @@
             idx=1 表示第1路数字量，映射到 DigitalWords 的 bit0；
             idx=16 映射到 word0 的 bit15；
             idx=17 映射到 word1 的 bit0。
+            </summary>
+        </member>
+        <member name="T:Video.Application.Dto.AlgoParams">
+            <summary>
+            闪光/火花检测算法参数（针对“非饱和闪光 + 1秒内出现-消失”优化）
+            </summary>
+        </member>
+        <member name="P:Video.Application.Dto.DeleteJobResultDto.FailedFiles">
+            <summary>物理文件删除失败列表（可选，用于排障）</summary>
+        </member>
+        <member name="T:Video.Application.Processing.VideoAnalysisQueue">
+            <summary>
+            基于 Channel 的内存队列：存放 fileId
             </summary>
         </member>
     </members>

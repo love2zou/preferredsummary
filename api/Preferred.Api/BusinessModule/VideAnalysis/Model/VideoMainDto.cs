@@ -25,29 +25,94 @@ namespace Video.Application.Dto
         public string EnqueueMessage { get; set; }
     }
 
+    /// <summary>
+    /// 闪光/火花检测算法参数（针对“非饱和闪光 + 1秒内出现-消失”优化）
+    /// </summary>
     public sealed class AlgoParams
     {
-        /// <summary>每隔多少秒抽一帧（默认1秒1帧）</summary>
-        public int SampleEverySec { get; set; } = 1;
+        // ===== 抽帧 =====
+        public int SampleFps { get; set; } = 8;      // 建议 6~10，默认 8
+        public int SampleEverySec { get; set; } = 1; // 兼容旧字段
 
-        /// <summary>帧差二值化阈值（越大越不敏感）</summary>
-        public int DiffThreshold { get; set; } = 40;
-
-        /// <summary>最小轮廓面积（像素），过滤噪声</summary>
+        // ===== diff/轮廓候选 =====
+        public int DiffThreshold { get; set; } = 35;
+        public int DiffThresholdMin { get; set; } = 12;
+        public double AdaptiveDiffK { get; set; } = 2.2;
         public double MinContourArea { get; set; } = 60;
 
-        /// <summary>最大轮廓面积占比（用于区分全局闪光）</summary>
-        public double FlashAreaRatio { get; set; } = 0.25; // 超过画面25%更像闪光
+        // ===== 全局亮度突变（你视频里这个才是“主信号”）=====
+        public double MeanDeltaRise { get; set; } = 6.0;   // “上升”阈值（灰度均值差），建议 5~10
+        public double MeanDeltaFall { get; set; } = 4.0;   // “回落”阈值（回到基线附近）
 
-        /// <summary>全局亮度变化阈值（用于闪光判定）</summary>
-        public double GlobalBrightnessDelta { get; set; } = 25;
+        // ===== 动态高亮比例（替代固定 240 饱和像素比例）=====
+        public double BrightStdK { get; set; } = 2.0;      // 动态阈值 = mean + K*std
+        public int BrightThrMin { get; set; } = 170;
+        public int BrightThrMax { get; set; } = 250;
+
+        public double BrightRatioDelta { get; set; } = 0.0012; // 你视频量级大约 0.0005~0.002，建议 0.001~0.002
+
+        // ===== 闪光/火花判别辅助 =====
+        public double FlashAreaRatio { get; set; } = 0.22;     // 大面积变化辅助（略放宽）
+        public double GlobalBrightnessDelta { get; set; } = 12; // 作为“候选触发/闪光辅助”阈值（你视频里 globalDelta 能到 14+）
+
+        // ===== 脉冲时序 =====
+        public double MaxPulseSec { get; set; } = 1.3;      // 1秒内出现-消失，给点余量
+        public double SustainRejectSec { get; set; } = 2.0;  // 持续光源抑制
+
+        // ===== 预处理 =====
+        public int ResizeMaxWidth { get; set; } = 640;
+        public int BlurKernel { get; set; } = 5;
+
+        // ===== 抑制策略 =====
+        public int RequireConsecutiveHits { get; set; } = 1; // 先保证能出事件，再收紧到 2
+        public int CooldownSec { get; set; } = 1;
+        public int MergeGapSec { get; set; } = 2;
+        public double MaxMotionRatioPerSec { get; set; } = 0.12;
 
         public static AlgoParams ParseOrDefault(string json)
         {
-            if (string.IsNullOrWhiteSpace(json)) return new AlgoParams();
             try
             {
-                return JsonConvert.DeserializeObject<AlgoParams>(json) ?? new AlgoParams();
+                if (string.IsNullOrWhiteSpace(json))
+                    return new AlgoParams();
+
+                var p = JsonConvert.DeserializeObject<AlgoParams>(json) ?? new AlgoParams();
+
+                if (p.SampleFps < 0) p.SampleFps = 0;
+                if (p.SampleEverySec <= 0) p.SampleEverySec = 1;
+
+                if (p.DiffThreshold <= 0) p.DiffThreshold = 35;
+                if (p.DiffThresholdMin <= 0) p.DiffThresholdMin = 12;
+                if (p.AdaptiveDiffK < 0) p.AdaptiveDiffK = 0;
+
+                if (p.MinContourArea < 1) p.MinContourArea = 60;
+
+                if (p.MeanDeltaRise <= 0) p.MeanDeltaRise = 6.0;
+                if (p.MeanDeltaFall <= 0) p.MeanDeltaFall = 4.0;
+
+                if (p.BrightStdK <= 0) p.BrightStdK = 2.0;
+                if (p.BrightThrMin <= 0) p.BrightThrMin = 170;
+                if (p.BrightThrMax <= 0) p.BrightThrMax = 250;
+                if (p.BrightThrMax < p.BrightThrMin) p.BrightThrMax = p.BrightThrMin;
+
+                if (p.BrightRatioDelta <= 0) p.BrightRatioDelta = 0.0012;
+
+                if (p.FlashAreaRatio <= 0) p.FlashAreaRatio = 0.22;
+                if (p.GlobalBrightnessDelta <= 0) p.GlobalBrightnessDelta = 12;
+
+                if (p.MaxPulseSec <= 0) p.MaxPulseSec = 1.3;
+                if (p.SustainRejectSec <= 0) p.SustainRejectSec = 2.0;
+
+                if (p.ResizeMaxWidth < 0) p.ResizeMaxWidth = 0;
+                if (p.BlurKernel > 1 && p.BlurKernel % 2 == 0) p.BlurKernel += 1;
+
+                if (p.RequireConsecutiveHits <= 0) p.RequireConsecutiveHits = 1;
+                if (p.CooldownSec < 0) p.CooldownSec = 0;
+                if (p.MergeGapSec < 0) p.MergeGapSec = 0;
+
+                if (p.MaxMotionRatioPerSec < 0) p.MaxMotionRatioPerSec = 0.12;
+
+                return p;
             }
             catch
             {
