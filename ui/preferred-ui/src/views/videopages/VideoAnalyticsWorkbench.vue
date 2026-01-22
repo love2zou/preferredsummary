@@ -1,27 +1,45 @@
 <template>
   <div class="workbench-view" :class="{ 'as-dialog': !!props.asDialog }">
-    <!-- 顶部工具栏（公共：只保留任务信息+帮助） -->
-    <div class="wb-toolbar">
-      <div class="wb-nav">
-        <span class="job-title">{{ currentDetailJob?.jobNo }}</span>
-        <el-tag v-if="currentDetailJob" size="small" :type="getStatusType(currentDetailJob.status)" class="ml-2">
-          {{ getJobStatusText(currentDetailJob) }}
-        </el-tag>
-
-        <el-tag v-if="uploadClosed" size="small" type="info" class="ml-2" effect="plain">
-          已关闭上传
-        </el-tag>
-      </div>
-
-      <div class="wb-actions">
-        <el-tooltip content="使用说明" placement="bottom" :show-after="200">
-          <el-button class="help-btn" :icon="QuestionFilled" circle size="small" @click="helpVisible = true" />
-        </el-tooltip>
-      </div>
-    </div>
-
-    <!-- Tabs -->
+    <!-- Tabs（把“任务编号/待关闭上传/帮助提示”放到选项卡栏最右侧） -->
     <div class="tabs-wrap" v-loading="loadingDetail">
+      <!-- 右侧任务信息（与 tabs 同一行，靠右） -->
+      <div class="tabs-meta">
+        <div class="meta-left">
+          <span class="job-title">{{ currentDetailJob?.jobNo }}</span>
+
+          <el-tag
+            v-if="currentDetailJob"
+            size="small"
+            :type="getStatusType(currentDetailJob.status)"
+            class="ml-2"
+          >
+            {{ getJobStatusText(currentDetailJob) }}
+          </el-tag>
+
+          <el-tag
+            v-if="uploadClosed"
+            size="small"
+            type="info"
+            class="ml-2"
+            effect="plain"
+          >
+            已关闭上传
+          </el-tag>
+        </div>
+
+        <div class="meta-right">
+          <el-tooltip content="使用说明" placement="bottom" :show-after="200">
+            <el-button
+              class="help-btn"
+              :icon="QuestionFilled"
+              circle
+              size="small"
+              @click="helpVisible = true"
+            />
+          </el-tooltip>
+        </div>
+      </div>
+
       <el-tabs v-model="activeTab" class="wb-tabs" type="card">
         <!-- 1) 视频清单（第一个选项卡） -->
         <el-tab-pane name="list" label="视频清单">
@@ -138,11 +156,7 @@
                   </div>
 
                   <!-- 补足空格：确保 4/9/16 画面固定布局 -->
-                  <div
-                    v-for="k in emptyCells"
-                    :key="'empty-' + k"
-                    class="grid-cell empty"
-                  >
+                  <div v-for="k in emptyCells" :key="'empty-' + k" class="grid-cell empty">
                     <div class="empty-tip">空</div>
                   </div>
                 </div>
@@ -163,7 +177,13 @@
           <div class="detail-filter-bar">
             <div class="df-left">
               <span class="filter-label">置信度阈值:</span>
-              <el-slider v-model="filterConf" :min="0" :max="1" :step="0.05" style="width: 160px; margin: 0 12px" />
+              <el-slider
+                v-model="filterConf"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                style="width: 160px; margin: 0 12px"
+              />
 
               <el-checkbox v-model="filterHasEvents" label="仅看有事件" border size="small" />
 
@@ -790,7 +810,6 @@ watch(
   () => enrichedVideos.value.map(v => v.id).join(','),
   () => {
     if (!listSelectedId.value) listSelectedId.value = listPageVideos.value[0]?.id ?? null
-    // 若当前页越界（比如切换仅异常后总数变少），修正页码
     if (listPageNo.value > listPageCount.value) listPageNo.value = listPageCount.value
   }
 )
@@ -848,13 +867,11 @@ const initWorkbench = async () => {
   await refreshDetail()
   await nextTick()
 
-  // 详情页保底选中
   if (!currentFileId.value && currentDetailJob.value?.videos?.length) {
     const first = currentDetailJob.value.videos[0]
     if (first?.id) selectVideo(first.id)
   }
 
-  // 清单页保底选中
   if (!listSelectedId.value) listSelectedId.value = listPageVideos.value[0]?.id ?? null
 
   loadingDetail.value = false
@@ -879,7 +896,6 @@ const refreshDetail = async () => {
     }
     if (evtRes.success) allEvents.value = evtRes.data
 
-    // 详情页：保底选中视频
     if (!currentFileId.value) {
       const first = currentDetailJob.value?.videos?.[0]
       if (first?.id) selectVideo(first.id)
@@ -891,7 +907,6 @@ const refreshDetail = async () => {
       }
     }
 
-    // 清单页：页码校正
     if (listPageNo.value > listPageCount.value) listPageNo.value = listPageCount.value
 
     if (currentDetailJob.value && ![0, 1].includes(Number(currentDetailJob.value.status))) {
@@ -1125,26 +1140,49 @@ const handleKeydown = (e: KeyboardEvent) => {
   background-color: #f5f7fa;
 }
 
-.wb-toolbar {
-  height: 50px;
-  background: #fff;
-  border-bottom: 1px solid #dcdfe6;
+/* Tabs 容器 */
+.tabs-wrap {
+  flex: 1;
+  overflow: hidden;
+  padding: 10px;
+  position: relative; /* 让 tabs-meta 绝对定位到 tab header 右侧 */
+}
+
+/* 任务信息放到 tab header 同一行右侧 */
+.tabs-meta {
+  position: absolute;
+  top: 14px;            /* 与 el-tabs header 垂直对齐（card tabs 一般较高） */
+  right: 16px;
+  z-index: 6;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
+  gap: 10px;
+  max-width: 45%;
+}
+
+.meta-left {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.meta-right {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
-.wb-nav { display: flex; align-items: center; }
-.wb-actions { display: flex; align-items: center; gap: 10px; }
+/* 给 tabs header 右侧预留空间，避免与 meta 覆盖 */
+.wb-tabs :deep(.el-tabs__header) {
+  margin: 0 0 10px 0;
+}
+.wb-tabs :deep(.el-tabs__nav-wrap) {
+  padding-right: 420px; /* 关键：给右侧“任务编号/状态/帮助”腾位置 */
+}
 
-.job-title { font-weight: 700; font-size: 16px; }
-.help-btn { border-color: #dcdfe6; }
-
-.tabs-wrap { flex: 1; overflow: hidden; padding: 10px; }
+/* tabs 内容高度 */
 .wb-tabs { height: 100%; }
-
 :deep(.el-tabs__content) { height: calc(100% - 42px); overflow: hidden; }
 :deep(.el-tab-pane) { height: 100%; }
 
@@ -1158,7 +1196,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   justify-content: space-between;
   align-items: center;
 }
-
 .panel-header.small { font-size: 12px; padding: 8px 10px; }
 
 .sub-text { font-weight: 400; color: #909399; font-size: 12px; }
@@ -1169,11 +1206,21 @@ const handleKeydown = (e: KeyboardEvent) => {
 .text-danger { color: #f56c6c; }
 .text-warning { color: #e6a23c; }
 
+.job-title {
+  font-weight: 700;
+  font-size: 14px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.help-btn { border-color: #dcdfe6; }
+
 /* ===== 清单页 ===== */
 .list-body {
   height: 100%;
   display: flex;
-  gap: 10px;
+  gap: 8px;            /* 缩小间距 */
   overflow: hidden;
 }
 
@@ -1202,7 +1249,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   justify-content: space-between;
   align-items: center;
 }
-
 .pager-right { display: flex; align-items: center; gap: 10px; }
 .pager-mid { font-size: 12px; color: #606266; }
 
@@ -1218,11 +1264,16 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 .grid-stage {
   flex: 1;
-  padding: 10px;
-  overflow: hidden; /* 关键：不允许滚动出现更多画面 */
+  padding: 6px;         /* 缩小边距 */
+  overflow: hidden;     /* 不允许滚动出现更多画面 */
 }
 
-.video-grid { height: 100%; display: grid; gap: 10px; }
+/* 多画面：间距更小 */
+.video-grid {
+  height: 100%;
+  display: grid;
+  gap: 6px;             /* 画面之间间距更小 */
+}
 
 .video-grid.grid-2 { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; }
 .video-grid.grid-3 { grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; }
@@ -1230,22 +1281,23 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 .grid-cell {
   border: 1px solid #ebeef5;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   background: #000;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
-  min-height: 160px;
+  min-height: 140px;
 }
 
 .grid-cell:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); transform: translateY(-1px); }
 .grid-cell.active { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64,158,255,0.15) inset; }
 
+/* 视频铺满：object-fit 改为 cover */
 .grid-video {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;    /* 关键：铺满画面 */
   background: #000;
 }
 
@@ -1265,7 +1317,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   border-style: dashed;
   cursor: default;
 }
-
 .empty-tip {
   height: 100%;
   display: flex;
@@ -1288,7 +1339,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   padding: 10px 12px;
   margin-bottom: 10px;
 }
-
 .df-left { display: flex; align-items: center; }
 .filter-label { font-size: 12px; color: #606266; }
 
@@ -1324,12 +1374,10 @@ const handleKeydown = (e: KeyboardEvent) => {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .video-card:hover { border-color: #c0c4cc; background-color: #fdfdfd; }
 .video-card.active { border-color: #409eff; background-color: #ecf5ff; }
 
 .vc-row1 { display: flex; justify-content: space-between; margin-bottom: 6px; gap: 8px; }
-
 .vc-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
 .vc-right { display: flex; align-items: center; flex-shrink: 0; }
 
