@@ -1,9 +1,5 @@
-// =========================
-// File: Preferred.Api/Controllers/VideoAnalyticsController.cs
-// =========================
 using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -23,7 +19,7 @@ namespace Preferred.Api.Controllers
 
         private const string DefaultAlgoParamsJson =
         "{"
-        + "\"SampleFps\":8,"
+        + "\"SampleFps\":18,"
         + "\"DiffThreshold\":35,"
         + "\"DiffThresholdMin\":12,"
         + "\"AdaptiveDiffK\":2.2,"
@@ -46,7 +42,6 @@ namespace Preferred.Api.Controllers
         + "\"MaxMotionRatioPerSec\":0.12"
         + "}";
 
-
         public VideoAnalyticsController(IVideoAnalyticsService svc)
         {
             _svc = svc;
@@ -55,12 +50,12 @@ namespace Preferred.Api.Controllers
         [HttpPost("job")]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(ApiResponse<CreateJobResultDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> CreateJob([FromBody] CreateVideoJobRequest req, CancellationToken ct)
+        public async Task<IActionResult> CreateJob([FromBody] CreateVideoJobRequest req)
         {
             try
             {
                 var algo = string.IsNullOrWhiteSpace(req?.AlgoParamsJson) ? DefaultAlgoParamsJson : req.AlgoParamsJson;
-                var r = await _svc.CreateJobAsync(algo, ct);
+                var r = await _svc.CreateJobAsync(algo);
 
                 return Ok(new ApiResponse<CreateJobResultDto>
                 {
@@ -79,7 +74,7 @@ namespace Preferred.Api.Controllers
         [Consumes("multipart/form-data")]
         [RequestSizeLimit(1024L * 1024 * 1024)]
         [ProducesResponseType(typeof(ApiResponse<UploadVideoResultDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> UploadOne([FromRoute] string jobNo, [FromForm] IFormFile file, CancellationToken ct)
+        public async Task<IActionResult> UploadOne([FromRoute] string jobNo, [FromForm] IFormFile file)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return BadRequest(new ApiErrorResponse { Message = "jobNo 不能为空" });
@@ -88,7 +83,8 @@ namespace Preferred.Api.Controllers
 
             try
             {
-                var r = await _svc.UploadAndEnqueueAsync(jobNo, file, ct);
+                var r = await _svc.UploadAndEnqueueAsync(jobNo, file);
+
                 return Ok(new ApiResponse<UploadVideoResultDto>
                 {
                     Success = true,
@@ -110,44 +106,15 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        [HttpPost("analyze")]
-        [Consumes("multipart/form-data")]
-        [RequestSizeLimit(1024L * 1024 * 1024)]
-        [ProducesResponseType(typeof(ApiResponse<CreateJobResultDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Analyze([FromForm] IFormFile[] files, [FromForm] string algoParamsJson, CancellationToken ct)
-        {
-            if (files == null || files.Length == 0)
-                return BadRequest(new ApiErrorResponse { Message = "请选择要上传的视频文件" });
-
-            if (string.IsNullOrWhiteSpace(algoParamsJson))
-                algoParamsJson = DefaultAlgoParamsJson;
-
-            try
-            {
-                var r = await _svc.CreateAndEnqueueAsync(files, algoParamsJson, ct);
-
-                return Ok(new ApiResponse<CreateJobResultDto>
-                {
-                    Success = true,
-                    Message = "任务已创建并进入队列",
-                    Data = r
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, new ApiErrorResponse { Message = "创建分析任务失败", Details = ex.Message });
-            }
-        }
-
         [HttpGet("job/{jobNo}")]
-        public async Task<IActionResult> GetJob([FromRoute] string jobNo, CancellationToken ct)
+        public async Task<IActionResult> GetJob([FromRoute] string jobNo)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return NotFound(new ApiErrorResponse { Message = "任务编号不能为空" });
 
             try
             {
-                var dto = await _svc.GetJobAsync(jobNo, ct);
+                var dto = await _svc.GetJobAsync(jobNo);
                 if (dto == null)
                     return NotFound(new ApiErrorResponse { Message = "任务不存在" });
 
@@ -161,15 +128,21 @@ namespace Preferred.Api.Controllers
 
         [HttpGet("job/{jobNo}/events")]
         [ProducesResponseType(typeof(ApiResponse<List<EventDto>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetJobEvents([FromRoute] string jobNo, CancellationToken ct)
+        public async Task<IActionResult> GetJobEvents([FromRoute] string jobNo)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return NotFound(new ApiErrorResponse { Message = "任务编号不能为空" });
 
             try
             {
-                var list = await _svc.GetJobEventsAsync(jobNo, ct);
-                return Ok(new ApiResponse<List<EventDto>> { Success = true, Message = "查询成功", Data = list ?? new List<EventDto>() });
+                var list = await _svc.GetJobEventsAsync(jobNo);
+
+                return Ok(new ApiResponse<List<EventDto>>
+                {
+                    Success = true,
+                    Message = "查询成功",
+                    Data = list ?? new List<EventDto>()
+                });
             }
             catch (Exception ex)
             {
@@ -179,15 +152,21 @@ namespace Preferred.Api.Controllers
 
         [HttpGet("event/{eventId}/snapshots")]
         [ProducesResponseType(typeof(ApiResponse<List<SnapshotDto>>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> GetEventSnapshots([FromRoute] int eventId, CancellationToken ct)
+        public async Task<IActionResult> GetEventSnapshots([FromRoute] int eventId)
         {
             if (eventId <= 0)
                 return BadRequest(new ApiErrorResponse { Message = "eventId 不合法" });
 
             try
             {
-                var list = await _svc.GetEventSnapshotsAsync(eventId, ct);
-                return Ok(new ApiResponse<List<SnapshotDto>> { Success = true, Message = "查询成功", Data = list ?? new List<SnapshotDto>() });
+                var list = await _svc.GetEventSnapshotsAsync(eventId);
+
+                return Ok(new ApiResponse<List<SnapshotDto>>
+                {
+                    Success = true,
+                    Message = "查询成功",
+                    Data = list ?? new List<SnapshotDto>()
+                });
             }
             catch (Exception ex)
             {
@@ -196,14 +175,14 @@ namespace Preferred.Api.Controllers
         }
 
         [HttpGet("snapshot/{snapshotId}/download")]
-        public async Task<IActionResult> DownloadSnapshot([FromRoute] int snapshotId, CancellationToken ct)
+        public async Task<IActionResult> DownloadSnapshot([FromRoute] int snapshotId)
         {
             if (snapshotId <= 0)
                 return BadRequest(new ApiErrorResponse { Message = "snapshotId 不合法" });
 
             try
             {
-                var path = await _svc.GetSnapshotPathAsync(snapshotId, ct);
+                var path = await _svc.GetSnapshotPathAsync(snapshotId);
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
                     return NotFound(new ApiErrorResponse { Message = "截图不存在" });
 
@@ -220,14 +199,14 @@ namespace Preferred.Api.Controllers
         }
 
         [HttpGet("video/{fileId}/stream")]
-        public async Task<IActionResult> StreamVideo([FromRoute] int fileId, CancellationToken ct)
+        public async Task<IActionResult> StreamVideo([FromRoute] int fileId)
         {
             if (fileId <= 0)
                 return BadRequest(new ApiErrorResponse { Message = "fileId 不合法" });
 
             try
             {
-                var path = await _svc.GetVideoPathAsync(fileId, ct);
+                var path = await _svc.GetVideoPathAsync(fileId);
                 if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
                     return NotFound(new ApiErrorResponse { Message = "视频不存在" });
 
@@ -244,14 +223,15 @@ namespace Preferred.Api.Controllers
         }
 
         [HttpDelete("job/{jobNo}")]
-        public async Task<IActionResult> DeleteJob([FromRoute] string jobNo, CancellationToken ct)
+        public async Task<IActionResult> DeleteJob([FromRoute] string jobNo)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return NotFound(new ApiErrorResponse { Message = "任务编号不能为空" });
 
             try
             {
-                var r = await _svc.DeleteJobAsync(jobNo, ct);
+                var r = await _svc.DeleteJobAsync(jobNo);
+
                 if (!r.Success)
                     return NotFound(new ApiErrorResponse { Message = r.Message ?? "任务不存在" });
 
@@ -266,14 +246,15 @@ namespace Preferred.Api.Controllers
         [HttpPost("job/{jobNo}/close")]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> CloseJob([FromRoute] string jobNo, CancellationToken ct)
+        public async Task<IActionResult> CloseJob([FromRoute] string jobNo)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return NotFound(new ApiErrorResponse { Message = "任务编号不能为空" });
 
             try
             {
-                var ok = await _svc.CloseJobAsync(jobNo, ct);
+                var ok = await _svc.CloseJobAsync(jobNo);
+
                 if (!ok)
                     return NotFound(new ApiErrorResponse { Message = "任务不存在或不可关闭" });
 
@@ -293,7 +274,7 @@ namespace Preferred.Api.Controllers
         [HttpPost("job/{jobNo}/reanalyze")]
         [Consumes("application/json")]
         [ProducesResponseType(typeof(ApiResponse<ReanalyzeResultDto>), StatusCodes.Status200OK)]
-        public async Task<IActionResult> Reanalyze([FromRoute] string jobNo, [FromBody] ReanalyzeVideoRequest req, CancellationToken ct)
+        public async Task<IActionResult> Reanalyze([FromRoute] string jobNo, [FromBody] ReanalyzeVideoRequest req)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return BadRequest(new ApiErrorResponse { Message = "jobNo 不能为空" });
@@ -301,7 +282,9 @@ namespace Preferred.Api.Controllers
             try
             {
                 var fileIds = req?.FileIds ?? Array.Empty<int>();
-                var r = await _svc.ReanalyzeFilesAsync(jobNo, fileIds, ct);
+                var algoParamsJson = req?.AlgoParamsJson;
+                var r = await _svc.ReanalyzeFilesAsync(jobNo, fileIds, algoParamsJson);
+
                 return Ok(new ApiResponse<ReanalyzeResultDto>
                 {
                     Success = true,

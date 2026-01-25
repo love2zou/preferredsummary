@@ -16,12 +16,7 @@ using Video.Application.Dto;
 namespace Preferred.Api.Services
 {
     /// <summary>
-    /// 闪光/火花检测服务（峰值对齐截图版）
-    /// 核心特性：
-    /// 1) 每个采样帧都入 window（保证回落帧存在）
-    /// 2) pending 观察期满再 ConfirmPulse（避免“永远等不到回落”）
-    /// 3) ring buffer 缓存最近几秒采样帧，按 peakTimeMs 取最接近帧做截图（时间点对齐）
-    /// 4) resize 检测的 bbox 映射回原图坐标（截图框不偏）
+    /// 闪光/火花检测服务（高召回稳健基线版 + Top5强约束 + 落盘可靠性）
     /// </summary>
     public sealed class SparkDetectionService
     {
@@ -47,12 +42,9 @@ namespace Preferred.Api.Services
             var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == vf.JobId, ct);
             if (job == null) return;
 
-            // job cancelled/done/failed => 不处理
             if (job.Status == 4 || job.Status == 2 || job.Status == 3) return;
-            // file already done/failed => 防重
             if (vf.Status == 2 || vf.Status == 3) return;
 
-            // 标记 processing
             vf.Status = 1;
             vf.UpdTime = DateTime.Now;
             await _db.SaveChangesAsync(ct);
@@ -63,7 +55,8 @@ namespace Preferred.Api.Services
             {
                 var algo = AlgoParams.ParseOrDefault(job.AlgoParamsJson);
 
-                var (eventCount, durationSec, width, height, analyzeMs) = await ProcessSingleVideoAsync(job, vf, algo, ct);
+                var (eventCount, durationSec, width, height, analyzeSec) =
+                    await ProcessSingleVideoAsync(job, vf, algo, ct);
 
                 vf.DurationSec = durationSec;
                 vf.Width = width;
@@ -71,14 +64,13 @@ namespace Preferred.Api.Services
 
                 // 如果你实体没有这些字段，请删除
                 vf.EventCount = eventCount;
-                vf.AnalyzeMs = (int)analyzeMs;
+                vf.AnalyzeSec = (int)analyzeSec;
 
                 vf.Status = 2;
                 vf.ErrorMessage = null;
                 vf.UpdTime = DateTime.Now;
 
                 await _db.SaveChangesAsync(ct);
-
                 await UpdateJobAggregateAsync(job.Id, ct);
             }
             catch (Exception ex)
@@ -89,7 +81,7 @@ namespace Preferred.Api.Services
                 vf.ErrorMessage = ex.Message;
 
                 // 如果你实体没有该字段，请删除
-                vf.AnalyzeMs = (int)sw.Elapsed.TotalMilliseconds;
+                vf.AnalyzeSec = (int)sw.Elapsed.TotalSeconds;
 
                 vf.UpdTime = DateTime.Now;
                 await _db.SaveChangesAsync(ct);
@@ -104,7 +96,7 @@ namespace Preferred.Api.Services
             var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId, ct);
             if (job == null) return;
 
-            if (job.Status == 4) return; // cancelled
+            if (job.Status == 4) return;
             if (job.Status == 2 || job.Status == 3) return;
 
             var files = await _db.VideoAnalysisFiles.AsNoTracking()
@@ -126,10 +118,10 @@ namespace Preferred.Api.Services
 
             if (job.TotalVideoCount > 0)
             {
-                job.Progress = job.TotalVideoCount <= 0 ? 0 : (int)Math.Round(finished * 100.0 / job.TotalVideoCount);
+                job.Progress = (int)Math.Round(finished * 100.0 / job.TotalVideoCount);
                 if (finished + failed >= job.TotalVideoCount)
                 {
-                    job.Status = 2; // done
+                    job.Status = 2;
                     job.Progress = 100;
                     job.FinishTime = DateTime.Now;
                 }
@@ -143,13 +135,15 @@ namespace Preferred.Api.Services
         }
 
         // =========================
-        // Frame ring buffer: 按 peakTimeMs 截取最接近帧
+        // Frame ring buffer (JPEG bytes)
         // =========================
         private sealed class FrameBufferItem
         {
             public int TimeMs { get; set; }
             public int FrameIndex { get; set; }
-            public Mat Frame { get; set; } // 原图分辨率 Clone
+            public byte[] Jpeg { get; set; }
+            public int Width { get; set; }
+            public int Height { get; set; }
         }
 
         private sealed class FrameRingBuffer : IDisposable
@@ -162,14 +156,32 @@ namespace Preferred.Api.Services
                 _maxItems = Math.Max(3, maxItems);
             }
 
-            public void Add(int timeMs, int frameIndex, Mat cloneFrame)
+            public void AddJpeg(int timeMs, int frameIndex, Mat srcBgr, int jpegQuality)
             {
-                _q.Enqueue(new FrameBufferItem { TimeMs = timeMs, FrameIndex = frameIndex, Frame = cloneFrame });
-                while (_q.Count > _maxItems)
+                if (srcBgr == null || srcBgr.Empty()) return;
+
+                byte[] bytes;
+                try
                 {
-                    var old = _q.Dequeue();
-                    try { old.Frame?.Dispose(); } catch { }
+                    Cv2.ImEncode(".jpg", srcBgr, out var buf,
+                        new ImageEncodingParam(ImwriteFlags.JpegQuality, Math.Max(30, Math.Min(95, jpegQuality))));
+                    bytes = buf?.ToArray();
                 }
+                catch
+                {
+                    bytes = null;
+                }
+
+                _q.Enqueue(new FrameBufferItem
+                {
+                    TimeMs = timeMs,
+                    FrameIndex = frameIndex,
+                    Jpeg = bytes,
+                    Width = srcBgr.Width,
+                    Height = srcBgr.Height
+                });
+
+                while (_q.Count > _maxItems) _q.Dequeue();
             }
 
             public void TrimByTime(int keepMs)
@@ -177,15 +189,14 @@ namespace Preferred.Api.Services
                 if (_q.Count == 0) return;
 
                 int newest = 0;
-                foreach (var it in _q) if (it.TimeMs > newest) newest = it.TimeMs;
+                foreach (var it in _q)
+                    if (it.TimeMs > newest) newest = it.TimeMs;
 
                 while (_q.Count > 0)
                 {
                     var head = _q.Peek();
                     if (newest - head.TimeMs <= keepMs) break;
-
-                    var old = _q.Dequeue();
-                    try { old.Frame?.Dispose(); } catch { }
+                    _q.Dequeue();
                 }
             }
 
@@ -203,18 +214,10 @@ namespace Preferred.Api.Services
                         best = it;
                     }
                 }
-
                 return best;
             }
 
-            public void Dispose()
-            {
-                while (_q.Count > 0)
-                {
-                    var it = _q.Dequeue();
-                    try { it.Frame?.Dispose(); } catch { }
-                }
-            }
+            public void Dispose() => _q.Clear();
         }
 
         private sealed class SamplePoint
@@ -225,20 +228,259 @@ namespace Preferred.Api.Services
             public double Mean { get; set; }
             public double Std { get; set; }
 
-            public double MeanDelta { get; set; }     // abs(mean2-mean1)
-            public double BrightRatio { get; set; }   // 动态高亮比例
-            public double BrightDelta { get; set; }   // abs(br2-br1)
+            public double MeanDelta { get; set; }
+            public double BrightRatio { get; set; }
+            public double BrightDelta { get; set; }
+
+            public double MeanRise { get; set; }
+            public double BrightRise { get; set; }
 
             public bool Candidate { get; set; }
-
-            /// <summary>bbox 统一是“原图坐标”</summary>
-            public Rect BBox { get; set; }
+            public Rect BBox { get; set; }         // 原图坐标
             public double AreaRatio { get; set; }
             public double Confidence { get; set; }
-            public Point2d Center { get; set; } // 原图坐标
+            public Point2d Center { get; set; }    // 原图坐标
         }
 
-        private async Task<(int eventCount, int? durationSec, int? width, int? height, double analyzeMs)> ProcessSingleVideoAsync(
+        // =========================
+        // TopK Snapshot Keeper
+        // =========================
+        private sealed class TopKSnapshotKeeper
+        {
+            public sealed class ReplaceDecision
+            {
+                public bool KeepNew { get; set; }
+                public int? ReplaceOldSnapshotId { get; set; }
+                public string ReplaceOldImagePath { get; set; }
+            }
+
+            private sealed class Item
+            {
+                public int SnapshotId { get; set; }
+                public string ImagePath { get; set; }
+                public double Confidence { get; set; }
+            }
+
+            private readonly int _k;
+            private readonly List<Item> _items;
+
+            public TopKSnapshotKeeper(int k)
+            {
+                _k = Math.Max(1, k);
+                _items = new List<Item>(_k + 2);
+            }
+
+            public void Seed(int snapshotId, string imagePath, double conf)
+            {
+                if (_items.Count >= _k) return;
+                _items.Add(new Item { SnapshotId = snapshotId, ImagePath = imagePath, Confidence = conf });
+            }
+
+            public ReplaceDecision Decide(double conf)
+            {
+                if (_items.Count < _k)
+                    return new ReplaceDecision { KeepNew = true };
+
+                int minIdx = 0;
+                double min = _items[0].Confidence;
+                for (int i = 1; i < _items.Count; i++)
+                {
+                    if (_items[i].Confidence < min)
+                    {
+                        min = _items[i].Confidence;
+                        minIdx = i;
+                    }
+                }
+
+                if (conf <= min + 1e-12)
+                    return new ReplaceDecision { KeepNew = false };
+
+                return new ReplaceDecision
+                {
+                    KeepNew = true,
+                    ReplaceOldSnapshotId = _items[minIdx].SnapshotId,
+                    ReplaceOldImagePath = _items[minIdx].ImagePath
+                };
+            }
+
+            public void CommitKept(int snapshotId, string imagePath, double conf, int? replaceOldSnapshotId)
+            {
+                if (_items.Count < _k && replaceOldSnapshotId == null)
+                {
+                    _items.Add(new Item { SnapshotId = snapshotId, ImagePath = imagePath, Confidence = conf });
+                    return;
+                }
+
+                if (replaceOldSnapshotId.HasValue)
+                {
+                    int idx = _items.FindIndex(x => x.SnapshotId == replaceOldSnapshotId.Value);
+                    if (idx >= 0)
+                    {
+                        _items[idx] = new Item { SnapshotId = snapshotId, ImagePath = imagePath, Confidence = conf };
+                        return;
+                    }
+                }
+
+                int minIdx2 = 0;
+                double min2 = _items[0].Confidence;
+                for (int i = 1; i < _items.Count; i++)
+                {
+                    if (_items[i].Confidence < min2)
+                    {
+                        min2 = _items[i].Confidence;
+                        minIdx2 = i;
+                    }
+                }
+                _items[minIdx2] = new Item { SnapshotId = snapshotId, ImagePath = imagePath, Confidence = conf };
+            }
+        }
+
+        private async Task DeleteSnapshotHardAsync(int snapshotId, string imagePath, CancellationToken ct)
+        {
+            try
+            {
+                // 1) 先找 Local（避免重复 Attach）
+                var local = _db.VideoAnalysisSnapshots.Local.FirstOrDefault(x => x.Id == snapshotId);
+                if (local != null)
+                {
+                    _db.VideoAnalysisSnapshots.Remove(local);
+                }
+                else
+                {
+                    // 2) 不 Attach stub，直接查一条再删（只多一次查询，但最稳定）
+                    var entity = await _db.VideoAnalysisSnapshots
+                        .FirstOrDefaultAsync(x => x.Id == snapshotId, ct);
+
+                    if (entity != null)
+                        _db.VideoAnalysisSnapshots.Remove(entity);
+                }
+
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "DeleteSnapshot DB failed. snapshotId={SnapshotId}", snapshotId);
+            }
+
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(imagePath) && File.Exists(imagePath))
+                    File.Delete(imagePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "DeleteSnapshot file failed. path={Path}", imagePath);
+            }
+        }
+
+        private void SafeDeleteFile(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "SafeDeleteFile failed. path={Path}", path);
+            }
+        }
+
+        private async Task SeedTop5KeeperFromDbAsync(int videoFileId, TopKSnapshotKeeper keeper, CancellationToken ct)
+        {
+            var top = await _db.VideoAnalysisSnapshots.AsNoTracking()
+                .Where(s => s.VideoFileId == videoFileId)
+                .OrderByDescending(s => s.Confidence)
+                .ThenByDescending(s => s.Id)
+                .Take(5)
+                .Select(s => new { s.Id, s.ImagePath, s.Confidence })
+                .ToListAsync(ct);
+
+            foreach (var x in top)
+                keeper.Seed(x.Id, x.ImagePath, (double)x.Confidence);
+        }
+
+        private async Task EnforceTop5HardAsync(int videoFileId, int k, CancellationToken ct)
+        {
+            var all = await _db.VideoAnalysisSnapshots.AsNoTracking()
+                .Where(s => s.VideoFileId == videoFileId)
+                .OrderByDescending(s => s.Confidence)
+                .ThenByDescending(s => s.Id)
+                .Select(s => new { s.Id, s.ImagePath })
+                .ToListAsync(ct);
+
+            if (all.Count <= k) return;
+
+            foreach (var d in all.Skip(k))
+            {
+                await DeleteSnapshotHardAsync(d.Id, d.ImagePath, ct);
+            }
+        }
+
+        // =========================
+        // Robust Baseline
+        // =========================
+        private sealed class RobustBaseline
+        {
+            public double MeanEwma { get; private set; }
+            public double BrightEwma { get; private set; }
+            public bool HasInit { get; private set; }
+
+            private readonly Queue<(double mean, double br)> _hist = new Queue<(double, double)>();
+            private readonly int _maxHist;
+
+            public RobustBaseline(int maxHist = 60)
+            {
+                _maxHist = Math.Max(10, maxHist);
+            }
+
+            public void Reset()
+            {
+                HasInit = false;
+                MeanEwma = 0;
+                BrightEwma = 0;
+                _hist.Clear();
+            }
+
+            public void Update(double mean, double br, double alpha, bool allowUpdate)
+            {
+                if (!allowUpdate) return;
+
+                if (!HasInit)
+                {
+                    MeanEwma = mean;
+                    BrightEwma = br;
+                    HasInit = true;
+                }
+                else
+                {
+                    MeanEwma = MeanEwma * (1.0 - alpha) + mean * alpha;
+                    BrightEwma = BrightEwma * (1.0 - alpha) + br * alpha;
+                }
+
+                _hist.Enqueue((mean, br));
+                while (_hist.Count > _maxHist) _hist.Dequeue();
+            }
+
+            public (double meanBase, double brBase) GetRobustBase()
+            {
+                if (!HasInit) return (0, 0);
+                if (_hist.Count < 8) return (MeanEwma, BrightEwma);
+
+                var arrM = _hist.Select(x => x.mean).OrderBy(x => x).ToArray();
+                var arrB = _hist.Select(x => x.br).OrderBy(x => x).ToArray();
+
+                double medM = arrM[arrM.Length / 2];
+                double medB = arrB[arrB.Length / 2];
+
+                double baseM = 0.6 * MeanEwma + 0.4 * medM;
+                double baseB = 0.6 * BrightEwma + 0.4 * medB;
+
+                return (baseM, baseB);
+            }
+        }
+
+        private async Task<(int eventCount, int? durationSec, int? width, int? height, double analyzeSec)> ProcessSingleVideoAsync(
             VideoAnalysisJob job,
             VideoAnalysisFile vf,
             AlgoParams algo,
@@ -253,7 +495,7 @@ namespace Preferred.Api.Services
             int fps = (int)Math.Round(cap.Fps);
             if (fps <= 0) fps = 25;
 
-            int sampleEveryFrames = CalcSampleEveryFrames(fps, algo);
+            int sampleEveryFrames = CalcSampleEveryFrames(fps, algo, _logger);
 
             int w0 = (int)cap.FrameWidth;
             int h0 = (int)cap.FrameHeight;
@@ -266,7 +508,7 @@ namespace Preferred.Api.Services
             int pendingLastHitMs = 0;
 
             var window = new Queue<SamplePoint>();
-            int windowMaxMs = 3200;
+            int windowMaxMs = 4500;
             int pulseMaxMs = (int)Math.Ceiling(Math.Max(900, algo.MaxPulseSec * 1000));
 
             VideoAnalysisEvent openEvent = null;
@@ -282,13 +524,19 @@ namespace Preferred.Api.Services
 
             int frameCounter = 0;
             if (!cap.Read(prev) || prev.Empty())
-                return (0, null, w0, h0, sw.Elapsed.TotalMilliseconds);
+                return (0, null, w0, h0, sw.Elapsed.TotalSeconds);
 
-            // ring buffer：缓存最近 3~3.5 秒采样帧
-            int sampleFps = algo.SampleFps > 0 ? algo.SampleFps : Math.Max(1, fps / sampleEveryFrames);
-            using var frameBuf = new FrameRingBuffer(maxItems: Math.Max(24, sampleFps * 4));
+            int effSampleFps = Math.Max(1, (int)Math.Round(fps * 1.0 / sampleEveryFrames));
+            using var frameBuf = new FrameRingBuffer(maxItems: Math.Max(24, effSampleFps * 5));
+
+            var top5Keeper = new TopKSnapshotKeeper(5);
+            await SeedTop5KeeperFromDbAsync(vf.Id, top5Keeper, ct);
+
+            var baseline = new RobustBaseline(maxHist: Math.Max(30, effSampleFps * 6));
+            double alpha = Math.Max(0.02, Math.Min(0.12, effSampleFps / 100.0));
 
             int foundEvents = 0;
+            var deletedSnapshotIds = new HashSet<int>();
 
             while (cap.Read(curr))
             {
@@ -302,16 +550,17 @@ namespace Preferred.Api.Services
 
                 int timeMs = (int)Math.Round(frameCounter * 1000.0 / fps);
 
-                // 缓存“原图帧”
-                frameBuf.Add(timeMs, frameCounter, curr.Clone());
-                frameBuf.TrimByTime(keepMs: 3600);
+                frameBuf.AddJpeg(timeMs, frameCounter, curr, jpegQuality: 85);
+                frameBuf.TrimByTime(keepMs: 5200);
 
-                // 1) 每个采样帧都入 window：统计点（含回落）
                 var stats = BuildStatsPoint(prev, curr, algo);
                 stats.FrameIndex = frameCounter;
                 stats.TimeMs = timeMs;
 
-                // 2) 候选检测（全局突变 or diff/contour），输出原图 bbox
+                var (baseMean, baseBR) = baseline.GetRobustBase();
+                stats.MeanRise = stats.Mean - baseMean;
+                stats.BrightRise = stats.BrightRatio - baseBR;
+
                 bool isCandidate = TryDetectCandidate(prev, curr, algo, stats, out var cand);
                 if (isCandidate && cand != null)
                 {
@@ -320,21 +569,29 @@ namespace Preferred.Api.Services
                     stats.AreaRatio = cand.AreaRatio;
                     stats.Confidence = cand.Confidence;
                     stats.Center = cand.Center;
+
+                    stats.MeanRise = cand.MeanRise;
+                    stats.BrightRise = cand.BrightRise;
                 }
                 else
                 {
-                    // 全局候选：没有 bbox 也可以进入 pending
                     stats.Candidate = isCandidate;
                 }
 
                 EnqueueWindow(window, stats, windowMaxMs);
 
-                // 3) 进入 pending
+                bool allowBaselineUpdate = (!pendingPulse && !isCandidate);
+                baseline.Update(stats.Mean, stats.BrightRatio, alpha, allowBaselineUpdate);
+
                 if (isCandidate)
                 {
                     consecutiveHits++;
 
-                    if (consecutiveHits >= Math.Max(1, algo.RequireConsecutiveHits))
+                    int needHits = Math.Max(1, algo.RequireConsecutiveHits);
+                    if (stats.MeanRise >= algo.MeanDeltaRise * 0.9 || stats.BrightRise >= algo.BrightRatioDelta * 0.9)
+                        needHits = 1;
+
+                    if (consecutiveHits >= needHits)
                     {
                         int cooldownFrames = Math.Max(0, algo.CooldownSec) * fps;
                         if (frameCounter - lastEventFrame >= cooldownFrames)
@@ -350,18 +607,16 @@ namespace Preferred.Api.Services
                 }
                 else
                 {
-                    consecutiveHits = 0;
+                    consecutiveHits = Math.Max(0, consecutiveHits - 1);
                 }
 
-                // pending 超时放弃
-                if (pendingPulse && timeMs - pendingLastHitMs > Math.Max(1200, pulseMaxMs + 450))
+                if (pendingPulse && timeMs - pendingLastHitMs > Math.Max(1500, pulseMaxMs + 800))
                 {
                     pendingPulse = false;
                     consecutiveHits = 0;
-                    TrimWindowToRecent(window, keepMs: 1500);
+                    TrimWindowToRecent(window, keepMs: 2000);
                 }
 
-                // 4) 观察期满再确认短脉冲
                 if (pendingPulse && (timeMs - pendingStartMs >= pulseMaxMs))
                 {
                     if (ConfirmPulse(
@@ -377,7 +632,6 @@ namespace Preferred.Api.Services
                     {
                         if (!sustainReject && !motionReject)
                         {
-                            // 用 peakTimeMs 在 ring buffer 中取最接近帧截图
                             var peakFrame = frameBuf.GetNearest(peakTimeMs);
                             int snapTimeMs = peakFrame?.TimeMs ?? peakTimeMs;
                             int snapFrameIndex = peakFrame?.FrameIndex ?? frameCounter;
@@ -385,7 +639,6 @@ namespace Preferred.Api.Services
                             int timeSec = (int)Math.Round(snapTimeMs / 1000.0);
                             byte eventType = (byte)(isFlash ? 1 : 2);
 
-                            // 合并：同类型短间隔合并
                             bool merged = false;
                             if (openEvent != null &&
                                 openEvent.VideoFileId == vf.Id &&
@@ -429,71 +682,119 @@ namespace Preferred.Api.Services
                                 await _db.SaveChangesAsync(ct);
                             }
 
-                            // 保存截图：用峰值附近帧
+                            // ====== Top5 截图（强约束 + 落盘可靠）======
                             snapshotSeq++;
-                            string label = isFlash ? "FLASH" : "SPARK";
-                            string imagePath = Path.Combine(snapDir, $"{vf.Id}_{snapFrameIndex}_{label}_t{timeSec}s.jpg");
 
-                            using (var boxed = (peakFrame?.Frame != null ? peakFrame.Frame.Clone() : curr.Clone()))
+                            var decision = top5Keeper.Decide(conf);
+                            if (decision.KeepNew)
                             {
-                                if (bestBox.Width > 0 && bestBox.Height > 0)
-                                    Cv2.Rectangle(boxed, bestBox, isFlash ? Scalar.Yellow : Scalar.Red, 2);
+                                string fileName = $"{vf.Id}_{snapFrameIndex}_t{timeSec}s_conf{conf:0.000}_{Guid.NewGuid():N}.jpg";
+                                string imagePath = Path.Combine(snapDir, fileName);
 
-                                Cv2.PutText(boxed, $"{label} t={timeSec}s conf={conf:0.00}", new Point(10, 30),
-                                    HersheyFonts.HersheySimplex, 1.0, isFlash ? Scalar.Yellow : Scalar.Red, 2);
+                                int imgW = curr.Width;
+                                int imgH = curr.Height;
 
-                                Cv2.ImWrite(imagePath, boxed);
-
-                                var snap = new VideoAnalysisSnapshot
+                                try
                                 {
-                                    EventId = openEvent.Id,
-                                    ImagePath = imagePath,
-                                    TimeSec = timeSec,
-                                    FrameIndex = snapFrameIndex,
-                                    ImageWidth = boxed.Width,
-                                    ImageHeight = boxed.Height,
-                                    SeqNo = snapshotSeq,
-                                    CrtTime = DateTime.Now,
-                                    UpdTime = DateTime.Now
-                                };
+                                    if (peakFrame?.Jpeg != null && peakFrame.Jpeg.Length > 0)
+                                    {
+                                        await File.WriteAllBytesAsync(imagePath, peakFrame.Jpeg, ct);
+                                        imgW = peakFrame.Width;
+                                        imgH = peakFrame.Height;
+                                    }
+                                    else
+                                    {
+                                        Cv2.ImWrite(imagePath, curr);
+                                        imgW = curr.Width;
+                                        imgH = curr.Height;
+                                    }
 
-                                _db.VideoAnalysisSnapshots.Add(snap);
-                                await _db.SaveChangesAsync(ct);
+                                    var fi = new FileInfo(imagePath);
+                                    if (!fi.Exists || fi.Length <= 0)
+                                    {
+                                        _logger.LogWarning("Snapshot file missing/empty after write. path={Path}", imagePath);
+                                        SafeDeleteFile(imagePath);
+                                    }
+                                    else
+                                    {
+                                        var snap = new VideoAnalysisSnapshot
+                                        {
+                                            VideoFileId = vf.Id,     // ★关键：写入新增字段
+                                            EventId = openEvent.Id,
+                                            ImagePath = imagePath,
+                                            TimeSec = timeSec,
+                                            FrameIndex = snapFrameIndex,
+                                            ImageWidth = imgW,
+                                            ImageHeight = imgH,
+                                            SeqNo = snapshotSeq,
+                                            Confidence = (decimal)conf,
+                                            CrtTime = DateTime.Now,
+                                            UpdTime = DateTime.Now
+                                        };
+
+                                        _db.VideoAnalysisSnapshots.Add(snap);
+                                        await _db.SaveChangesAsync(ct);
+
+                                        top5Keeper.CommitKept(snap.Id, imagePath, conf, decision.ReplaceOldSnapshotId);
+                                        if (decision.ReplaceOldSnapshotId.HasValue)
+                                        {
+                                            var oldId = decision.ReplaceOldSnapshotId.Value;
+
+                                            if (deletedSnapshotIds.Add(oldId))
+                                            {
+                                                if (!string.Equals(decision.ReplaceOldImagePath, imagePath, StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    await DeleteSnapshotHardAsync(oldId, decision.ReplaceOldImagePath, ct);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Snapshot write failed. path={Path}", imagePath);
+                                    SafeDeleteFile(imagePath);
+                                }
                             }
 
                             lastEventFrame = snapFrameIndex;
                         }
                     }
 
-                    // 结束 pending
                     pendingPulse = false;
                     consecutiveHits = 0;
-
-                    TrimWindowToRecent(window, keepMs: 1500);
+                    TrimWindowToRecent(window, keepMs: 2200);
                 }
 
                 curr.CopyTo(prev);
             }
+
+            // ★最终硬裁剪：保证最多5张
+            await EnforceTop5HardAsync(vf.Id, 5, ct);
 
             int? durationSec = cap.FrameCount > 0 && cap.Fps > 0
                 ? (int?)Math.Round(cap.FrameCount / cap.Fps)
                 : null;
 
             sw.Stop();
-            return (foundEvents, durationSec, w0, h0, sw.Elapsed.TotalMilliseconds);
+            return (foundEvents, durationSec, w0, h0, sw.Elapsed.TotalSeconds);
         }
 
-        private static int CalcSampleEveryFrames(int fps, AlgoParams algo)
+        private static int CalcSampleEveryFrames(int fps, AlgoParams algo, ILogger logger)
         {
-            if (algo.SampleFps > 0)
-                return Math.Max(1, (int)Math.Round(fps * 1.0 / algo.SampleFps));
+            int targetFps = algo.SampleFps;
 
-            return Math.Max(1, algo.SampleEverySec * fps);
+            if (targetFps <= 0)
+            {
+                targetFps = 8;
+                logger?.LogWarning("AlgoParams.SampleFps <= 0, fallback to default 8fps. Please set SampleFps explicitly.");
+            }
+
+            if (targetFps > fps) targetFps = fps;
+
+            return Math.Max(1, (int)Math.Round(fps * 1.0 / targetFps));
         }
 
-        /// <summary>
-        /// 统计点：MeanDelta + 动态高亮比例（thr = mean + K*std clamp）
-        /// </summary>
         private static SamplePoint BuildStatsPoint(Mat prev, Mat curr, AlgoParams algo)
         {
             using var p = ResizeIfNeeded(prev, algo.ResizeMaxWidth, out _);
@@ -535,6 +836,10 @@ namespace Preferred.Api.Services
                 MeanDelta = meanDelta,
                 BrightRatio = br2,
                 BrightDelta = brightDelta,
+
+                MeanRise = 0,
+                BrightRise = 0,
+
                 Candidate = false,
                 BBox = default,
                 AreaRatio = 0,
@@ -543,24 +848,21 @@ namespace Preferred.Api.Services
             };
         }
 
-        /// <summary>
-        /// 候选触发：三路任一路满足即可触发
-        /// 1) MeanDelta 足够大（全局突亮/突暗）
-        /// 2) BrightDelta 足够大（动态高亮比例突变）
-        /// 3) diff + contour（局部变化）
-        /// 其中 diff/contour 的 bbox 会从 resize 坐标映射到原图坐标
-        /// </summary>
         private static bool TryDetectCandidate(Mat prev, Mat curr, AlgoParams algo, SamplePoint stats, out SamplePoint cand)
         {
             cand = null;
 
-            // 全局候选：不依赖 bbox
-            if (stats.MeanDelta >= algo.GlobalBrightnessDelta || stats.BrightDelta >= algo.BrightRatioDelta)
-            {
-                return true;
-            }
+            bool riseHit =
+                stats.MeanRise >= algo.MeanDeltaRise ||
+                stats.BrightRise >= algo.BrightRatioDelta;
 
-            // diff/contour：在 resize 图上做
+            bool deltaHit =
+                stats.MeanDelta >= algo.GlobalBrightnessDelta ||
+                stats.BrightDelta >= algo.BrightRatioDelta;
+
+            if (riseHit || deltaHit)
+                return true;
+
             using var p = ResizeIfNeeded(prev, algo.ResizeMaxWidth, out _);
             using var c = ResizeIfNeeded(curr, algo.ResizeMaxWidth, out double scaleC);
 
@@ -589,7 +891,7 @@ namespace Preferred.Api.Services
             Cv2.Threshold(diff, diff, thr, 255, ThresholdTypes.Binary);
 
             using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(3, 3));
-            Cv2.MorphologyEx(diff, diff, MorphTypes.Open, kernel);
+            Cv2.MorphologyEx(diff, diff, MorphTypes.Close, kernel);
 
             Cv2.FindContours(diff, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
             if (contours == null || contours.Length == 0) return false;
@@ -611,7 +913,6 @@ namespace Preferred.Api.Services
 
             var bboxSmall = Cv2.BoundingRect(contours[maxIdx]);
 
-            // 映射回原图坐标：original = small / scale
             double s = scaleC;
             if (s <= 0) s = 1.0;
 
@@ -629,29 +930,38 @@ namespace Preferred.Api.Services
             var center = new Point2d(bbox.X + bbox.Width / 2.0, bbox.Y + bbox.Height / 2.0);
 
             double score =
-                Math.Min(1.0, areaRatio * 5.0) * 0.40 +
-                Math.Min(1.0, stats.MeanDelta / 20.0) * 0.40 +
-                Math.Min(1.0, stats.BrightDelta / 0.006) * 0.20;
+                Math.Min(1.0, areaRatio * 7.0) * 0.45 +
+                Math.Min(1.0, stats.BrightDelta / 0.006) * 0.25 +
+                Math.Min(1.0, stats.MeanDelta / 18.0) * 0.20 +
+                Math.Min(1.0, Math.Max(0, stats.MeanRise) / 20.0) * 0.10;
 
             cand = new SamplePoint
             {
+                Mean = stats.Mean,
+                Std = stats.Std,
+                MeanDelta = stats.MeanDelta,
+                BrightRatio = stats.BrightRatio,
+                BrightDelta = stats.BrightDelta,
+                MeanRise = stats.MeanRise,
+                BrightRise = stats.BrightRise,
+
                 BBox = bbox,
                 AreaRatio = areaRatio,
-                Confidence = Math.Max(0.1, Math.Min(1.0, score)),
-                Center = center
+                Confidence = Math.Max(0.08, Math.Min(1.0, score)),
+                Center = center,
+                Candidate = true
             };
-
             return true;
         }
 
         /// <summary>
-        /// 短脉冲确认（主信号：MeanDelta；辅信号：BrightDelta）
-        /// - 快上升（MeanDeltaRise 或 BrightRatioDelta 达标）
-        /// - 快回落（窗口内回到 baseline 附近）
-        /// - 持续短（<= MaxPulseSec）
+        /// 短脉冲确认（召回优先稳健基线版）
+        /// - rise：峰值相对基线抬升（MeanRise/BrightRise）达标，或窗口内出现一次强 delta
+        /// - fall：峰值后 (pulseMaxMs + 400ms) 内回落到 baseline 附近
+        /// - 持续短：高亮跨度不超过 MaxPulseSec
         /// 抑制：
-        /// - 持续高亮（>= SustainRejectSec）
-        /// - 移动光源（中心位移过大，仅对有 bbox 的候选生效）
+        /// - 持续高亮 >= SustainRejectSec
+        /// - 移动光源（bbox 中心位移过大，仅对 bbox 足够的候选生效）
         /// </summary>
         private static bool ConfirmPulse(
             Queue<SamplePoint> window,
@@ -671,78 +981,68 @@ namespace Preferred.Api.Services
             sustainReject = false;
             motionReject = false;
 
-            if (window == null || window.Count < 2)
+            if (window == null || window.Count < 3)
                 return false;
 
             var arr = window.ToArray();
             Array.Sort(arr, (a, b) => a.TimeMs.CompareTo(b.TimeMs));
             int n = arr.Length;
 
-            // baseline：最早 2 个点
-            int baseCount = n >= 2 ? 2 : 1;
-            double baseMean = 0;
-            double baseBR = 0;
-            for (int i = 0; i < baseCount; i++)
-            {
-                baseMean += arr[i].Mean;
-                baseBR += arr[i].BrightRatio;
-            }
-            baseMean /= baseCount;
-            baseBR /= baseCount;
-
-            // peak：以 Mean 最大点作为峰值（更贴合“全局突亮”）
-            int peakIdx = 0;
-            double peakMean = arr[0].Mean;
-            for (int i = 1; i < n; i++)
-            {
-                if (arr[i].Mean > peakMean)
-                {
-                    peakMean = arr[i].Mean;
-                    peakIdx = i;
-                }
-            }
-
+            // 选峰值：优先局部 bbox/conf，否则用 MeanRise 或 MeanDelta
+            int peakIdx = SelectPeakIndex(arr, algo, out bool peakIsLocal);
             var peak = arr[peakIdx];
             peakTimeMs = peak.TimeMs;
 
-            // bestBox：尽量取峰值附近、且 bbox 有效的点；否则用 peak 的 bbox（可能为空）
-            bestBox = peak.BBox;
-            if (bestBox.Width <= 0 || bestBox.Height <= 0)
+            bestBox = GetBestBoxNearPeak(arr, peakTimeMs);
+
+            // -------- baseline：使用“峰值前 800ms~1500ms”范围内的稳健中位数（避免被事件污染）--------
+            int baseEnd = peakTimeMs - 200;
+            int baseStart = Math.Max(arr[0].TimeMs, peakTimeMs - 1500);
+
+            var pre = arr.Where(p => p.TimeMs >= baseStart && p.TimeMs <= baseEnd).ToArray();
+            if (pre.Length < 2)
             {
-                // 向前后找最近的有效 bbox
-                int bestJ = -1;
-                int bestAbs = int.MaxValue;
-                for (int j = 0; j < n; j++)
-                {
-                    if (arr[j].BBox.Width <= 0 || arr[j].BBox.Height <= 0) continue;
-                    int d = Math.Abs(arr[j].TimeMs - peakTimeMs);
-                    if (d < bestAbs)
-                    {
-                        bestAbs = d;
-                        bestJ = j;
-                    }
-                }
-                if (bestJ >= 0) bestBox = arr[bestJ].BBox;
+                // 兜底：用峰值前所有点
+                pre = arr.Where(p => p.TimeMs <= baseEnd).ToArray();
+            }
+            if (pre.Length < 2)
+            {
+                // 再兜底：用最早两点
+                pre = arr.Take(Math.Min(2, n)).ToArray();
             }
 
-            // rise：任一满足即可
-            bool hasRise = false;
-            for (int i = 0; i < n; i++)
+            double baseMean = Median(pre.Select(x => x.Mean));
+            double baseBR = Median(pre.Select(x => x.BrightRatio));
+
+            // -------- rise：相对基线抬升优先，其次相邻帧突变 --------
+            double peakMeanRise = peak.Mean - baseMean;
+            double peakBrRise = peak.BrightRatio - baseBR;
+
+            bool hasRise =
+                peakMeanRise >= algo.MeanDeltaRise ||
+                peakBrRise >= algo.BrightRatioDelta;
+
+            if (!hasRise)
             {
-                if (arr[i].MeanDelta >= algo.MeanDeltaRise || arr[i].BrightDelta >= algo.BrightRatioDelta)
+                // 兜底：窗口内任何点出现强 delta 也算 rise
+                for (int i = 0; i < n; i++)
                 {
-                    hasRise = true;
-                    break;
+                    if (arr[i].MeanDelta >= algo.GlobalBrightnessDelta ||
+                        arr[i].BrightDelta >= algo.BrightRatioDelta)
+                    {
+                        hasRise = true;
+                        break;
+                    }
                 }
             }
             if (!hasRise) return false;
 
-            // fall：峰值后 pulseMaxMs 内回到 baseline 附近
+            // -------- fall：允许 pulseMaxMs + 400ms（采样稀疏时常见漏点）--------
             double meanBackTo = baseMean + algo.MeanDeltaFall;
             double brBackTo = baseBR + Math.Max(0.0005, algo.BrightRatioDelta * 0.8);
 
             bool hasFall = false;
-            int fallEnd = peakTimeMs + pulseMaxMs;
+            int fallEnd = peakTimeMs + pulseMaxMs + 400;
             for (int i = peakIdx; i < n; i++)
             {
                 int t = arr[i].TimeMs;
@@ -756,7 +1056,7 @@ namespace Preferred.Api.Services
             }
             if (!hasFall) return false;
 
-            // 高亮持续时间：Mean 超过 baseline+MeanDeltaRise 的跨度
+            // -------- 高亮持续时间（用 mean 超过 baseMean+MeanDeltaRise 的跨度）--------
             int firstHigh = -1, lastHigh = -1;
             double highMeanThr = baseMean + algo.MeanDeltaRise;
 
@@ -771,31 +1071,141 @@ namespace Preferred.Api.Services
 
             int highSpanMs = (firstHigh >= 0 && lastHigh >= 0) ? (lastHigh - firstHigh) : 0;
 
-            // 持续光源抑制
             sustainReject = (highSpanMs >= (int)(algo.SustainRejectSec * 1000));
-
-            // motionReject：只有在窗口中有足够 bbox 点才判
             motionReject = CheckMotionReject(arr, peakTimeMs, algo);
 
-            // 脉冲短
             int maxPulseMs = (int)(algo.MaxPulseSec * 1000);
-            if (highSpanMs > Math.Max(250, maxPulseMs)) return false;
+            if (highSpanMs > Math.Max(260, maxPulseMs)) return false;
 
-            // isFlash：均值提升足够大，或面积占比足够大
-            double meanGain = Math.Max(0, peak.Mean - baseMean);
-            bool flashByMean = meanGain >= Math.Max(algo.MeanDeltaRise, algo.GlobalBrightnessDelta * 0.8);
+            // -------- isFlash 判定：全局 meanRise 更可靠；局部用 areaRatio 辅助 --------
+            bool flashByMean = peakMeanRise >= Math.Max(algo.MeanDeltaRise, algo.GlobalBrightnessDelta * 0.75);
             bool flashByArea = peak.AreaRatio >= algo.FlashAreaRatio;
-            isFlash = flashByMean || flashByArea;
 
-            // 置信度：均值提升 + brightDelta + area
-            double score =
-                Math.Min(1.0, meanGain / 25.0) * 0.55 +
-                Math.Min(1.0, peak.BrightDelta / 0.006) * 0.20 +
-                Math.Min(1.0, peak.AreaRatio * 4.0) * 0.15 +
-                (hasFall ? 0.10 : 0.0);
+            // 召回优先：peakIsLocal 时也允许 flashByMean 触发 flash（避免大范围闪光但 bbox 只抓到局部）
+            isFlash = (flashByMean || flashByArea);
 
-            confidence = Math.Max(0.1, Math.Min(1.0, score));
+            // -------- confidence：更偏向“峰值相对基线抬升”--------
+            if (peakIsLocal)
+            {
+                double score =
+                    Math.Min(1.0, Math.Max(0, peakBrRise) / 0.006) * 0.35 +
+                    Math.Min(1.0, peak.AreaRatio * 7.0) * 0.25 +
+                    Math.Min(1.0, Math.Max(0, peakMeanRise) / 22.0) * 0.30 +
+                    (hasFall ? 0.10 : 0.0);
+
+                confidence = Math.Max(0.10, Math.Min(1.0, score));
+            }
+            else
+            {
+                double score =
+                    Math.Min(1.0, Math.Max(0, peakMeanRise) / 22.0) * 0.60 +
+                    Math.Min(1.0, peak.MeanDelta / 18.0) * 0.15 +
+                    Math.Min(1.0, Math.Max(0, peakBrRise) / 0.006) * 0.15 +
+                    (hasFall ? 0.10 : 0.0);
+
+                confidence = Math.Max(0.10, Math.Min(1.0, score));
+            }
+
             return true;
+        }
+        private static double Median(IEnumerable<double> values)
+        {
+            if (values == null) return 0;
+
+            var arr = values as double[] ?? values.ToArray();
+            if (arr.Length == 0) return 0;
+
+            Array.Sort(arr);
+
+            int mid = arr.Length / 2;
+            if ((arr.Length % 2) == 1)
+                return arr[mid];
+
+            // 偶数个：取中间两数平均
+            return (arr[mid - 1] + arr[mid]) / 2.0;
+        }
+
+        private static int SelectPeakIndex(SamplePoint[] arr, AlgoParams algo, out bool peakIsLocal)
+        {
+            peakIsLocal = false;
+            int n = arr.Length;
+
+            // 1) 局部候选：优先 bbox 点里选 (Confidence 或 BrightRise/BrightDelta)
+            int bestIdx = -1;
+            double bestScore = double.MinValue;
+
+            for (int i = 0; i < n; i++)
+            {
+                bool hasBox = arr[i].BBox.Width > 0 && arr[i].BBox.Height > 0;
+                if (!hasBox) continue;
+
+                double s = arr[i].Confidence;
+                s = Math.Max(s, arr[i].BrightDelta * 1000.0);
+                s = Math.Max(s, Math.Max(0, arr[i].BrightRise) * 800.0);
+
+                if (s > bestScore)
+                {
+                    bestScore = s;
+                    bestIdx = i;
+                }
+            }
+
+            if (bestIdx >= 0)
+            {
+                peakIsLocal = true;
+                return bestIdx;
+            }
+
+            // 2) 全局：优先 MeanRise 最大，其次 MeanDelta 最大
+            int peakIdx = 0;
+            double maxRise = arr[0].MeanRise;
+            for (int i = 1; i < n; i++)
+            {
+                if (arr[i].MeanRise > maxRise)
+                {
+                    maxRise = arr[i].MeanRise;
+                    peakIdx = i;
+                }
+            }
+
+            if (maxRise > 0.1)
+            {
+                peakIsLocal = false;
+                return peakIdx;
+            }
+
+            int peakIdx2 = 0;
+            double maxMd = arr[0].MeanDelta;
+            for (int i = 1; i < n; i++)
+            {
+                if (arr[i].MeanDelta > maxMd)
+                {
+                    maxMd = arr[i].MeanDelta;
+                    peakIdx2 = i;
+                }
+            }
+
+            peakIsLocal = false;
+            return peakIdx2;
+        }
+
+        private static Rect GetBestBoxNearPeak(SamplePoint[] arr, int peakTimeMs)
+        {
+            int bestJ = -1;
+            int bestAbs = int.MaxValue;
+
+            for (int j = 0; j < arr.Length; j++)
+            {
+                if (arr[j].BBox.Width <= 0 || arr[j].BBox.Height <= 0) continue;
+                int d = Math.Abs(arr[j].TimeMs - peakTimeMs);
+                if (d < bestAbs)
+                {
+                    bestAbs = d;
+                    bestJ = j;
+                }
+            }
+
+            return bestJ >= 0 ? arr[bestJ].BBox : default;
         }
 
         /// <summary>

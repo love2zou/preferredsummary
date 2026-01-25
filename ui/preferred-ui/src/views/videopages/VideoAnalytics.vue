@@ -7,7 +7,7 @@
           <el-input
             v-model="searchJobNo"
             placeholder="请输入任务编号查询"
-            style="width: 260px; margin-right: 10px"
+            class="search-input"
             @keyup.enter="handleSearch"
             clearable
             @clear="handleSearch"
@@ -26,7 +26,7 @@
         :data="jobList"
         border
         stripe
-        style="width: 100%; height: calc(100vh - 120px)"
+        class="job-table"
       >
         <el-table-column prop="jobNo" label="任务编号" min-width="200">
           <template #default="{ row }">
@@ -91,36 +91,28 @@
       />
     </el-dialog>
 
-    <!-- 新建会话弹窗（仅创建 Job，不上传文件） -->
-    <el-dialog v-model="createDialogVisible" title="新建持续上传会话" width="640px">
+    <!-- 新建会话弹窗（仅创建 Job，不上传参数，不上传文件） -->
+    <el-dialog
+      v-model="createDialogVisible"
+      title="新建持续上传会话"
+      width="760px"
+      top="8vh"
+      :close-on-click-modal="false"
+      :destroy-on-close="true"
+    >
       <div class="create-tip">
-        <el-alert
-          title="说明"
-          type="info"
-          :closable="false"
-          show-icon
-        >
+        <el-alert title="说明" type="info" :closable="false" show-icon>
           <template #default>
-            <div>
-              该会话支持<strong>持续上传</strong>：你可以不断上传视频，服务端在收到视频后立即入队分析；
-              当你确认不再上传时，在工作台点击<strong>关闭上传</strong>即可。
+            <div class="tip-text">
+              该会话支持<strong>持续上传</strong>：你可以不断上传视频，服务端收到视频后立即入队分析；
+              当你确认不再上传时，在工作台点击<strong>关闭上传</strong>即可完成收尾。
+            </div>
+            <div class="tip-sub">
+              本页创建会话<strong>不上传算法参数</strong>，后端将使用默认参数。
+              如需调整“重新分析”入队参数，可在工作台的<strong>参数设置</strong>里临时修改（不保存）。
             </div>
           </template>
         </el-alert>
-      </div>
-
-      <div style="margin-top: 12px">
-        <div style="font-size: 12px; color: #909399; margin-bottom: 6px">algoParamsJson（可选，JSON 字符串）</div>
-        <el-input
-          v-model="algoParams"
-          type="textarea"
-          :rows="5"
-          placeholder="留空则使用默认参数"
-        />
-        <div style="margin-top: 8px; font-size: 12px; color: #909399">
-          默认值：
-          <pre class="default-json">{{ defaultAlgoParams }}</pre>
-        </div>
       </div>
 
       <template #footer>
@@ -147,17 +139,9 @@ const jobList = ref<JobDetailDto[]>([])
 const currentDetailJob = ref<JobDetailDto | null>(null)
 const workbenchVisible = ref(false)
 
-// 创建会话
+// 创建会话（仅创建 Job）
 const createDialogVisible = ref(false)
 const submitting = ref(false)
-const algoParams = ref('')
-const defaultAlgoParams = `{
-  "SampleEverySec": 1,
-  "DiffThreshold": 40,
-  "MinContourArea": 60,
-  "FlashAreaRatio": 0.25,
-  "GlobalBrightnessDelta": 25
-}`
 
 const getStatusText = (s: number) => {
   switch (s) {
@@ -221,15 +205,22 @@ const fetchJobList = async () => {
     try {
       const res = await videoAnalyticsService.getJob(searchJobNo.value.trim())
       if (res.success) list.push(res.data)
-    } catch {}
+    } catch { /* ignore */ }
   } else {
     const recent = jobHistory.value.slice(0, 10)
+    const toRemove: string[] = []
     await Promise.all(recent.map(async (jn) => {
       try {
         const res = await videoAnalyticsService.getJob(jn)
         if (res.success) list.push(res.data)
-      } catch {}
+      } catch (e: any) {
+        if (e?.response?.status === 404) toRemove.push(jn)
+      }
     }))
+    if (toRemove.length) {
+      const removeSet = new Set(toRemove)
+      jobHistory.value = jobHistory.value.filter(x => !removeSet.has(x))
+    }
   }
 
   jobList.value = list.sort((a: any, b: any) => {
@@ -248,13 +239,12 @@ const handleDeleteJob = async (jn: string) => {
     const res = await videoAnalyticsService.deleteJob(jn)
     if (res.success) {
       ElMessage.success('删除成功')
-      // 从本地历史和列表中移除
       jobHistory.value = jobHistory.value.filter(x => x !== jn)
       fetchJobList()
     } else {
       ElMessage.error(res.message || '删除失败')
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('删除请求失败')
   }
 }
@@ -275,13 +265,13 @@ const onWorkbenchClosed = () => {
 
 const openCreateDialog = () => {
   createDialogVisible.value = true
-  algoParams.value = ''
 }
 
 const createJobAndEnter = async () => {
   submitting.value = true
   try {
-    const res = await videoAnalyticsService.createJob(algoParams.value || undefined)
+    // 关键：不上传参数（传空字符串，让后端用默认 DefaultAlgoParamsJson）
+    const res = await videoAnalyticsService.createJob('')
     if (!res.success) {
       ElMessage.error(res.message || '创建失败')
       return
@@ -290,22 +280,14 @@ const createJobAndEnter = async () => {
     const jobNo = res.data.jobNo
     ElMessage.success(`会话创建成功: ${jobNo}`)
 
-    // 写入历史
     jobHistory.value = [jobNo, ...jobHistory.value.filter(x => x !== jobNo)].slice(0, 20)
 
-    // 拉取详情并进入工作台
     const jobRes = await videoAnalyticsService.getJob(jobNo)
-    if (jobRes.success) {
-      currentDetailJob.value = jobRes.data
-      createDialogVisible.value = false
-      workbenchVisible.value = true
-    } else {
-      // 兜底：至少能进入
-      currentDetailJob.value = { ...(res.data as any), jobNo } as any
-      createDialogVisible.value = false
-      workbenchVisible.value = true
-    }
-  } catch (e) {
+    currentDetailJob.value = jobRes.success ? jobRes.data : ({ ...(res.data as any), jobNo } as any)
+
+    createDialogVisible.value = false
+    workbenchVisible.value = true
+  } catch {
     ElMessage.error('创建失败')
   } finally {
     submitting.value = false
@@ -326,13 +308,24 @@ const createJobAndEnter = async () => {
   padding: 20px;
   background: #fff;
   height: 100%;
+  overflow: hidden;
 }
 
 .list-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
+}
+
+.search-input {
+  width: 260px;
+  margin-right: 10px;
+}
+
+.job-table {
+  width: 100%;
+  height: calc(100vh - 108px);
 }
 
 .link-text {
@@ -342,15 +335,18 @@ const createJobAndEnter = async () => {
 }
 
 .create-tip {
-  margin-bottom: 10px;
+  margin-top: 8px;
 }
 
-.default-json {
-  margin: 6px 0 0;
-  background: #f6f8fa;
-  padding: 10px;
-  border-radius: 6px;
-  overflow: auto;
+.tip-text {
+  line-height: 1.6;
+}
+
+.tip-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.6;
 }
 
 :deep(.va-workbench-dialog) {

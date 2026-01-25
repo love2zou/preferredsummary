@@ -28,6 +28,15 @@
         </div>
 
         <div class="meta-right">
+          <el-tooltip content="参数设置" placement="bottom" :show-after="200">
+            <el-button
+              class="help-btn"
+              :icon="Setting"
+              circle
+              size="small"
+              @click="openAlgoParamsDialog"
+            />
+          </el-tooltip>
           <el-tooltip content="使用说明" placement="bottom" :show-after="200">
             <el-button
               class="help-btn"
@@ -72,7 +81,7 @@
                     </template>
                   </el-table-column>
 
-                  <el-table-column prop="fileName" label="文件名" min-width="220" show-overflow-tooltip />
+                  <el-table-column prop="fileName" label="文件名" min-width="220" />
 
                   <el-table-column label="异常" width="90">
                     <template #default="{ row }">
@@ -152,7 +161,11 @@
                       muted
                       preload="metadata"
                       controls
-                    ></video>
+                      playsinline
+                      @error="onVideoError($event, v)"
+                    >
+                      <source :src="videoAnalyticsService.getVideoContentUrl(v.id)" type='video/mp4; codecs="avc1.42E01E, mp4a.40.2"' />
+                    </video>
                   </div>
 
                   <!-- 补足空格：确保 4/9/16 画面固定布局 -->
@@ -160,12 +173,6 @@
                     <div class="empty-tip">空</div>
                   </div>
                 </div>
-              </div>
-
-              <div class="grid-hint">
-                <span class="sub-text">
-                  提示：右上角 🔥 表示有异常；点击任意画面可选中；分页与左侧表格同步。
-                </span>
               </div>
             </div>
           </div>
@@ -245,7 +252,7 @@
                           @change="toggleSelected(vid.id, $event)"
                           @click.stop
                         />
-                        <span class="vc-name" :title="vid.fileName">{{ vid.fileName }}</span>
+                        <span class="vc-name">{{ vid.fileName }}</span>
                       </div>
 
                       <div class="vc-right">
@@ -256,20 +263,35 @@
                     </div>
 
                     <div class="vc-row2">
-                      <div class="vc-badges">
-                        <el-tag v-if="vid.stats.spark > 0" type="danger" size="small" effect="dark">火 {{ vid.stats.spark }}</el-tag>
-                        <el-tag v-if="vid.stats.flash > 0" type="warning" size="small" effect="dark">闪 {{ vid.stats.flash }}</el-tag>
+                      <!-- 左侧：火/闪/置信度（同一块） -->
+                      <div class="vc-kpi-left">
+                        <el-tag v-if="vid.stats.spark > 0" type="danger" size="small" effect="dark">
+                          火 {{ vid.stats.spark }}
+                        </el-tag>
+                        <el-tag v-if="vid.stats.flash > 0" type="warning" size="small" effect="dark">
+                          闪 {{ vid.stats.flash }}
+                        </el-tag>
+
                         <span v-if="vid.stats.total === 0" class="text-gray">无异常事件</span>
+
+                        <span v-if="vid.stats.maxConf > 0" class="vc-conf-inline">
+                          置信度 {{ (vid.stats.maxConf * 100).toFixed(0) }}%
+                        </span>
+                        <span v-else class="vc-conf-inline text-gray">置信度 -</span>
                       </div>
-                      <div v-if="vid.stats.maxConf > 0" class="vc-conf">
-                        Max: {{ (vid.stats.maxConf * 100).toFixed(0) }}%
+
+                      <!-- 右侧：时长（最右） -->
+                      <div class="vc-kpi-right">
+                      <span class="vc-meta">分析时长: {{ formatAnalyzeSec(vid.analyzeSec) }}</span>
                       </div>
                     </div>
 
+                    <!-- 可选：把“处理中...”等状态单独放下一行（不占 KPI 行） -->
                     <div class="vc-row3">
-                      <span class="vc-meta">时长: {{ formatDuration(vid.analysisDurationMs) }}</span>
                       <span class="vc-meta" v-if="vid.status === 1">处理中...</span>
+                      <span class="vc-meta" v-else> </span>
                     </div>
+
                   </div>
                 </div>
               </el-scrollbar>
@@ -287,7 +309,7 @@
                   <div v-for="g in allEventGroups" :key="g.videoId" class="group-block">
                     <div class="group-header" @click="selectVideo(g.videoId)">
                       <div class="gh-left">
-                        <span class="gh-title" :title="g.fileName">{{ g.fileName }}</span>
+                        <span class="gh-title">{{ g.fileName }}</span>
                         <el-tag size="small" effect="plain" class="ml-2">{{ getVideoStatusText(g.status) }}</el-tag>
                         <el-tag type="danger" size="small" effect="dark" class="ml-2">异常</el-tag>
                       </div>
@@ -296,7 +318,7 @@
                         <el-tag v-if="g.spark > 0" type="danger" size="small" effect="dark">火 {{ g.spark }}</el-tag>
                         <el-tag v-if="g.flash > 0" type="warning" size="small" effect="dark">闪 {{ g.flash }}</el-tag>
                         <span class="gh-meta">事件 {{ g.total }}</span>
-                        <span v-if="g.maxConf > 0" class="gh-meta strong">Max {{ (g.maxConf * 100).toFixed(0) }}%</span>
+                        <span v-if="g.maxConf > 0" class="gh-meta strong">置信度 {{ (g.maxConf * 100).toFixed(0) }}%</span>
                       </div>
                     </div>
 
@@ -314,11 +336,21 @@
                             :src="snapshotCache[evt.id]"
                             fit="cover"
                             class="ec-img"
+                            @error="onSnapshotError(evt.id)"
                           />
                           <div v-else class="ec-placeholder">
                             <el-icon><Picture /></el-icon>
                           </div>
                           <div class="ec-time">{{ formatTime(evt.peakTimeSec) }}</div>
+                          <el-tooltip content="下载截图" placement="top" :show-after="200">
+                            <el-button
+                              class="ec-dl"
+                              circle
+                              size="small"
+                              :icon="Download"
+                              @click.stop="downloadEventSnapshot(evt.id)"
+                            />
+                          </el-tooltip>
                         </div>
 
                         <div class="ec-info">
@@ -402,14 +434,10 @@
                     <div class="upload-hint">
                       <span>已上传: {{ (currentDetailJob?.videos?.length || 0) }} 个</span>
                       <el-divider direction="vertical" />
-                      <span>完成/失败: {{ doneCount }}/{{ totalCount }}</span>
+                      <span>完成/失败: {{ finishedCount }}/{{ failedCount }}</span>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              <div class="right-footer-hint">
-                <span class="sub-text">提示：点击事件墙中的任意截图，将自动切换视频并定位到该事件前 2 秒。</span>
               </div>
             </div>
           </div>
@@ -437,14 +465,77 @@
         <el-button type="primary" @click="helpVisible = false">我知道了</el-button>
       </template>
     </el-dialog>
+
+    <!-- 参数设置弹窗 -->
+    <el-dialog v-model="algoParamsVisible" title="参数设置" width="860px" top="6vh" append-to-body>
+      <div style="font-size: 12px; color: #909399; margin-bottom: 10px">
+        修改后立即生效，将影响“重新分析”的入队参数；新建会话也会沿用此参数。
+      </div>
+
+      <div class="algo-scroll">
+        <el-collapse v-model="algoOpenGroups">
+          <el-collapse-item v-for="g in algoGroups" :key="g" :name="g" :title="g">
+            <el-form :model="algoParamsEdit" label-width="140px" class="algo-form">
+              <el-row :gutter="12">
+                <el-col v-for="f in fieldsByGroup(g)" :key="f.key" :span="12">
+                  <el-form-item>
+                    <template #label>
+                      <span class="algo-label">{{ f.labelZh }}</span>
+                      <el-tooltip :content="`${f.desc}（字段：${f.label}）`" placement="top" :show-after="200">
+                        <el-icon class="algo-help"><QuestionFilled /></el-icon>
+                      </el-tooltip>
+                    </template>
+                    <el-input-number
+                      v-model="algoParamsEdit[f.key]"
+                      :min="f.min"
+                      :max="f.max"
+                      :step="f.step"
+                      :precision="f.precision"
+                      controls-position="right"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                </el-col>
+              </el-row>
+            </el-form>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px">
+        <el-button @click="resetAlgoParams">恢复默认</el-button>
+      </div>
+
+      <el-collapse v-model="algoJsonOpen" style="margin-top: 8px">
+        <el-collapse-item name="json" title="查看当前参数（JSON）">
+          <pre class="algo-json">{{ algoParamsJson }}</pre>
+        </el-collapse-item>
+      </el-collapse>
+
+      <template #footer>
+        <el-button type="primary" @click="algoParamsVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { videoAnalyticsService, type EventDto, type JobDetailDto, type JobVideoDto } from '@/services/videoAnalyticsService';
-import { Picture, QuestionFilled } from '@element-plus/icons-vue';
+import { Download, Picture, QuestionFilled, Setting } from '@element-plus/icons-vue';
+import { useLocalStorage } from '@vueuse/core';
 import { ElMessage } from 'element-plus';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+  ALGO_FIELD_GROUPS,
+  ALGO_FIELDS,
+  DEFAULT_ALGO_PARAMS,
+  DEFAULT_ALGO_PARAMS_JSON,
+  parseAlgoParamsJson,
+  toAlgoParamsJson,
+  type AlgoFieldGroup,
+  type AlgoFieldMeta,
+  type AlgoParams
+} from './utils/videoAlgoParams';
 
 const props = defineProps<{ job: JobDetailDto; asDialog?: boolean }>()
 defineEmits(['back'])
@@ -464,7 +555,6 @@ interface VideoStats {
 interface EnrichedVideo extends JobVideoDto {
   stats: VideoStats
   events: EventDto[]
-  analysisDurationMs: number
 }
 
 interface WallGroup {
@@ -481,7 +571,7 @@ interface WallGroup {
 
 // ============ 状态 ============
 const currentDetailJob = ref<JobDetailDto | null>(null)
-const loadingDetail = ref(false)
+const loadingDetail = ref(true)
 const allEvents = ref<EventDto[]>([])
 const currentFileId = ref<number | null>(null)
 
@@ -489,6 +579,23 @@ const snapshotCache = ref<Record<number, string>>({})
 const snapshotLoading = ref<Record<number, boolean>>({})
 
 const helpVisible = ref(false)
+const algoFields = ALGO_FIELDS
+const algoGroups = ALGO_FIELD_GROUPS
+const fieldsByGroup = (g: AlgoFieldGroup): AlgoFieldMeta[] => algoFields.filter(x => x.group === g)
+
+const algoParamsStorage = useLocalStorage<string>('video_analytics_algo_params_json', DEFAULT_ALGO_PARAMS_JSON)
+const algoParamsVisible = ref(false)
+const algoParamsEdit = ref<AlgoParams>(parseAlgoParamsJson(algoParamsStorage.value))
+const algoParamsJson = computed(() => toAlgoParamsJson(algoParamsEdit.value))
+const algoOpenGroups = ref<string[]>(['抽帧', '亮度判别', '差分候选'])
+const algoJsonOpen = ref<string[]>([])
+watch(
+  algoParamsEdit,
+  () => {
+    algoParamsStorage.value = algoParamsJson.value
+  },
+  { deep: true }
+)
 
 // 上传/关闭
 const uploadClosed = ref(false)
@@ -588,18 +695,24 @@ const formatDuration = (ms: number) => {
   return `${mm}m ${ss}s`
 }
 
-const normalizeDurationMs = (file: any) => {
-  const ms = file?.analysisDurationMs ?? file?.durationMs ?? file?.costMs ?? file?.elapsedMs
-  if (ms != null) return Number(ms || 0)
-  const sec = Number(file?.durationSec ?? 0)
-  return sec > 0 ? sec * 1000 : 0
+const formatAnalyzeSec = (sec: number | null | undefined) => {
+  if (sec === null || sec === undefined) return '-'
+  const v = Number(sec)
+  if (!Number.isFinite(v)) return '-'
+  if (v === 0) return '0s'
+  return formatDuration(v * 1000)
 }
 
 // ============ 统计 ============
 const totalCount = computed(() => currentDetailJob.value?.videos?.length || 0)
-const doneCount = computed(() => {
+const finishedCount = computed(() => {
   const vids = currentDetailJob.value?.videos || []
-  return vids.filter((v: any) => [2, 3].includes(Number(v.status))).length
+  return vids.filter((v: any) => Number(v.status) === 2).length
+})
+
+const failedCount = computed(() => {
+  const vids = currentDetailJob.value?.videos || []
+  return vids.filter((v: any) => Number(v.status) === 3).length
 })
 
 const selectAllChecked = computed(() => {
@@ -641,7 +754,6 @@ const enrichedVideos = computed<EnrichedVideo[]>(() => {
 
     return {
       ...file,
-      analysisDurationMs: normalizeDurationMs(file),
       stats,
       events: fileEvents
     }
@@ -845,7 +957,7 @@ const reanalyzeSelected = async () => {
 
   reanalyzing.value = true
   try {
-    const res = await videoAnalyticsService.reanalyze(currentDetailJob.value.jobNo, ids)
+    const res = await videoAnalyticsService.reanalyze(currentDetailJob.value.jobNo, ids, algoParamsStorage.value)
     if (res.success) {
       ElMessage.success(`已重新入队：${res.data?.requeuedCount ?? ids.length} 个视频`)
       selectedFileIds.value = []
@@ -859,6 +971,17 @@ const reanalyzeSelected = async () => {
   } finally {
     reanalyzing.value = false
   }
+}
+
+const openAlgoParamsDialog = () => {
+  const parsed = parseAlgoParamsJson(algoParamsStorage.value)
+  algoParamsEdit.value = { ...parsed }
+
+  algoParamsVisible.value = true
+}
+
+const resetAlgoParams = () => {
+  algoParamsEdit.value = { ...DEFAULT_ALGO_PARAMS }
 }
 
 // ============ 初始化/轮询/刷新 ============
@@ -998,6 +1121,68 @@ const preloadSnapshots = async (events: EventDto[]) => {
   }
 }
 
+const ensureSnapshotId = async (eventId: number) => {
+  if (snapshotLoading.value[eventId]) return null
+  snapshotLoading.value[eventId] = true
+  try {
+    const res = await videoAnalyticsService.getEventSnapshots(eventId)
+    if (!res.success || !res.data.length) {
+      snapshotCache.value[eventId] = ''
+      return null
+    }
+    const best = res.data
+      .slice()
+      .sort((a: any, b: any) => Number(b?.confidence ?? 0) - Number(a?.confidence ?? 0))[0]
+    const snapId = Number(best?.id)
+    if (!snapId) {
+      snapshotCache.value[eventId] = ''
+      return null
+    }
+    snapshotCache.value[eventId] = videoAnalyticsService.getSnapshotUrl(snapId)
+    return snapId
+  } catch {
+    snapshotCache.value[eventId] = ''
+    return null
+  } finally {
+    snapshotLoading.value[eventId] = false
+  }
+}
+
+const downloadSnapshotById = async (eventId: number, snapshotId: number, retry = true) => {
+  try {
+    const resp: any = await videoAnalyticsService.downloadSnapshot(snapshotId)
+    const blob: Blob = resp?.data
+    if (!blob || typeof (blob as any).size !== 'number' || (blob as any).size <= 0) {
+      ElMessage.warning('截图内容为空')
+      return
+    }
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `snapshot_${snapshotId}.jpg`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  } catch (e: any) {
+    if (retry && e?.response?.status === 404) {
+      snapshotCache.value[eventId] = ''
+      const newId = await ensureSnapshotId(eventId)
+      if (newId && newId !== snapshotId) {
+        await downloadSnapshotById(eventId, newId, false)
+        return
+      }
+      ElMessage.warning('截图不存在（可能已被替换或已清理）')
+      return
+    }
+    ElMessage.error('下载失败')
+  }
+}
+
+const onSnapshotError = (eventId: number) => {
+  snapshotCache.value[eventId] = ''
+}
+
 const seekToEvent = (evt: EventDto, autoPlay = true) => {
   if (!videoRef.value) return
   const targetTime = Math.max(0, evt.peakTimeSec - 2)
@@ -1110,6 +1295,21 @@ const closeUpload = async () => {
   }
 }
 
+const downloadEventSnapshot = async (eventId: number) => {
+  const snapId = await ensureSnapshotId(eventId)
+  if (!snapId) {
+    ElMessage.warning('暂无截图可下载')
+    return
+  }
+  await downloadSnapshotById(eventId, snapId)
+}
+
+const onVideoError = (e: Event, v: any) => {
+  const el = e.target as HTMLVideoElement
+  console.warn('video error', v?.id, v?.fileName, el?.error)
+  ElMessage.warning(`视频无法解码：${v?.fileName}（建议转码为H.264）`)
+}
+
 // ============ 快捷键 ============
 const handleKeydown = (e: KeyboardEvent) => {
   if (!videoRef.value) return
@@ -1151,7 +1351,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 /* 任务信息放到 tab header 同一行右侧 */
 .tabs-meta {
   position: absolute;
-  top: 14px;            /* 与 el-tabs header 垂直对齐（card tabs 一般较高） */
+  top: 14px;
   right: 16px;
   z-index: 6;
   display: flex;
@@ -1178,7 +1378,7 @@ const handleKeydown = (e: KeyboardEvent) => {
   margin: 0 0 10px 0;
 }
 .wb-tabs :deep(.el-tabs__nav-wrap) {
-  padding-right: 420px; /* 关键：给右侧“任务编号/状态/帮助”腾位置 */
+  padding-right: 420px;
 }
 
 /* tabs 内容高度 */
@@ -1215,12 +1415,37 @@ const handleKeydown = (e: KeyboardEvent) => {
   white-space: nowrap;
 }
 .help-btn { border-color: #dcdfe6; }
+.algo-scroll {
+  max-height: 52vh;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.algo-form :deep(.el-form-item) {
+  margin-bottom: 10px;
+}
+
+.algo-label {
+  margin-right: 6px;
+}
+
+.algo-help {
+  color: #909399;
+}
+
+.algo-json {
+  margin: 6px 0 0;
+  background: #f6f8fa;
+  padding: 10px;
+  border-radius: 6px;
+  overflow: auto;
+}
 
 /* ===== 清单页 ===== */
 .list-body {
   height: 100%;
   display: flex;
-  gap: 8px;            /* 缩小间距 */
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -1252,7 +1477,8 @@ const handleKeydown = (e: KeyboardEvent) => {
 .pager-right { display: flex; align-items: center; gap: 10px; }
 .pager-mid { font-size: 12px; color: #606266; }
 
-:deep(.is-selected-row td) { background-color: #ecf5ff !important; }
+:deep(.is-selected-row td) { background-color: #dbeafe !important; }
+:deep(.is-selected-row td:first-child) { box-shadow: inset 4px 0 0 #409eff; }
 
 .mini-kpi { display: inline-flex; gap: 6px; }
 .kpi { font-size: 12px; font-weight: 700; }
@@ -1264,15 +1490,15 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 .grid-stage {
   flex: 1;
-  padding: 6px;         /* 缩小边距 */
-  overflow: hidden;     /* 不允许滚动出现更多画面 */
+  padding: 0;
+  overflow: hidden;
 }
 
 /* 多画面：间距更小 */
 .video-grid {
   height: 100%;
   display: grid;
-  gap: 6px;             /* 画面之间间距更小 */
+  gap: 0;
 }
 
 .video-grid.grid-2 { grid-template-columns: repeat(2, 1fr); grid-auto-rows: 1fr; }
@@ -1281,7 +1507,7 @@ const handleKeydown = (e: KeyboardEvent) => {
 
 .grid-cell {
   border: 1px solid #ebeef5;
-  border-radius: 8px;
+  border-radius: 0;
   overflow: hidden;
   background: #000;
   cursor: pointer;
@@ -1290,14 +1516,14 @@ const handleKeydown = (e: KeyboardEvent) => {
   min-height: 140px;
 }
 
-.grid-cell:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); transform: translateY(-1px); }
-.grid-cell.active { border-color: #409eff; box-shadow: 0 0 0 2px rgba(64,158,255,0.15) inset; }
+.grid-cell:hover { box-shadow: none; transform: none; }
+.grid-cell.active { border-color: #f00; box-shadow: 0 0 0 3px #f00 inset; z-index: 2; }
 
 /* 视频铺满：object-fit 改为 cover */
 .grid-video {
   width: 100%;
   height: 100%;
-  object-fit: cover;    /* 关键：铺满画面 */
+  object-fit: cover;
   background: #000;
 }
 
@@ -1325,8 +1551,6 @@ const handleKeydown = (e: KeyboardEvent) => {
   color: #c0c4cc;
   font-size: 12px;
 }
-
-.grid-hint { padding: 8px 10px; border-top: 1px solid #ebeef5; background: #fafafa; }
 
 /* ===== 详情页筛选栏（置信度阈值在这里） ===== */
 .detail-filter-bar {
@@ -1461,6 +1685,20 @@ const handleKeydown = (e: KeyboardEvent) => {
   padding: 2px 6px;
 }
 
+.ec-dl {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: none;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+}
+
+.ec-dl:hover {
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+}
+
 .ec-info { padding: 8px; }
 .ec-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
 .ec-conf { font-size: 12px; font-weight: 700; color: #606266; }
@@ -1494,11 +1732,44 @@ const handleKeydown = (e: KeyboardEvent) => {
 .upload-actions { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .upload-hint { font-size: 12px; color: #606266; }
 
-.right-footer-hint { padding: 8px 10px; border-top: 1px solid #ebeef5; background: #fafafa; }
-
 /* help */
 .help-content { line-height: 1.7; color: #303133; }
 .help-content h4 { margin: 10px 0 6px; font-size: 14px; }
 .help-content ul { margin: 0 0 10px 18px; padding: 0; }
 .help-content li { margin: 4px 0; }
+
+.vc-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.vc-kpi-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.vc-conf-inline {
+  font-size: 12px;
+  color: #67c23a;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.vc-kpi-right {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.vc-row3 {
+  margin-top: 6px;
+  display: flex;
+  justify-content: flex-end; /* 状态靠右也可以；你要靠左就改成 flex-start */
+}
 </style>

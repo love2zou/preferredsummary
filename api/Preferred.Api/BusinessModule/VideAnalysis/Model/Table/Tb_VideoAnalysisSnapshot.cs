@@ -8,7 +8,10 @@ namespace Preferred.Api.Models
     public class VideoAnalysisSnapshot
     {
         public int Id { get; set; }
-
+        /// <summary>
+        /// 视频文件ID（Tb_VideoAnalysisFile.Id）
+        /// </summary>
+        public int VideoFileId { get; set; }
         /// <summary>
         /// 所属识别事件ID（Tb_VideoAnalysisEvent.Id）
         /// </summary>
@@ -32,6 +35,10 @@ namespace Preferred.Api.Models
         public int ImageWidth { get; set; }
         public int ImageHeight { get; set; }
 
+        /// <summary>
+        /// 该截图对应的置信度（0~1）
+        /// </summary>
+        public decimal Confidence { get; set; }  // ★新增
         public int SeqNo { get; set; }
         public DateTime CrtTime { get; set; }
         public DateTime UpdTime { get; set; }

@@ -14,6 +14,61 @@ namespace Preferred.Api
 {
     public class Program
     {
+        private sealed class FilteringTextWriter : TextWriter
+        {
+            private readonly TextWriter _inner;
+            private readonly Func<string, bool> _shouldFilter;
+            private readonly StringBuilder _line = new StringBuilder();
+
+            public FilteringTextWriter(TextWriter inner, Func<string, bool> shouldFilter)
+            {
+                _inner = inner ?? TextWriter.Null;
+                _shouldFilter = shouldFilter ?? (_ => false);
+            }
+
+            public override Encoding Encoding => _inner.Encoding;
+
+            public override void Write(char value)
+            {
+                if (value == '\r') return;
+                if (value == '\n')
+                {
+                    FlushLine();
+                    return;
+                }
+                _line.Append(value);
+            }
+
+            public override void Write(string value)
+            {
+                if (value == null) return;
+                foreach (var ch in value) Write(ch);
+            }
+
+            public override void WriteLine(string value)
+            {
+                Write(value);
+                Write('\n');
+            }
+
+            public override void Flush()
+            {
+                FlushLine();
+                _inner.Flush();
+            }
+
+            private void FlushLine()
+            {
+                if (_line.Length == 0) return;
+                var s = _line.ToString();
+                _line.Clear();
+                if (!_shouldFilter(s))
+                {
+                    _inner.WriteLine(s);
+                }
+            }
+        }
+
         public static void Main(string[] args)
         {
             // 确保控制台输出编码为 UTF-8
@@ -21,6 +76,24 @@ namespace Preferred.Api
             
             // 注册 CodePagesEncodingProvider 以支持更多编码（如 GB18030）
             Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+
+            Environment.SetEnvironmentVariable("OPENCV_LOG_LEVEL", "OFF");
+            Environment.SetEnvironmentVariable("OPENCV_VIDEOIO_DEBUG", "0");
+            Environment.SetEnvironmentVariable("OPENCV_FFMPEG_DEBUG", "0");
+            Environment.SetEnvironmentVariable("OPENCV_FFMPEG_LOGLEVEL", "-8");
+
+            Func<string, bool> shouldFilterNative = s =>
+            {
+                if (string.IsNullOrWhiteSpace(s)) return false;
+                var t = s.TrimStart();
+                return t.StartsWith("[h264 @", StringComparison.OrdinalIgnoreCase)
+                       || t.Contains("error while decoding MB", StringComparison.OrdinalIgnoreCase)
+                       || t.Contains("cabac decode", StringComparison.OrdinalIgnoreCase)
+                       || t.Contains("decode_slice_header error", StringComparison.OrdinalIgnoreCase)
+                       || t.Contains("no frame!", StringComparison.OrdinalIgnoreCase);
+            };
+            Console.SetError(new FilteringTextWriter(Console.Error, shouldFilterNative));
+
             // 配置 Serilog
             var logDirectory = Path.Combine(Directory.GetCurrentDirectory(), "logs");
             if (!Directory.Exists(logDirectory))

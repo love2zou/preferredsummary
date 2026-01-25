@@ -31,7 +31,7 @@ namespace Preferred.Api.Models
         /// <summary>
         /// 分析耗时(秒)
         /// </summary>
-        public int? AnalyzeMs { get; set; }
+        public int? AnalyzeSec { get; set; }
 
         /// <summary>
         /// 视频时长（秒）

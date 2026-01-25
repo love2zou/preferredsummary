@@ -547,7 +547,7 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.EventCount)
                     .HasComment("识别事件数");
 
-                entity.Property(e => e.AnalyzeMs)
+                entity.Property(e => e.AnalyzeSec)
                     .HasComment("分析耗时(秒)");
                 entity.Property(e => e.DurationSec)
                     .HasComment("视频时长（秒）");
@@ -622,7 +622,9 @@ namespace Preferred.Api.Data
                 entity.ToTable("Tb_VideoAnalysisSnapshot");
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
-
+                
+                entity.Property(e => e.VideoFileId).IsRequired()
+                    .HasComment("视频文件ID");
                 entity.Property(e => e.EventId).IsRequired()
                     .HasComment("所属识别事件ID");
 
@@ -640,7 +642,11 @@ namespace Preferred.Api.Data
 
                 entity.Property(e => e.ImageHeight).IsRequired()
                     .HasComment("截图高度（像素）");
-
+                entity.Property(e => e.Confidence)
+                    .IsRequired()
+                    .HasColumnType("decimal(6,4)")
+                    .HasDefaultValue(0m)
+                    .HasComment("该截图对应的置信度（0~1）");
                 entity.Property(e => e.SeqNo).IsRequired().HasDefaultValue(0)
                     .HasComment("视频顺序号");
 

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
@@ -34,7 +33,7 @@ namespace Preferred.Api.Services
             _logger = logger;
         }
 
-        public async Task<CreateJobResultDto> CreateJobAsync(string algoParamsJson, CancellationToken ct)
+        public async Task<CreateJobResultDto> CreateJobAsync(string algoParamsJson)
         {
             if (string.IsNullOrWhiteSpace(algoParamsJson))
                 throw new ArgumentException("algoParamsJson 不能为空");
@@ -66,7 +65,7 @@ namespace Preferred.Api.Services
             };
 
             _db.VideoAnalysisJobs.Add(job);
-            await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync();
 
             return new CreateJobResultDto
             {
@@ -75,14 +74,14 @@ namespace Preferred.Api.Services
             };
         }
 
-        public async Task<UploadVideoResultDto> UploadAndEnqueueAsync(string jobNo, IFormFile file, CancellationToken ct)
+        public async Task<UploadVideoResultDto> UploadAndEnqueueAsync(string jobNo, IFormFile file)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 throw new ArgumentException("jobNo 不能为空");
             if (file == null || file.Length <= 0)
                 throw new ArgumentException("file 不能为空");
 
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null)
                 throw new ArgumentException("任务不存在: " + jobNo);
 
@@ -114,7 +113,7 @@ namespace Preferred.Api.Services
                     bufferSize: 1024 * 1024,
                     useAsync: true);
 
-                await file.CopyToAsync(fs, ct);
+                await file.CopyToAsync(fs);
             }
             catch
             {
@@ -126,7 +125,7 @@ namespace Preferred.Api.Services
             var maxSeq = await _db.VideoAnalysisFiles
                 .Where(x => x.JobId == job.Id)
                 .Select(x => (int?)x.SeqNo)
-                .MaxAsync(ct);
+                .MaxAsync();
             if (maxSeq.HasValue) nextSeq = maxSeq.Value + 1;
 
             var vf = new VideoAnalysisFile
@@ -157,8 +156,8 @@ namespace Preferred.Api.Services
 
             job.UpdTime = now;
 
-            await _db.SaveChangesAsync(ct);
-            await _queue.EnqueueAsync(vf.Id, ct);
+            await _db.SaveChangesAsync();
+            await _queue.EnqueueAsync(vf.Id);
 
             return new UploadVideoResultDto
             {
@@ -172,34 +171,33 @@ namespace Preferred.Api.Services
             };
         }
 
-        public async Task<CreateJobResultDto> CreateAndEnqueueAsync(IFormFile[] files, string algoParamsJson, CancellationToken ct)
+        public async Task<CreateJobResultDto> CreateAndEnqueueAsync(IFormFile[] files, string algoParamsJson)
         {
             if (files == null || files.Length == 0)
                 throw new ArgumentException("files 不能为空");
             if (string.IsNullOrWhiteSpace(algoParamsJson))
                 throw new ArgumentException("algoParamsJson 不能为空");
 
-            var job = await CreateJobAsync(algoParamsJson, ct);
+            var job = await CreateJobAsync(algoParamsJson);
 
             foreach (var f in files)
             {
-                ct.ThrowIfCancellationRequested();
                 if (f == null || f.Length == 0) continue;
 
-                await UploadAndEnqueueAsync(job.JobNo, f, ct);
+                await UploadAndEnqueueAsync(job.JobNo, f);
             }
 
             return job;
         }
 
-        public async Task<ReanalyzeResultDto> ReanalyzeFilesAsync(string jobNo, int[] fileIds, CancellationToken ct)
+        public async Task<ReanalyzeResultDto> ReanalyzeFilesAsync(string jobNo, int[] fileIds, string algoParamsJson)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 throw new ArgumentException("jobNo 不能为空");
             if (fileIds == null || fileIds.Length == 0)
                 throw new ArgumentException("fileIds 不能为空");
 
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null)
                 throw new ArgumentException("任务不存在: " + jobNo);
 
@@ -212,7 +210,7 @@ namespace Preferred.Api.Services
 
             var files = await _db.VideoAnalysisFiles
                 .Where(x => x.JobId == job.Id && ids.Contains(x.Id))
-                .ToListAsync(ct);
+                .ToListAsync();
 
             if (files.Count == 0)
                 return new ReanalyzeResultDto { RequeuedCount = 0, ClearedEventCount = 0, ClearedSnapshotCount = 0 };
@@ -220,22 +218,27 @@ namespace Preferred.Api.Services
             var eventIds = await _db.VideoAnalysisEvents.AsNoTracking()
                 .Where(e => e.JobId == job.Id && ids.Contains(e.VideoFileId))
                 .Select(e => e.Id)
-                .ToListAsync(ct);
+                .ToListAsync();
 
             int clearedSnap = 0;
             if (eventIds.Count > 0)
             {
                 clearedSnap = await _db.VideoAnalysisSnapshots
                     .Where(s => eventIds.Contains(s.EventId))
-                    .CountAsync(ct);
+                    .CountAsync();
             }
 
             int clearedEvt = eventIds.Count;
             var now = DateTime.Now;
 
-            using var tx = await _db.Database.BeginTransactionAsync(ct);
+            using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
+                if (!string.IsNullOrWhiteSpace(algoParamsJson))
+                {
+                    job.AlgoParamsJson = algoParamsJson;
+                }
+
                 if (eventIds.Count > 0)
                 {
                     var snaps = _db.VideoAnalysisSnapshots.Where(s => eventIds.Contains(s.EventId));
@@ -250,7 +253,7 @@ namespace Preferred.Api.Services
                     vf.Status = 0;
                     vf.ErrorMessage = null;
                     vf.EventCount = null;
-                    vf.AnalyzeMs = null;
+                    vf.AnalyzeSec = null;
                     vf.DurationSec = null;
                     vf.Width = null;
                     vf.Height = null;
@@ -263,19 +266,19 @@ namespace Preferred.Api.Services
                 job.StartTime ??= now;
                 job.UpdTime = now;
 
-                await _db.SaveChangesAsync(ct);
-                await tx.CommitAsync(ct);
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
             }
             catch
             {
-                await tx.RollbackAsync(ct);
+                await tx.RollbackAsync();
                 throw;
             }
 
             foreach (var vf in files)
-                await _queue.EnqueueAsync(vf.Id, ct);
+                await _queue.EnqueueAsync(vf.Id);
 
-            await RecomputeJobAggregateAsync(job.Id, ct);
+            await RecomputeJobAggregateAsync(job.Id);
 
             return new ReanalyzeResultDto
             {
@@ -285,16 +288,16 @@ namespace Preferred.Api.Services
             };
         }
 
-        private async Task RecomputeJobAggregateAsync(int jobId, CancellationToken ct)
+        private async Task RecomputeJobAggregateAsync(int jobId)
         {
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId);
             if (job == null) return;
             if (job.Status == 4) return;
 
             var files = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == jobId)
                 .Select(x => new { x.Status })
-                .ToListAsync(ct);
+                .ToListAsync();
 
             int totalUploaded = files.Count;
             int finished = files.Count(x => x.Status == 2);
@@ -302,7 +305,7 @@ namespace Preferred.Api.Services
 
             int totalEvents = await _db.VideoAnalysisEvents.AsNoTracking()
                 .Where(e => e.JobId == jobId)
-                .CountAsync(ct);
+                .CountAsync();
 
             job.FinishedVideoCount = finished;
             job.TotalEventCount = totalEvents;
@@ -330,12 +333,12 @@ namespace Preferred.Api.Services
                 job.FinishTime = null;
             }
 
-            await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync();
         }
 
-        public async Task<bool> CloseJobAsync(string jobNo, CancellationToken ct)
+        public async Task<bool> CloseJobAsync(string jobNo)
         {
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null) return false;
 
             if (job.Status == 2 || job.Status == 3 || job.Status == 4) return false;
@@ -343,7 +346,7 @@ namespace Preferred.Api.Services
 
             var total = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == job.Id)
-                .CountAsync(ct);
+                .CountAsync();
 
             job.TotalVideoCount = total;
             job.UpdTime = DateTime.Now;
@@ -354,15 +357,15 @@ namespace Preferred.Api.Services
                 job.StartTime ??= DateTime.Now;
             }
 
-            await _db.SaveChangesAsync(ct);
-            await TryFinalizeJobIfClosedAsync(job.Id, ct);
+            await _db.SaveChangesAsync();
+            await TryFinalizeJobIfClosedAsync(job.Id);
 
             return true;
         }
 
-        private async Task TryFinalizeJobIfClosedAsync(int jobId, CancellationToken ct)
+        private async Task TryFinalizeJobIfClosedAsync(int jobId)
         {
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId);
             if (job == null) return;
 
             if (job.Status == 4) return;
@@ -372,14 +375,14 @@ namespace Preferred.Api.Services
             var files = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == jobId)
                 .Select(x => new { x.Status })
-                .ToListAsync(ct);
+                .ToListAsync();
 
             int finished = files.Count(x => x.Status == 2);
             int failed = files.Count(x => x.Status == 3);
 
             int totalEvents = await _db.VideoAnalysisEvents.AsNoTracking()
                 .Where(e => e.JobId == jobId)
-                .CountAsync(ct);
+                .CountAsync();
 
             job.FinishedVideoCount = finished;
             job.TotalEventCount = totalEvents;
@@ -394,12 +397,12 @@ namespace Preferred.Api.Services
                 job.UpdTime = DateTime.Now;
             }
 
-            await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync();
         }
 
-        public async Task<bool> CancelJobAsync(string jobNo, CancellationToken ct)
+        public async Task<bool> CancelJobAsync(string jobNo)
         {
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null) return false;
 
             if (job.Status == 2 || job.Status == 3) return false;
@@ -408,16 +411,16 @@ namespace Preferred.Api.Services
             job.UpdTime = DateTime.Now;
             job.FinishTime ??= DateTime.Now;
 
-            await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync();
             return true;
         }
 
-        public async Task<DeleteJobResultDto> DeleteJobAsync(string jobNo, CancellationToken ct)
+        public async Task<DeleteJobResultDto> DeleteJobAsync(string jobNo)
         {
             if (string.IsNullOrWhiteSpace(jobNo))
                 return new DeleteJobResultDto { Success = false, Message = "任务编号不能为空", FailedFiles = Array.Empty<string>() };
 
-            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+            var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null)
                 return new DeleteJobResultDto { Success = false, Message = "任务不存在", FailedFiles = Array.Empty<string>() };
 
@@ -425,7 +428,7 @@ namespace Preferred.Api.Services
             {
                 job.Status = 4;
                 job.UpdTime = DateTime.Now;
-                await _db.SaveChangesAsync(ct);
+                await _db.SaveChangesAsync();
             }
 
             var failed = new List<string>();
@@ -433,12 +436,12 @@ namespace Preferred.Api.Services
             var videoPaths = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == job.Id)
                 .Select(x => x.FilePath)
-                .ToListAsync(ct);
+                .ToListAsync();
 
             var eventIds = await _db.VideoAnalysisEvents.AsNoTracking()
                 .Where(e => e.JobId == job.Id)
                 .Select(e => e.Id)
-                .ToListAsync(ct);
+                .ToListAsync();
 
             List<string> snapPaths = new List<string>();
             if (eventIds.Count > 0)
@@ -446,12 +449,12 @@ namespace Preferred.Api.Services
                 snapPaths = await _db.VideoAnalysisSnapshots.AsNoTracking()
                     .Where(s => eventIds.Contains(s.EventId))
                     .Select(s => s.ImagePath)
-                    .ToListAsync(ct);
+                    .ToListAsync();
             }
 
             string jobDir = Path.Combine(_fs.VideoRootPath, jobNo);
 
-            using var tx = await _db.Database.BeginTransactionAsync(ct);
+            using var tx = await _db.Database.BeginTransactionAsync();
             try
             {
                 if (eventIds.Count > 0)
@@ -468,12 +471,12 @@ namespace Preferred.Api.Services
 
                 _db.VideoAnalysisJobs.Remove(job);
 
-                await _db.SaveChangesAsync(ct);
-                await tx.CommitAsync(ct);
+                await _db.SaveChangesAsync();
+                await tx.CommitAsync();
             }
             catch
             {
-                await tx.RollbackAsync(ct);
+                await tx.RollbackAsync();
                 throw;
             }
 
@@ -493,59 +496,74 @@ namespace Preferred.Api.Services
             };
         }
 
-        public async Task<JobDetailDto> GetJobAsync(string jobNo, CancellationToken ct)
+        public async Task<JobDetailDto> GetJobAsync(string jobNo)
         {
             var job = await _db.VideoAnalysisJobs.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+                .FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null) return null;
 
             var files = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == job.Id)
                 .OrderBy(x => x.SeqNo)
-                .ToListAsync(ct);
+                .ToListAsync();
 
             return JobDetailDto.From(job, files);
         }
 
-        public async Task<List<EventDto>> GetJobEventsAsync(string jobNo, CancellationToken ct)
+        public async Task<List<EventDto>> GetJobEventsAsync(string jobNo)
         {
             var job = await _db.VideoAnalysisJobs.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.JobNo == jobNo, ct);
+                .FirstOrDefaultAsync(x => x.JobNo == jobNo);
             if (job == null) return new List<EventDto>();
 
             var events = await _db.VideoAnalysisEvents.AsNoTracking()
                 .Where(e => e.JobId == job.Id)
                 .OrderBy(e => e.VideoFileId)
                 .ThenBy(e => e.SeqNo)
-                .ToListAsync(ct);
+                .ToListAsync();
 
             return events.Select(EventDto.From).ToList();
         }
 
-        public async Task<List<SnapshotDto>> GetEventSnapshotsAsync(int eventId, CancellationToken ct)
+        public async Task<List<SnapshotDto>> GetEventSnapshotsAsync(int eventId)
         {
             var snaps = await _db.VideoAnalysisSnapshots.AsNoTracking()
                 .Where(s => s.EventId == eventId)
                 .OrderBy(s => s.SeqNo)
-                .ToListAsync(ct);
+                .ToListAsync();
 
-            return snaps.Select(SnapshotDto.From).ToList();
+            var list = new List<SnapshotDto>();
+            foreach (var s in snaps)
+            {
+                var p = NormalizeSnapshotPath(s.ImagePath);
+                if (string.IsNullOrWhiteSpace(p) || !File.Exists(p)) continue;
+                list.Add(SnapshotDto.From(s));
+            }
+            return list;
         }
 
-        public async Task<string> GetSnapshotPathAsync(int snapshotId, CancellationToken ct)
+        public async Task<string> GetSnapshotPathAsync(int snapshotId)
         {
-            return await _db.VideoAnalysisSnapshots.AsNoTracking()
+            var path = await _db.VideoAnalysisSnapshots.AsNoTracking()
                 .Where(x => x.Id == snapshotId)
                 .Select(x => x.ImagePath)
-                .FirstOrDefaultAsync(ct);
+                .FirstOrDefaultAsync();
+            return NormalizeSnapshotPath(path);
         }
 
-        public async Task<string> GetVideoPathAsync(int fileId, CancellationToken ct)
+        public async Task<string> GetVideoPathAsync(int fileId)
         {
             return await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.Id == fileId)
                 .Select(x => x.FilePath)
-                .FirstOrDefaultAsync(ct);
+                .FirstOrDefaultAsync();
+        }
+
+        private string NormalizeSnapshotPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            if (Path.IsPathRooted(path)) return path;
+            return Path.Combine(_fs.VideoRootPath ?? string.Empty, path);
         }
 
         private static void TryDeleteFile(string path, List<string> failed)

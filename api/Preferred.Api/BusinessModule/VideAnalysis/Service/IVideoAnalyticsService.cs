@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Video.Application.Dto;
@@ -8,20 +7,19 @@ namespace Preferred.Api.Services
 {
     public interface IVideoAnalyticsService
     {
-            Task<CreateJobResultDto> CreateJobAsync(string algoParamsJson, CancellationToken ct);
-        Task<UploadVideoResultDto> UploadAndEnqueueAsync(string jobNo, IFormFile file, CancellationToken ct);
-        Task<CreateJobResultDto> CreateAndEnqueueAsync(IFormFile[] files, string algoParamsJson, CancellationToken ct);
+        Task<CreateJobResultDto> CreateJobAsync(string algoParamsJson);
+        Task<UploadVideoResultDto> UploadAndEnqueueAsync(string jobNo, IFormFile file);
+        Task<CreateJobResultDto> CreateAndEnqueueAsync(IFormFile[] files, string algoParamsJson);
 
-        Task<JobDetailDto> GetJobAsync(string jobNo, CancellationToken ct);
-        Task<List<EventDto>> GetJobEventsAsync(string jobNo, CancellationToken ct);
-        Task<List<SnapshotDto>> GetEventSnapshotsAsync(int eventId, CancellationToken ct);
-        Task<string> GetSnapshotPathAsync(int snapshotId, CancellationToken ct);
-        Task<string> GetVideoPathAsync(int fileId, CancellationToken ct);
+        Task<JobDetailDto> GetJobAsync(string jobNo);
+        Task<List<EventDto>> GetJobEventsAsync(string jobNo);
+        Task<List<SnapshotDto>> GetEventSnapshotsAsync(int eventId);
+        Task<string> GetSnapshotPathAsync(int snapshotId);
+        Task<string> GetVideoPathAsync(int fileId);
 
-        Task<bool> CloseJobAsync(string jobNo, CancellationToken ct);
-        Task<ReanalyzeResultDto> ReanalyzeFilesAsync(string jobNo, int[] fileIds, CancellationToken ct);
-        Task<DeleteJobResultDto> DeleteJobAsync(string jobNo, CancellationToken ct);
-        Task<bool> CancelJobAsync(string jobNo, CancellationToken ct);
-
+        Task<bool> CloseJobAsync(string jobNo);
+        Task<ReanalyzeResultDto> ReanalyzeFilesAsync(string jobNo, int[] fileIds, string algoParamsJson);
+        Task<DeleteJobResultDto> DeleteJobAsync(string jobNo);
+        Task<bool> CancelJobAsync(string jobNo);
     }
 }

@@ -30,6 +30,8 @@ export interface JobVideoDto {
   status: number
   errorMessage: string | null
 
+  analyzeSec?: number | null
+
   // 注意：你当前字段更像“视频时长”，不是“分析耗时”
   durationSec?: number | null
 
@@ -44,6 +46,7 @@ export interface JobDetailDto {
   status: number
   progress: number
   algoCode: string
+  algoParamsJson?: string | null
   errorMessage: string | null
   startTime?: string | null
   finishTime?: string | null
@@ -80,6 +83,7 @@ export interface SnapshotDto {
 
 export interface ReanalyzeVideoRequest {
   fileIds: number[]
+  algoParamsJson?: string
 }
 
 export interface ReanalyzeResultDto {
@@ -92,17 +96,6 @@ export interface ReanalyzeResultDto {
 // const http = axios.create(...)
 
 export const videoAnalyticsService = {
-  // ================= 旧接口：批量上传并创建任务（保留兼容） =================
-  async analyze(files: File[], algoParamsJson?: string) {
-    const form = new FormData()
-    files.forEach(f => form.append('files', f))
-    if (algoParamsJson) form.append('algoParamsJson', algoParamsJson)
-
-    // api instance handles Content-Type for FormData automatically
-    const res = await api.post<any, ApiResponse<CreateJobResultDto>>('/api/VideoAnalytics/analyze', form)
-    return res
-  },
-
   // ================= 新接口：持续上传会话（Job） =================
   async createJob(algoParamsJson?: string) {
     const body: CreateVideoJobRequest = {
@@ -131,8 +124,11 @@ export const videoAnalyticsService = {
     return res
   },
 
-  async reanalyze(jobNo: string, fileIds: number[]) {
-    const body: ReanalyzeVideoRequest = { fileIds: Array.from(new Set((fileIds || []).filter(x => Number(x) > 0))).map(Number) }
+  async reanalyze(jobNo: string, fileIds: number[], algoParamsJson?: string) {
+    const body: ReanalyzeVideoRequest = {
+      fileIds: Array.from(new Set((fileIds || []).filter(x => Number(x) > 0))).map(Number),
+      algoParamsJson: algoParamsJson && algoParamsJson.trim() ? algoParamsJson : undefined
+    }
     const res = await api.post<any, ApiResponse<ReanalyzeResultDto>>(
       `/api/VideoAnalytics/job/${encodeURIComponent(jobNo)}/reanalyze`,
       body
@@ -157,6 +153,20 @@ export const videoAnalyticsService = {
       // Normalize: backend returns 'files', frontend expects 'videos'
       if (res.data.files && !res.data.videos) {
         res.data.videos = res.data.files
+      }
+
+      if (res.data.videos && Array.isArray(res.data.videos)) {
+        res.data.videos.forEach((v: any) => {
+          if (v && v.analyzeSec === undefined && v.AnalyzeSec !== undefined) v.analyzeSec = v.AnalyzeSec
+          if (v && v.durationSec === undefined && v.DurationSec !== undefined) v.durationSec = v.DurationSec
+          if (v && v.fileName === undefined && v.FileName !== undefined) v.fileName = v.FileName
+          if (v && v.errorMessage === undefined && v.ErrorMessage !== undefined) v.errorMessage = v.ErrorMessage
+          if (v && v.seqNo === undefined && v.SeqNo !== undefined) v.seqNo = v.SeqNo
+          if (v && v.width === undefined && v.Width !== undefined) v.width = v.Width
+          if (v && v.height === undefined && v.Height !== undefined) v.height = v.Height
+          if (v && v.status === undefined && v.Status !== undefined) v.status = v.Status
+          if (v && v.id === undefined && v.Id !== undefined) v.id = v.Id
+        })
       }
     }
     return res
@@ -187,6 +197,10 @@ export const videoAnalyticsService = {
 
   getSnapshotUrl(snapshotId: number) {
     return `${api.defaults.baseURL || ''}/api/VideoAnalytics/snapshot/${snapshotId}/download`
+  },
+
+  async downloadSnapshot(snapshotId: number) {
+    return await api.get(`/api/VideoAnalytics/snapshot/${snapshotId}/download`, { responseType: 'blob' })
   },
 
   getVideoContentUrl(fileId: number) {

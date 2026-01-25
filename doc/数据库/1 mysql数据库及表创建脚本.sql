@@ -403,7 +403,7 @@ CREATE TABLE IF NOT EXISTS Tb_VideoAnalysisFile (
    FileName             VARCHAR(255)        NOT NULL COMMENT '视频原始文件名',
    FilePath             VARCHAR(1024)       NOT NULL COMMENT '视频文件存储路径',
    EventCount        	INT 				NULL COMMENT '识别事件数',
-   AnalyzeMs 			INT 				NULL COMMENT '分析耗时(毫秒)',
+   AnalyzeSec 			INT 				NULL COMMENT '分析耗时(秒)',
    DurationSec          INT                 NULL COMMENT '视频时长（秒）',
    Width                INT                 NULL COMMENT '视频宽度（像素）',
    Height               INT                 NULL COMMENT '视频高度（像素）',
@@ -438,12 +438,14 @@ COMMENT='视频闪光/火花识别事件结果表';
 /*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_VideoAnalysisSnapshot (
    Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   VideoFileId          INT                 NOT NULL COMMENT '视频文件ID',
    EventId              INT                 NOT NULL COMMENT '所属识别事件ID',
    ImagePath            VARCHAR(1024)       NOT NULL COMMENT '已画框截图文件路径',
    TimeSec              INT                 NOT NULL COMMENT '截图对应视频时间点（秒）',
    FrameIndex           INT                 NOT NULL COMMENT '截图对应帧序号',
    ImageWidth           INT                 NOT NULL COMMENT '截图宽度（像素）',
    ImageHeight          INT                 NOT NULL COMMENT '截图高度（像素）',
+   Confidence DECIMAL(6,4) DEFAULT 0 NOT NULL COMMENT '该截图对应的置信度（0~1）',
    SeqNo                INT    DEFAULT 0    NOT NULL COMMENT '视频顺序号',
    CrtTime              DATETIME            NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME            NOT NULL COMMENT '最后修改时间'

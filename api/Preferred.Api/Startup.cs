@@ -18,7 +18,8 @@ using System.Text;
 using Pomelo.EntityFrameworkCore.MySql;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Preferred.Api.Extensions; // 添加这个引用
+using Preferred.Api.Extensions;
+using Video.Application.Dto;
 
 namespace Preferred.Api
 {
@@ -157,6 +158,7 @@ namespace Preferred.Api
             
             // 注册文件存储配置
             services.Configure<FileStorageConfig>(Configuration.GetSection("FileStorage"));
+            services.Configure<VideoAnalysisWorkerOptions>(Configuration.GetSection("VideoAnalysisWorker"));
         }
 
         public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
