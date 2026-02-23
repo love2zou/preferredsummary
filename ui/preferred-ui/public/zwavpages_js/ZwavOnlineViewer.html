@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>录波在线浏览（HTML+JS）</title>
+  <link href="./assets/app.css" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+</head>
+
+<body>
+  <div class="viewer-container">
+    <div class="viewer-header">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+        <div class="viewer-title">
+          <h2>录波在线浏览</h2>
+          <span class="file-name" id="fileNameText"></span>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <a class="el-button" href="./ZwavAnalysis.html">返回列表</a>
+          <button class="el-button" id="btnOpenApiConfig">接口配置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="viewer-content">
+      <div class="left-panel">
+        <div class="chart-controls">
+          <button class="el-button el-button--primary" id="btnFetch">加载/刷新波形</button>
+          <span class="tip">提示：数据量大时请减少通道数</span>
+          <div style="flex:1"></div>
+          <button class="icon-btn" id="btnExport" title="导出CSV">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="btnAxis" title="坐标轴高度设置">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor"
+                d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.02 7.02 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.83 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.51.4 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="btnStats" title="通道极值" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor" d="M5 9h3v10H5V9zm5-4h3v14h-3V5zm5 7h3v7h-3v-7z" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="btnSequence" title="故障时序图" disabled>
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor"
+                d="M15 1H9v2h6V1zM11 14h2V8h-2v6zm8.03-6.61l1.42-1.42A9 9 0 1 0 21 12h-2a7 7 0 1 1-2.05-4.95l-1.42 1.42A4.98 4.98 0 1 0 17 12h-2a3 3 0 1 1-3-3v2l4-3-4-3v2a5 5 0 1 0 5 5h2a7 7 0 1 1-1.97-4.61z" />
+            </svg>
+          </button>
+          <button class="icon-btn" id="btnFullScreen" title="全屏显示">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path fill="currentColor"
+                d="M7 14H5v5h5v-2H7v-3zm0-4h2V7h3V5H5v5zm10 9h-3v2h5v-5h-2v3zm0-14V5h-5v2h3v3h2V5z" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="main-body">
+          <div class="channel-sidebar">
+            <div class="sidebar-header">
+              <input id="channelSearch" class="el-input" placeholder="通道名称" style="width:100%" />
+            </div>
+            <div class="sidebar-body">
+              <div class="channel-group">
+                <div class="section-title">模拟通道信号</div>
+                <div class="sidebar-group-header">
+                  <label class="check-all">
+                    <input id="analogCheckAll" type="checkbox" />
+                    <span>全选</span>
+                  </label>
+                  <span class="count">已选<span id="analogCount">0</span>个</span>
+                </div>
+                <div id="analogList" class="channel-list"></div>
+              </div>
+
+              <div class="channel-group">
+                <div class="section-title">数字通道信号</div>
+                <div class="sidebar-group-header no-outer-margin">
+                  <label class="check-all">
+                    <input id="digitalCheckAll" type="checkbox" />
+                    <span>全选</span>
+                  </label>
+                  <span class="count">已选<span id="digitalCount">0</span>个</span>
+                </div>
+                <div id="digitalList" class="channel-list"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-wrapper">
+            <div class="chart-scroll-container">
+              <div id="zwavChart" class="chart-content"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-panel">
+        <div class="el-tabs__header">
+          <div class="el-tabs__item is-active" data-tab="cfg">CFG 信息</div>
+          <div class="el-tabs__item" data-tab="hdr">HDR 信息</div>
+        </div>
+        <div style="padding: 10px; overflow:auto; height: calc(100% - 44px);">
+          <div class="el-tab-pane is-active" id="tabCfg">
+            <div id="cfgSummary" class="info-list"></div>
+            <div id="cfgSampleRateSection" class="info-section" style="margin-top:16px; display:none;">
+              <div class="info-section-title">采样率配置</div>
+              <div class="zwav-pre" id="sampleRateText"></div>
+            </div>
+            <div class="info-section" style="margin-top:16px;">
+              <div class="info-section-title">CFG 全文</div>
+              <div class="zwav-pre" id="cfgText"></div>
+            </div>
+          </div>
+          <div class="el-tab-pane" id="tabHdr">
+            <div id="hdrSummary" class="info-list"></div>
+            <div id="hdrSections"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="apiModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">接口配置</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="search-item" style="width:100%">
+          <label>API Base URL</label>
+          <input id="apiBaseInput" class="el-input" placeholder="例如：http://159.75.184.108:8080" style="width:100%" />
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+        <button class="el-button el-button--primary" id="btnSaveApiBase">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="axisModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">设置</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="search-item" style="width:100%">
+          <label>单个波形高度(px)</label>
+          <input id="gridHeight" type="number" class="el-input" min="20" max="300" step="5" style="width:100%" />
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;">
+          <div class="search-item">
+            <label>起始采样点</label>
+            <input id="fromSample" type="number" class="el-input" min="0" />
+          </div>
+          <div class="search-item">
+            <label>结束采样点</label>
+            <input id="toSample" type="number" class="el-input" min="0" />
+          </div>
+          <div class="search-item">
+            <label>限制点数</label>
+            <input id="limit" type="number" class="el-input" min="100" step="1000" />
+          </div>
+          <div class="search-item">
+            <label>抽样倍率</label>
+            <input id="downSample" type="number" class="el-input" min="1" />
+          </div>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>取消</button>
+        <button class="el-button el-button--primary" id="btnApplyAxis">应用</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="statsModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">通道极值</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body" id="statsBody"></div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="seqModal">
+    <div class="el-dialog el-dialog--xl seq-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">故障时序图</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="seq-layout">
+          <div class="seq-sidebar">
+            <button class="el-button el-button--primary seq-add-btn" id="btnSeqAdd">
+              <span class="seq-add-icon">+</span>
+              <span>添加对比</span>
+            </button>
+            <div class="seq-sidebar-hint">勾选要显示的文件</div>
+            <div id="seqFileList" class="seq-file-list"></div>
+          </div>
+          <div class="seq-main">
+            <div class="seq-topbar">
+              <div class="seq-legend" id="seqLegend"></div>
+              <div class="seq-zoom">
+                <span class="seq-zoom-label">缩放比例：</span>
+                <span class="seq-zoom-value" id="seqZoomText">-</span>
+              </div>
+            </div>
+            <div class="seq-fault-card">
+              <div class="seq-fault-time" id="seqFaultTime">-</div>
+              <div class="seq-fault-sub">故障发生时间</div>
+            </div>
+            <div class="seq-canvas" id="seqCanvas">
+              <svg id="seqSvg"></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="filePickModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">选择录波文件</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px;">
+          <input id="pickKeyword" class="el-input" placeholder="文件名" style="flex:1" />
+          <button class="el-button el-button--primary" id="btnPickSearch">查询</button>
+        </div>
+        <table class="el-table">
+          <thead>
+            <tr>
+              <th>文件名</th>
+              <th style="width: 160px">创建时间</th>
+              <th style="width: 80px"></th>
+            </tr>
+          </thead>
+          <tbody id="pickTbody"></tbody>
+        </table>
+        <div class="pagination">
+          <button class="el-button" id="btnPickPrev">上一页</button>
+          <button class="el-button" id="btnPickNext">下一页</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./assets/zwav-viewer.js"></script>
+  <span id="guidText" style="display:none"></span>
+</body>
+
+</html>

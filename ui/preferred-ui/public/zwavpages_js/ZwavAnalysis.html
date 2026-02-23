@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>录波解析管理（HTML+JS）</title>
+  <link href="./assets/app.css" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="zwav-analysis-container">
+    <div class="page-header">
+      <h2>录波解析管理</h2>
+      <div style="display:flex; gap:10px;">
+        <a class="el-button" href="/" target="_blank">返回主页</a>
+        <button class="el-button" id="btnOpenApiConfig">接口配置</button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <div class="search-left">
+        <div class="search-item">
+          <label>文件名</label>
+          <input id="keyword" class="el-input" placeholder="" />
+        </div>
+        <div class="search-item">
+          <label>状态</label>
+          <select id="status" class="el-select" style="width: 140px">
+            <option value="">全部状态</option>
+            <option value="Queued">排队中</option>
+            <option value="Parsing">解析中</option>
+            <option value="Completed">已完成</option>
+            <option value="Failed">失败</option>
+          </select>
+        </div>
+        <div class="search-item">
+          <label>开始日期</label>
+          <input id="fromDate" type="date" class="el-input" />
+        </div>
+        <div class="search-item">
+          <label>结束日期</label>
+          <input id="toDate" type="date" class="el-input" />
+        </div>
+        <div style="display:flex; gap:10px; align-items:end;">
+          <button class="el-button el-button--primary" id="btnSearch">查询</button>
+          <button class="el-button" id="btnReset">重置</button>
+        </div>
+      </div>
+      <div class="search-right">
+        <button class="el-button el-button--primary" id="btnUpload">批量上传</button>
+        <button class="el-button el-button--danger" id="btnBatchDelete" disabled>批量删除</button>
+      </div>
+    </div>
+
+    <div class="data-table">
+      <table class="el-table">
+        <thead>
+          <tr>
+            <th class="cell-center" style="width: 42px"><input type="checkbox" id="checkAll" /></th>
+            <th class="cell-center" style="width: 60px">序号</th>
+            <th style="width: 500px">文件名</th>
+            <th style="width: 100px">大小</th>
+            <th style="width: 100px">状态</th>
+            <th style="width: 100px">进度</th>
+            <th style="width: 150px">创建时间</th>
+            <th>错误信息</th>
+            <th class="cell-center" style="width: 200px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+
+      <div class="pagination">
+        <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="totalText">-</span>
+        <select id="pageSize" class="el-select" style="width: 90px; height: 28px">
+          <option value="10">10</option>
+          <option value="20" selected>20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button class="el-button" id="btnPrev">上一页</button>
+        <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="pageText">1</span> 页</span>
+        <button class="el-button" id="btnNext">下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="apiModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">接口配置</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="search-item" style="width:100%">
+          <label>API Base URL</label>
+          <input id="apiBaseInput" class="el-input" placeholder="例如：http://159.75.184.108:8080" style="width:100%" />
+        </div>
+        <div style="margin-top:8px; font-size:12px; color: var(--el-text-color-secondary);">
+          默认优先读取 ?apiBase=... 其次读取 localStorage.zwav_api_base。
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+        <button class="el-button el-button--primary" id="btnSaveApiBase">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="uploadModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">批量上传录波文件</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <input id="fileInput" type="file" multiple accept=".zwav,.zip" class="el-input"
+          style="width:100%; height: 34px; padding-top: 6px" />
+        <div style="margin-top:8px; font-size:12px; color: var(--el-text-color-secondary);">
+          支持 .zwav, .zip。上传完成后自动创建解析任务。
+        </div>
+        <div style="margin-top:12px;">
+          <div id="uploadList" style="display:grid; gap:10px;"></div>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+        <button class="el-button el-button--primary" id="btnStartUpload">开始上传</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./assets/zwav-analysis.js"></script>
+</body>
+
+</html>
