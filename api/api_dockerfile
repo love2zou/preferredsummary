@@ -1,18 +1,73 @@
-FROM mcr.microsoft.com/dotnet/aspnet:3.1-buster-slim AS base
-WORKDIR /app
-EXPOSE 8080
-
-FROM mcr.microsoft.com/dotnet/sdk:3.1-buster AS build
+# =============================
+# Build (.NET SDK 3.1)
+# =============================
+FROM mcr.microsoft.com/dotnet/sdk:3.1-bullseye AS build
 WORKDIR /src
+
 COPY ["Preferred.Api/Preferred.Api.csproj", "Preferred.Api/"]
 COPY ["Preferred.Api/template/tag_import.xlsx", "Preferred.Api/template/"]
 RUN dotnet restore "Preferred.Api/Preferred.Api.csproj"
+
 COPY . .
 WORKDIR /src/Preferred.Api
-RUN dotnet build "Preferred.Api.csproj" -p:Version=23.0.0-docker -c Release -o /app/build
-FROM build AS publish
-RUN dotnet publish "Preferred.Api.csproj" -p:Version=23.0.0-docker -c Release -o /app/publish
-FROM base AS final
+
+# Self-contained publish
+RUN dotnet publish "Preferred.Api.csproj" \
+    -c Release \
+    -r linux-x64 \
+    --self-contained true \
+    -o /app/publish
+
+RUN echo "== CHECK publish output ==" \
+    && ls -la /app/publish | head -80 \
+    && find /app/publish -maxdepth 4 -name "libOpenCvSharpExtern.so" -o -name "*OpenCvSharp*" | head -50
+
+
+# =============================
+# Runtime (Debian Bullseye - has libssl1.1)
+# =============================
+FROM debian:bullseye-slim AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
-ENTRYPoint ["dotnet", "Preferred.Api.dll"]
+
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:80
+ENV DOTNET_EnableDiagnostics=0
+ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 关键：让动态链接器能找到 OpenCvSharpExtern（你发布后它在 /app 目录）
+ENV LD_LIBRARY_PATH=/app:$LD_LIBRARY_PATH
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates tzdata locales \
+    # OpenCvSharp 常见依赖
+    libglib2.0-0 libgomp1 \
+    libsm6 libxext6 libxrender1 libx11-6 \
+    # 视频解码（VideoCapture 走 ffmpeg / gstreamer 相关）
+    ffmpeg \
+    # .NET Core 3.1 关键依赖（bullseye 有 libssl1.1）
+    libssl1.1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 可选：locale（避免你 exec 进去时 setlocale 警告）
+RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
+    && locale-gen
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+COPY --from=build /app/publish ./
+
+# ========= 关键修复点：OpenCvSharpExtern 搜索路径兼容 =========
+# 你的容器里实际是 /app/libOpenCvSharpExtern.so
+# 但很多 OpenCvSharp 版本默认也会尝试 runtimes/linux-x64/native 下的路径
+# 所以做一个目录 + 软链接，双保险。
+RUN mkdir -p /app/runtimes/linux-x64/native \
+    && if [ -f "/app/libOpenCvSharpExtern.so" ]; then \
+    ln -sf /app/libOpenCvSharpExtern.so /app/runtimes/linux-x64/native/libOpenCvSharpExtern.so; \
+    fi \
+    && echo "/app" > /etc/ld.so.conf.d/app.conf \
+    && echo "/app/runtimes/linux-x64/native" > /etc/ld.so.conf.d/opencvsharp.conf \
+    && ldconfig
+
+# Self-contained 的入口是可执行文件
+ENTRYPOINT ["./Preferred.Api"]

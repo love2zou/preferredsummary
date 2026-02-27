@@ -93,3 +93,4 @@ D:\github\preferredsummary\api\Preferred.Api\obj\Release\netcoreapp3.1\Preferred
 D:\github\preferredsummary\api\Preferred.Api\obj\Release\netcoreapp3.1\Preferred.Api.xml
 D:\github\preferredsummary\api\Preferred.Api\obj\Release\netcoreapp3.1\Preferred.Api.pdb
 D:\github\preferredsummary\api\Preferred.Api\obj\Release\netcoreapp3.1\Preferred.Api.genruntimeconfig.cache
+D:\github\preferredsummary\api\Preferred.Api\bin\Release\netcoreapp3.1\runtimes\linux-x64\native\libOpenCvSharpExtern.so

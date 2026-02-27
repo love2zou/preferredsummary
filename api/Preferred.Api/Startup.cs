@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.IO;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
@@ -41,15 +43,15 @@ namespace Preferred.Api
                     mySqlOptions => mySqlOptions.CommandTimeout(60))); // 设置数据库命令超时为60秒
 
             // 配置Kestrel上传限制（解决大文件上传超时或被截断）
-            services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
+            services.Configure<KestrelServerOptions>(options =>
             {
                 options.Limits.MaxRequestBodySize = 1024L * 1024 * 1024; // 1GB
-                options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2); // 保持连接2分钟
+                options.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(10); // 保持连接2分钟
                 options.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(2); // 请求头超时
             });
 
             // 配置表单选项（解决Multipart Body Length Limit Exceeded）
-            services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+            services.Configure<FormOptions>(options =>
             {
                 options.ValueLengthLimit = int.MaxValue;
                 options.MultipartBodyLengthLimit = 1024L * 1024 * 1024; // 1GB
