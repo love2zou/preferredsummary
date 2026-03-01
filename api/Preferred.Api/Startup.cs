@@ -38,9 +38,13 @@ namespace Preferred.Api
         public void ConfigureServices(IServiceCollection services)
         {
             // 添加数据库上下文
+            var connStr = Configuration.GetConnectionString("DefaultConnectionString");
+            var serverVersion = ServerVersion.AutoDetect(connStr);
             services.AddDbContext<ApplicationDbContext>(options =>
-                options.UseMySql(Configuration.GetConnectionString("DefaultConnectionString"),
-                    mySqlOptions => mySqlOptions.CommandTimeout(60))); // 设置数据库命令超时为60秒
+                options.UseMySql(
+                    connStr,
+                    serverVersion,
+                    mySqlOptions => mySqlOptions.CommandTimeout(60)));
 
             // 配置Kestrel上传限制（解决大文件上传超时或被截断）
             services.Configure<KestrelServerOptions>(options =>

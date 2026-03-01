@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.StaticFiles;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Preferred.Api.Models;
 using Preferred.Api.Services;
 using Video.Application.Dto;
@@ -93,7 +92,7 @@ namespace Preferred.Api.Controllers
                     Data = r
                 });
             }
-            catch (BadHttpRequestException ex) // 关键：Kestrel 抛的
+            catch (Microsoft.AspNetCore.Http.BadHttpRequestException ex) // 关键：请求体不完整/格式错误
             {
                 // 基本就是：请求体没传完/连接被断
                 return BadRequest(new ApiErrorResponse { Message = "上传中断（请求体未完整发送）", Details = ex.Message });

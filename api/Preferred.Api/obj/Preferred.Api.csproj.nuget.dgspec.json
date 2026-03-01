@@ -17,13 +17,14 @@
           "C:\\Users\\love2\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
-          "netcoreapp3.1"
+          "net8.0"
         ],
         "sources": {
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
-          "netcoreapp3.1": {
+          "net8.0": {
+            "targetAlias": "net8.0",
             "projectReferences": {}
           }
         },
@@ -31,10 +32,16 @@
           "warnAsError": [
             "NU1605"
           ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
         }
       },
       "frameworks": {
-        "netcoreapp3.1": {
+        "net8.0": {
+          "targetAlias": "net8.0",
           "dependencies": {
             "Cronos": {
               "target": "Package",
@@ -46,55 +53,59 @@
             },
             "Microsoft.AspNetCore.Authentication.JwtBearer": {
               "target": "Package",
-              "version": "[3.1.32, )"
+              "version": "[8.0.2, )"
             },
             "Microsoft.EntityFrameworkCore": {
               "target": "Package",
-              "version": "[3.1.32, )"
+              "version": "[8.0.2, )"
             },
             "Microsoft.EntityFrameworkCore.Design": {
               "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
               "suppressParent": "All",
               "target": "Package",
-              "version": "[3.1.32, )"
+              "version": "[8.0.2, )"
             },
             "Microsoft.EntityFrameworkCore.Tools": {
               "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
               "suppressParent": "All",
               "target": "Package",
-              "version": "[3.1.32, )"
+              "version": "[8.0.2, )"
             },
             "Microsoft.VisualBasic": {
               "target": "Package",
               "version": "[10.3.0, )"
             },
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.3, )"
+            },
             "OpenCvSharp4": {
               "target": "Package",
-              "version": "[4.10.0.20240717, )"
+              "version": "[4.13.0.20260226, )"
             },
-            "OpenCvSharp4.runtime.linux-x64": {
+            "OpenCvSharp4.official.runtime.linux-x64": {
               "target": "Package",
-              "version": "[4.10.0.20240717, )"
+              "version": "[4.13.0.20260226, )"
             },
             "OpenCvSharp4.runtime.win": {
               "target": "Package",
-              "version": "[4.10.0.20240717, )"
+              "version": "[4.13.0.20260226, )"
             },
             "Pomelo.EntityFrameworkCore.MySql": {
               "target": "Package",
-              "version": "[3.2.7, )"
+              "version": "[8.0.2, )"
             },
             "Serilog.AspNetCore": {
               "target": "Package",
-              "version": "[3.4.0, )"
+              "version": "[8.0.1, )"
             },
             "Serilog.Sinks.Console": {
               "target": "Package",
-              "version": "[3.1.1, )"
+              "version": "[5.0.0, )"
             },
             "Serilog.Sinks.File": {
               "target": "Package",
-              "version": "[4.1.0, )"
+              "version": "[5.0.0, )"
             },
             "SixLabors.ImageSharp": {
               "target": "Package",
@@ -110,11 +121,15 @@
             },
             "System.IdentityModel.Tokens.Jwt": {
               "target": "Package",
-              "version": "[6.8.0, )"
+              "version": "[8.2.0, )"
             },
             "System.Management": {
               "target": "Package",
               "version": "[7.0.0, )"
+            },
+            "System.Text.Encoding.CodePages": {
+              "target": "Package",
+              "version": "[8.0.0, )"
             }
           },
           "imports": [
@@ -123,7 +138,8 @@
             "net47",
             "net471",
             "net472",
-            "net48"
+            "net48",
+            "net481"
           ],
           "assetTargetFallback": true,
           "warn": true,
@@ -135,7 +151,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\3.1.426\\RuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.204/PortableRuntimeIdentifierGraph.json"
         }
       }
     }
