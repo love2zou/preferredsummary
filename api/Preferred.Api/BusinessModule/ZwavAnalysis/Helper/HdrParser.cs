@@ -165,11 +165,33 @@ namespace Zwav.Application.Parsing
         public HdrParseResult Parse(string xmlText)
             => Parse(xmlText, out _);
 
-        private static string SanitizeXmlText(string s)
+       private static string SanitizeXmlText(string s)
         {
-            // 去掉 UTF-8 BOM 和 \0 等前导垃圾字符
-            // 这些经常导致 “Data at the root level is invalid.” / “Unexpected token” 等错误
-            return s.TrimStart('\uFEFF', '\0', ' ', '\t', '\r', '\n');
+            if (string.IsNullOrEmpty(s)) return s;
+
+            // 1) 去 BOM / \0 等前导垃圾
+            s = s.TrimStart('\uFEFF', '\0', ' ', '\t', '\r', '\n');
+
+            // 2) 只处理 XML 1.1（不支持），其它版本不动
+            //    处理方式：移除整个 XML declaration（<?xml ... ?>）
+            if (s.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase))
+            {
+                // 粗略定位声明结束
+                int end = s.IndexOf("?>", StringComparison.Ordinal);
+                if (end > 0)
+                {
+                    var decl = s.Substring(0, end + 2);
+
+                    // 仅当 declaration 里包含 version="1.1" 或 version='1.1' 才移除
+                    if (decl.IndexOf("version=\"1.1\"", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        decl.IndexOf("version='1.1'", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        s = s.Substring(end + 2).TrimStart(' ', '\t', '\r', '\n');
+                    }
+                }
+            }
+
+            return s;
         }
 
         /// <summary>

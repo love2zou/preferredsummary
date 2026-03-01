@@ -132,7 +132,7 @@ namespace Zwav.Application.Workers
             {
                 var hdrText = ZwavZipHelper.ReadTextWithFallbacks(hdrPath, "hdr");
                 var hdr = _hdrParser.Parse(hdrText);
-                await UpsertHdrAsync(context, analysis.Id, hdr, ct);
+                await UpsertHdrAsync(context, analysis.Id, hdr, ct);             
             }
             await UpdateStatusAsync(context, analysis, ZwavConstants.ParsingHdr, 65, null, null, null, ct);
 
