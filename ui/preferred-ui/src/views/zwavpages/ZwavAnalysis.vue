@@ -72,7 +72,7 @@
             <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="progress" label="进度" width="120">
+        <el-table-column prop="progress" label="进度" width="100">
           <template #default="{ row }">
             <el-progress 
               :percentage="row.progress" 
@@ -80,12 +80,12 @@
             />
           </template>
         </el-table-column>
-        <el-table-column prop="crtTime" label="创建时间" width="140">
+        <el-table-column prop="crtTime" label="创建时间" width="160">
           <template #default="{ row }">
             {{ formatDateTime(row.crtTime) }}
           </template>
         </el-table-column>
-        <el-table-column prop="errorMessage" label="错误信息" min-width="150" show-overflow-tooltip>
+        <el-table-column prop="errorMessage" label="错误信息" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="error-text" v-if="row.errorMessage">{{ row.errorMessage }}</span>
             <span v-else>-</span>
