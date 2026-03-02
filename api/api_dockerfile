@@ -1,65 +1,78 @@
-# =============================
-# Build (.NET SDK 8)
-# =============================
+# =========================================================
+# Build Stage (.NET SDK 8 on Ubuntu 22.04 jammy)
+# =========================================================
 FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 WORKDIR /src
 
+# 1) 先拷贝 csproj 做 restore（利用缓存）
 COPY ["Preferred.Api/Preferred.Api.csproj", "Preferred.Api/"]
 COPY ["Preferred.Api/template/tag_import.xlsx", "Preferred.Api/template/"]
 RUN dotnet restore "Preferred.Api/Preferred.Api.csproj"
 
+# 2) 再拷贝全部源码
 COPY . .
 WORKDIR /src/Preferred.Api
 
-RUN dotnet publish "Preferred.Api.csproj" -c Release -o /app/publish
+# 3) 发布：强制 RID=linux-x64，确保 runtimes/linux-x64/native 带上
+RUN dotnet publish "Preferred.Api.csproj" \
+    -c Release \
+    -r linux-x64 \
+    --self-contained false \
+    -o /app/publish
 
+# 4) 构建期自检：确认 native so 确实进了 publish 目录
 RUN echo "== CHECK publish output ==" \
-    && ls -la /app/publish | head -120 \
+    && ls -la /app/publish | head -200 \
     && echo "== FIND OpenCvSharp native assets ==" \
     && find /app/publish -maxdepth 8 \( -name "*OpenCvSharpExtern*" -o -name "*OpenCvSharp*" \) -print | head -200
 
 
-# =============================
-# Runtime (Debian Bullseye + ASP.NET Core Runtime 8)
-# 目的：拿到 libtesseract.so.4，同时保证有 ASP.NET Core Runtime 8 可运行 dll
-# =============================
-FROM debian:bullseye-slim AS final
+# =========================================================
+# Runtime Stage (ASP.NET 8 on Ubuntu 22.04 jammy)
+# =========================================================
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy AS final
 WORKDIR /app
 
+# 说明：你原来 EXPOSE 8080，但 ASPNETCORE_URLS 写 80；这里统一为 8080
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:80
+
+# 减少诊断开销（可选）
 ENV DOTNET_EnableDiagnostics=0
 ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 ENV DEBIAN_FRONTEND=noninteractive
+
+# 让 OpenCvSharp 更容易找到 native so
 ENV LD_LIBRARY_PATH=/app:/app/runtimes/linux-x64/native:$LD_LIBRARY_PATH
 
-# ---- 1) 安装基础依赖 + OpenCvSharp/ffmpeg + tesseract4 ----
+# 安装运行依赖：
+# - OpenCvSharpExtern.so 的依赖：gtk2、jpeg8、openexr、X11基础库等
+# - 视频解码：ffmpeg
+# - OCR：tesseract4 + leptonica
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl gnupg tzdata locales \
+    ca-certificates tzdata locales curl \
     libglib2.0-0 libgomp1 \
     libsm6 libxext6 libxrender1 libx11-6 \
     libstdc++6 \
     ffmpeg \
     libtesseract4 liblept5 \
+    libgtk2.0-0 libgdk-pixbuf2.0-0 \
+    libjpeg8 \
+    libopenexr25 \
+    libcanberra-gtk-module libcanberra-gtk3-module \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- 2) 安装 Microsoft ASP.NET Core Runtime 8（bullseye）----
-# 官方 repo: packages.microsoft.com
-RUN set -eux; \
-    curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /usr/share/keyrings/microsoft.gpg; \
-    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft.gpg] https://packages.microsoft.com/debian/11/prod bullseye main" \
-    > /etc/apt/sources.list.d/microsoft-prod.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends aspnetcore-runtime-8.0; \
-    rm -rf /var/lib/apt/lists/*
-
 # locale（可选）
-RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen \
-    && locale-gen
+RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
 # 拷贝发布产物
 COPY --from=build /app/publish ./
+
+# 运行前自检（可选）：确认 so 存在 + 依赖齐全
+# 如果你不想每次容器启动都做检查，可以删掉这段
+RUN test -f /app/runtimes/linux-x64/native/libOpenCvSharpExtern.so \
+    && ldd /app/runtimes/linux-x64/native/libOpenCvSharpExtern.so | grep -E "not found|GLIBC|GLIBCXX|CXXABI" || true
 
 ENTRYPOINT ["dotnet", "Preferred.Api.dll"]
