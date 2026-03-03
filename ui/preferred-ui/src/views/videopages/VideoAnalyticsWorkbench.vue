@@ -1270,7 +1270,13 @@ const doUploadRequest = async (options: any) => {
     options.onSuccess?.(res)
   } catch (e: any) {
     console.error(e)
-    ElMessage.error(`上传失败：${file.name}`)
+    const msg =
+      e?.code === 'ECONNABORTED'
+        ? `上传超时：${file.name}`
+        : e?.message
+          ? `上传失败：${file.name}（${e.message}）`
+          : `上传失败：${file.name}`
+    ElMessage.error(msg)
     options.onError?.(e)
   }
 }
