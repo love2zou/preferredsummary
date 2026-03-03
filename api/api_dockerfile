@@ -1,26 +1,32 @@
+# syntax=docker/dockerfile:1.6
+
 # =========================================================
 # Build Stage (.NET SDK 8 on Ubuntu 22.04 jammy)
 # =========================================================
 FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 WORKDIR /src
 
-# 1) 先拷贝 csproj 做 restore（利用缓存）
+# 1) 先拷贝 csproj 做 restore（利用层缓存）
 COPY ["Preferred.Api/Preferred.Api.csproj", "Preferred.Api/"]
 COPY ["Preferred.Api/template/tag_import.xlsx", "Preferred.Api/template/"]
-RUN dotnet restore "Preferred.Api/Preferred.Api.csproj"
+
+# NuGet 包缓存（跨构建复用：需要 BuildKit）
+RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
+    dotnet restore "Preferred.Api/Preferred.Api.csproj"
 
 # 2) 再拷贝全部源码
 COPY . .
 WORKDIR /src/Preferred.Api
 
-# 3) 发布：强制 RID=linux-x64，确保 runtimes/linux-x64/native 带上
-RUN dotnet publish "Preferred.Api.csproj" \
+# 3) 发布：强制 RID=linux-x64（确保 runtimes/linux-x64/native 带上）
+RUN --mount=type=cache,target=/root/.nuget/packages,sharing=locked \
+    dotnet publish "Preferred.Api.csproj" \
     -c Release \
     -r linux-x64 \
     --self-contained false \
     -o /app/publish
 
-# 4) 构建期自检：确认 native so 确实进了 publish 目录
+# （可选）构建期自检：确认 native so 进了 publish 目录
 RUN echo "== CHECK publish output ==" \
     && ls -la /app/publish | head -200 \
     && echo "== FIND OpenCvSharp native assets ==" \
@@ -33,11 +39,10 @@ RUN echo "== CHECK publish output ==" \
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-jammy AS final
 WORKDIR /app
 
-# 说明：你原来 EXPOSE 8080，但 ASPNETCORE_URLS 写 80；这里统一为 8080
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:80
 
-# 减少诊断开销（可选）
+# 可选：减少诊断开销
 ENV DOTNET_EnableDiagnostics=0
 ENV DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1
 ENV DEBIAN_FRONTEND=noninteractive
@@ -45,11 +50,19 @@ ENV DEBIAN_FRONTEND=noninteractive
 # 让 OpenCvSharp 更容易找到 native so
 ENV LD_LIBRARY_PATH=/app:/app/runtimes/linux-x64/native:$LD_LIBRARY_PATH
 
-# 安装运行依赖：
-# - OpenCvSharpExtern.so 的依赖：gtk2、jpeg8、openexr、X11基础库等
-# - 视频解码：ffmpeg
-# - OCR：tesseract4 + leptonica
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 关键：Force IPv4（很多环境 IPv6 会导致 apt 极慢）
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+
+# 关键：替换 Ubuntu 源（默认源在部分地区/网络非常慢）
+# 你也可以替换为阿里云/中科大等镜像
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' /etc/apt/sources.list \
+    && sed -i 's|http://security.ubuntu.com/ubuntu/|https://mirrors.tuna.tsinghua.edu.cn/ubuntu/|g' /etc/apt/sources.list
+
+# 关键：apt cache mount（需要 BuildKit；并发时用 locked）
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update \
+    && apt-get install -y --no-install-recommends \
     ca-certificates tzdata locales curl \
     libglib2.0-0 libgomp1 \
     libsm6 libxext6 libxrender1 libx11-6 \
@@ -59,10 +72,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk2.0-0 libgdk-pixbuf2.0-0 \
     libjpeg8 \
     libopenexr25 \
-    libcanberra-gtk-module libcanberra-gtk3-module \
-    && rm -rf /var/lib/apt/lists/*
+    libcanberra-gtk-module libcanberra-gtk3-module
 
-# locale（可选）
+# locale（可选：如果你不依赖 UTF-8 locale 输出，可删掉加速一点点）
 RUN sed -i 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && locale-gen
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
@@ -70,8 +82,7 @@ ENV LC_ALL=en_US.UTF-8
 # 拷贝发布产物
 COPY --from=build /app/publish ./
 
-# 运行前自检（可选）：确认 so 存在 + 依赖齐全
-# 如果你不想每次容器启动都做检查，可以删掉这段
+# 运行前自检（可选）
 RUN test -f /app/runtimes/linux-x64/native/libOpenCvSharpExtern.so \
     && ldd /app/runtimes/linux-x64/native/libOpenCvSharpExtern.so | grep -E "not found|GLIBC|GLIBCXX|CXXABI" || true
 
