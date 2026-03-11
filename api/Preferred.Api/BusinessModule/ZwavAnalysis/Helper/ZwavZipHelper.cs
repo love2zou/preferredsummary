@@ -222,7 +222,13 @@ namespace Zwav.Application.Parsing
             x => x.Channel51, x => x.Channel52, x => x.Channel53, x => x.Channel54, x => x.Channel55,
             x => x.Channel56, x => x.Channel57, x => x.Channel58, x => x.Channel59, x => x.Channel60,
             x => x.Channel61, x => x.Channel62, x => x.Channel63, x => x.Channel64, x => x.Channel65,
-            x => x.Channel66, x => x.Channel67, x => x.Channel68, x => x.Channel69, x => x.Channel70
+            x => x.Channel66, x => x.Channel67, x => x.Channel68, x => x.Channel69, x => x.Channel70,
+            x => x.Channel71, x => x.Channel72, x => x.Channel73, x => x.Channel74, x => x.Channel75,
+            x => x.Channel76, x => x.Channel77, x => x.Channel78, x => x.Channel79, x => x.Channel80,
+            x => x.Channel81, x => x.Channel82, x => x.Channel83, x => x.Channel84, x => x.Channel85,
+            x => x.Channel86, x => x.Channel87, x => x.Channel88, x => x.Channel89, x => x.Channel90,
+            x => x.Channel91, x => x.Channel92, x => x.Channel93, x => x.Channel94, x => x.Channel95,
+            x => x.Channel96, x => x.Channel97, x => x.Channel98, x => x.Channel99, x => x.Channel100
         };
     }
 }

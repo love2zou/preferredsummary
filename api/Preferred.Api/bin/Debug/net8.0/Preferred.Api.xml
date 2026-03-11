@@ -3319,7 +3319,7 @@
             <param name="fromSample">起始采样点编号（SampleNo）与 toSample 同时传入时生效，表示按采样点区间查询。</param>
             <param name="toSample">结束采样点编号（SampleNo）与 fromSample 同时传入时生效，表示按采样点区间查询。</param>
             <param name="limit">本次最多返回的采样点数量</param>
-            <param name="channels">模拟量通道索引集合（1~70），支持逗号分隔或区间格式（如 "1,2,5-8"）。</param>
+            <param name="channels">模拟量通道索引集合（1~100），支持逗号分隔或区间格式（如 "1,2,5-8"）。</param>
             <param name="digitals">开关量通道索引集合（1~50），支持逗号分隔或区间格式。</param>
             <param name="downSample">下采样倍率（抽点参数）。N 表示仅返回 SampleNo 能被 N 整除的采样点；小于等于 0 时按 1 处理（不下采样）。</param>
         </member>

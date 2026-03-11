@@ -302,6 +302,36 @@ namespace Zwav.Application.Parsing
         public double? Channel68 { get; set; }
         public double? Channel69 { get; set; }
         public double? Channel70 { get; set; }
+        public double? Channel71 { get; set; }
+        public double? Channel72 { get; set; }
+        public double? Channel73 { get; set; }
+        public double? Channel74 { get; set; }
+        public double? Channel75 { get; set; }
+        public double? Channel76 { get; set; }
+        public double? Channel77 { get; set; }
+        public double? Channel78 { get; set; }
+        public double? Channel79 { get; set; }
+        public double? Channel80 { get; set; }
+        public double? Channel81 { get; set; }
+        public double? Channel82 { get; set; }
+        public double? Channel83 { get; set; }
+        public double? Channel84 { get; set; }
+        public double? Channel85 { get; set; }
+        public double? Channel86 { get; set; }
+        public double? Channel87 { get; set; }
+        public double? Channel88 { get; set; }
+        public double? Channel89 { get; set; }
+        public double? Channel90 { get; set; }
+        public double? Channel91 { get; set; }
+        public double? Channel92 { get; set; }
+        public double? Channel93 { get; set; }
+        public double? Channel94 { get; set; }
+        public double? Channel95 { get; set; }
+        public double? Channel96 { get; set; }
+        public double? Channel97 { get; set; }
+        public double? Channel98 { get; set; }
+        public double? Channel99 { get; set; }
+        public double? Channel100 { get; set; }
 
          /// <summary>
         /// 数字量字（bitset），来自数据库 Tb_ZwavData.DigitalWords VARBINARY(100)
@@ -381,6 +411,36 @@ namespace Zwav.Application.Parsing
             68 => (Channel68 ?? 0),
             69 => (Channel69 ?? 0),
             70 => (Channel70 ?? 0),
+            71 => (Channel71 ?? 0),
+            72 => (Channel72 ?? 0),
+            73 => (Channel73 ?? 0),
+            74 => (Channel74 ?? 0),
+            75 => (Channel75 ?? 0),
+            76 => (Channel76 ?? 0),
+            77 => (Channel77 ?? 0),
+            78 => (Channel78 ?? 0),
+            79 => (Channel79 ?? 0),
+            80 => (Channel80 ?? 0),
+            81 => (Channel81 ?? 0),
+            82 => (Channel82 ?? 0),
+            83 => (Channel83 ?? 0),
+            84 => (Channel84 ?? 0),
+            85 => (Channel85 ?? 0),
+            86 => (Channel86 ?? 0),
+            87 => (Channel87 ?? 0),
+            88 => (Channel88 ?? 0),
+            89 => (Channel89 ?? 0),
+            90 => (Channel90 ?? 0),
+            91 => (Channel91 ?? 0),
+            92 => (Channel92 ?? 0),
+            93 => (Channel93 ?? 0),
+            94 => (Channel94 ?? 0),
+            95 => (Channel95 ?? 0),
+            96 => (Channel96 ?? 0),
+            97 => (Channel97 ?? 0),
+            98 => (Channel98 ?? 0),
+            99 => (Channel99 ?? 0),
+            100 => (Channel100 ?? 0),
             _ => 0
         };
 

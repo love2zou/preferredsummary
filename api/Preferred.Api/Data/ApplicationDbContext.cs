@@ -470,6 +470,36 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.Channel68).HasColumnType("DOUBLE");
                 entity.Property(e => e.Channel69).HasColumnType("DOUBLE");
                 entity.Property(e => e.Channel70).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel71).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel72).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel73).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel74).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel75).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel76).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel77).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel78).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel79).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel80).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel81).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel82).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel83).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel84).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel85).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel86).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel87).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel88).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel89).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel90).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel91).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel92).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel93).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel94).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel95).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel96).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel97).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel98).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel99).HasColumnType("DOUBLE");
+                entity.Property(e => e.Channel100).HasColumnType("DOUBLE");
 
                 entity.Property(x => x.DigitalWords).HasColumnType("varbinary(100)").HasMaxLength(100);
 

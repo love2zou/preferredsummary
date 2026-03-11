@@ -25,9 +25,9 @@ namespace Zwav.Application.Workers
         private readonly CfgParser _cfgParser = new CfgParser();
         private readonly HdrParser _hdrParser = new HdrParser();
 
-        // 反射缓存：Channel1..Channel70
+        // 反射缓存：Channel1..Channel100
         private static readonly System.Reflection.PropertyInfo[] ChannelProps =
-            Enumerable.Range(1, ZwavConstants.MaxAnalog) // MaxAnalog=70
+            Enumerable.Range(1, ZwavConstants.MaxAnalog) // MaxAnalog=100
                 .Select(i => typeof(ZwavData).GetProperty($"Channel{i}"))
                 .ToArray();
 

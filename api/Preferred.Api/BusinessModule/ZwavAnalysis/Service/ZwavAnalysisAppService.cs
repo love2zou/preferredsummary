@@ -423,10 +423,10 @@ namespace Preferred.Api.Services
 
 
         private static readonly Func<WaveRowRaw, double>[] ZwavAnalogGetters =
-            Enumerable.Range(1, 70).Select(BuildAnalogGetter).ToArray();
+            Enumerable.Range(1, ZwavConstants.MaxAnalog).Select(BuildAnalogGetter).ToArray();
 
         private static readonly Func<WaveRowRaw, short>[] ZwavDigitalGetters =
-            Enumerable.Range(1, 700).Select(BuildDigitalGetter).ToArray();
+            Enumerable.Range(1, ZwavConstants.MaxDigital).Select(BuildDigitalGetter).ToArray();
 
         private static Func<WaveRowRaw, double> BuildAnalogGetter(int i)
         {
@@ -483,7 +483,7 @@ namespace Preferred.Api.Services
             {
                 var idx = indices[i];
                 // 防御：避免 idx 越界导致 switch default 以外的异常（你 switch 已 default=0，其实这里可省）
-                if (idx < 1 || idx > 70) { arr[i] = 0; continue; }
+                if (idx < 1 || idx > ZwavConstants.MaxAnalog) { arr[i] = 0; continue; }
                 arr[i] = row.GetAnalog(idx);
             }
             return arr;
@@ -619,6 +619,36 @@ namespace Preferred.Api.Services
                     Channel68 = x.Channel68 != null ? (double?)Math.Round(x.Channel68.Value, 3) : null,
                     Channel69 = x.Channel69 != null ? (double?)Math.Round(x.Channel69.Value, 3) : null,
                     Channel70 = x.Channel70 != null ? (double?)Math.Round(x.Channel70.Value, 3) : null,
+                    Channel71 = x.Channel71 != null ? (double?)Math.Round(x.Channel71.Value, 3) : null,
+                    Channel72 = x.Channel72 != null ? (double?)Math.Round(x.Channel72.Value, 3) : null,
+                    Channel73 = x.Channel73 != null ? (double?)Math.Round(x.Channel73.Value, 3) : null,
+                    Channel74 = x.Channel74 != null ? (double?)Math.Round(x.Channel74.Value, 3) : null,
+                    Channel75 = x.Channel75 != null ? (double?)Math.Round(x.Channel75.Value, 3) : null,
+                    Channel76 = x.Channel76 != null ? (double?)Math.Round(x.Channel76.Value, 3) : null,
+                    Channel77 = x.Channel77 != null ? (double?)Math.Round(x.Channel77.Value, 3) : null,
+                    Channel78 = x.Channel78 != null ? (double?)Math.Round(x.Channel78.Value, 3) : null,
+                    Channel79 = x.Channel79 != null ? (double?)Math.Round(x.Channel79.Value, 3) : null,
+                    Channel80 = x.Channel80 != null ? (double?)Math.Round(x.Channel80.Value, 3) : null,
+                    Channel81 = x.Channel81 != null ? (double?)Math.Round(x.Channel81.Value, 3) : null,
+                    Channel82 = x.Channel82 != null ? (double?)Math.Round(x.Channel82.Value, 3) : null,
+                    Channel83 = x.Channel83 != null ? (double?)Math.Round(x.Channel83.Value, 3) : null,
+                    Channel84 = x.Channel84 != null ? (double?)Math.Round(x.Channel84.Value, 3) : null,
+                    Channel85 = x.Channel85 != null ? (double?)Math.Round(x.Channel85.Value, 3) : null,
+                    Channel86 = x.Channel86 != null ? (double?)Math.Round(x.Channel86.Value, 3) : null,
+                    Channel87 = x.Channel87 != null ? (double?)Math.Round(x.Channel87.Value, 3) : null,
+                    Channel88 = x.Channel88 != null ? (double?)Math.Round(x.Channel88.Value, 3) : null,
+                    Channel89 = x.Channel89 != null ? (double?)Math.Round(x.Channel89.Value, 3) : null,
+                    Channel90 = x.Channel90 != null ? (double?)Math.Round(x.Channel90.Value, 3) : null,
+                    Channel91 = x.Channel91 != null ? (double?)Math.Round(x.Channel91.Value, 3) : null,
+                    Channel92 = x.Channel92 != null ? (double?)Math.Round(x.Channel92.Value, 3) : null,
+                    Channel93 = x.Channel93 != null ? (double?)Math.Round(x.Channel93.Value, 3) : null,
+                    Channel94 = x.Channel94 != null ? (double?)Math.Round(x.Channel94.Value, 3) : null,
+                    Channel95 = x.Channel95 != null ? (double?)Math.Round(x.Channel95.Value, 3) : null,
+                    Channel96 = x.Channel96 != null ? (double?)Math.Round(x.Channel96.Value, 3) : null,
+                    Channel97 = x.Channel97 != null ? (double?)Math.Round(x.Channel97.Value, 3) : null,
+                    Channel98 = x.Channel98 != null ? (double?)Math.Round(x.Channel98.Value, 3) : null,
+                    Channel99 = x.Channel99 != null ? (double?)Math.Round(x.Channel99.Value, 3) : null,
+                    Channel100 = x.Channel100 != null ? (double?)Math.Round(x.Channel100.Value, 3) : null,
 
                     // ====== 关键：数字量改成 DigitalWords ======
                     DigitalWords = x.DigitalWords

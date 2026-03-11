@@ -87,6 +87,36 @@ namespace Preferred.Api.Models
         public double? Channel68 { get; set; }
         public double? Channel69 { get; set; }
         public double? Channel70 { get; set; }
+        public double? Channel71 { get; set; }
+        public double? Channel72 { get; set; }
+        public double? Channel73 { get; set; }
+        public double? Channel74 { get; set; }
+        public double? Channel75 { get; set; }
+        public double? Channel76 { get; set; }
+        public double? Channel77 { get; set; }
+        public double? Channel78 { get; set; }
+        public double? Channel79 { get; set; }
+        public double? Channel80 { get; set; }
+        public double? Channel81 { get; set; }
+        public double? Channel82 { get; set; }
+        public double? Channel83 { get; set; }
+        public double? Channel84 { get; set; }
+        public double? Channel85 { get; set; }
+        public double? Channel86 { get; set; }
+        public double? Channel87 { get; set; }
+        public double? Channel88 { get; set; }
+        public double? Channel89 { get; set; }
+        public double? Channel90 { get; set; }
+        public double? Channel91 { get; set; }
+        public double? Channel92 { get; set; }
+        public double? Channel93 { get; set; }
+        public double? Channel94 { get; set; }
+        public double? Channel95 { get; set; }
+        public double? Channel96 { get; set; }
+        public double? Channel97 { get; set; }
+        public double? Channel98 { get; set; }
+        public double? Channel99 { get; set; }
+        public double? Channel100 { get; set; }
 
          /// <summary>
         /// 数字量字（bitset），对应数据库 VARBINARY(100)
