@@ -3332,6 +3332,86 @@
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportAsync(System.String,System.Boolean)">
             <summary>导出波形数据（CSV）</summary>
         </member>
+        <member name="T:Preferred.Api.Controllers.ZwavSagEventsController">
+            <summary>
+            电压暂降事件控制器
+            与录波解析控制器解耦，专注于暂降分析结果的生成、查询与维护。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetListAsync(System.String,System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>
+            分页查询暂降事件列表
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetDetailAsync(System.Int32)">
+            <summary>
+            获取暂降事件详情
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetPhasesAsync(System.Int32)">
+            <summary>
+            获取暂降事件相别明细
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetByAnalysisAsync(System.Int32)">
+            <summary>
+            根据录波解析任务ID查询暂降结果
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.AnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            发起电压暂降分析
+            建议由 AnalysisId 驱动，从已解析入库的录波数据中计算暂降事件。
+            当前实现默认会重建该 AnalysisId 下的暂降结果。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.ReAnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            重新分析指定解析任务的暂降结果
+            当前实现与 AnalyzeAsync 一致：都会先清理旧结果，再重新计算。
+            保留该接口是为了前端语义更清晰。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.UpdateAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagEventRequest,System.Threading.CancellationToken)">
+            <summary>
+            更新暂降事件（仅建议用于备注等有限字段修正）
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteAsync(System.Int32)">
+            <summary>
+            删除单个暂降事件
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteByAnalysisAsync(System.Int32)">
+            <summary>
+            按解析任务删除全部暂降结果
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetChannelRuleListAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            分页查询暂降通道词库
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetChannelRuleDetailAsync(System.Int32)">
+            <summary>
+            获取暂降通道词库详情
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.CreateChannelRuleAsync(Zwav.Application.Sag.CreateZwavSagChannelRuleRequest)">
+            <summary>
+            新增暂降通道词库
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.UpdateChannelRuleAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest)">
+            <summary>
+            修改暂降通道词库
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteChannelRuleAsync(System.Int32)">
+            <summary>
+            删除暂降通道词库
+            </summary>
+        </member>
         <member name="T:Zwav.Application.Processing.AnalysisQueue">
             <summary>
             进程内解析队列：基于 Channel，单消费者（Worker）读取，多生产者（Controller/AppService）写入。
@@ -3413,7 +3493,9 @@
         <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingRead">
             <summary>进度状态：解析读取录波文件</summary>
         </member>
-        <!-- Badly formed XML comment ignored for member "F:Zwav.Application.Parsing.ZwavConstants.ParsingExtract" -->
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingExtract">
+            <summary>进度状态：解析提取文件</summary>
+        </member>
         <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingCfg">
             <summary>进度状态：解析CFG文件</summary>
         </member>
@@ -3470,6 +3552,47 @@
             idx=16 映射到 word0 的 bit15；
             idx=17 映射到 word1 的 bit0。
             </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagSamplePoint.ChannelValues">
+            <summary>
+            key=ChannelIndex, value=模拟量值
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagChannelRuleDto">
+            <summary>
+            暂降通道词库返回 DTO
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest">
+            <summary>
+            新增暂降通道词库请求
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest">
+            <summary>
+            修改暂降通道词库请求
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.IZwavSagAnalyzer">
+            <summary>
+            电压暂降分析器
+            只负责纯计算，不负责读取波形数据
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer">
+             <summary>
+             电压暂降分析器 V1
+             目标：
+             1. 基于电压通道原始波形计算 RMS 序列
+             2. 按阈值检测统一暂降事件窗口
+             3. 输出事件汇总和各相明细
+            
+             V1 暂不实现：
+             - 1分钟归并
+             - 相位跳变
+             - 起始角
+             - 真正的滑动参考电压
+             </summary>
         </member>
         <member name="T:Video.Application.Dto.AlgoParams">
             <summary>

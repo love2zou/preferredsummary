@@ -42,6 +42,7 @@ export interface AnalysisDetailDto {
 }
 
 export interface ZwavFileAnalysis {
+  id?: number
   analysisGuid: string
   status: string
   progress: number

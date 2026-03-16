@@ -1,6 +1,5 @@
 import { authService } from './authService';
 import TestAccountConfig from '@/config/testAccount';
-import { ElMessage } from 'element-plus';
 
 class AutoLoginService {
   private static readonly TOKEN_KEY = 'guest_token';

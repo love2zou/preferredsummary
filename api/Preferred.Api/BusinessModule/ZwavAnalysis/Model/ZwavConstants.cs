@@ -22,7 +22,7 @@ namespace Zwav.Application.Parsing
         public const string Parsing = "Parsing";
         /// <summary>进度状态：解析读取录波文件</summary>
         public const string ParsingRead = "ParsingRead";
-        /// <summary>进度状态：解析提取文件/summary>
+        /// <summary>进度状态：解析提取文件</summary>
         public const string ParsingExtract = "ParsingExtract";
         /// <summary>进度状态：解析CFG文件</summary>
         public const string ParsingCfg = "ParsingCfg";

@@ -291,11 +291,12 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavHdr (
 /*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_ZwavData (
     Id INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-	AnalysisId INT NOT NULL COMMENT '解析任务ID',
+    AnalysisId INT NOT NULL COMMENT '解析任务ID',
     SampleNo INT NOT NULL COMMENT '样本号',
-	TimeRaw INT NOT NULL COMMENT '原始时间戳(us)',
-	TimeMs  DOUBLE NOT NULL COMMENT '时间戳(ms)，由 TimeRaw * TimeMul / 1000 计算，用于展示和绘图',
-    -- 模拟量通道（根据要求最大70个通道）
+    TimeRaw INT NOT NULL COMMENT '原始时间戳(us)',
+    TimeMs  DOUBLE NOT NULL COMMENT '时间戳(ms)，由 TimeRaw * TimeMul / 1000 计算，用于展示和绘图',
+
+    -- 模拟量通道
     Channel1 DOUBLE COMMENT '模拟量通道1',
     Channel2 DOUBLE COMMENT '模拟量通道2',
     Channel3 DOUBLE COMMENT '模拟量通道3',
@@ -366,13 +367,154 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavData (
     Channel68 DOUBLE COMMENT '模拟量通道68',
     Channel69 DOUBLE COMMENT '模拟量通道69',
     Channel70 DOUBLE COMMENT '模拟量通道70',
+    Channel71 DOUBLE COMMENT '模拟量通道71',
+    Channel72 DOUBLE COMMENT '模拟量通道72',
+    Channel73 DOUBLE COMMENT '模拟量通道73',
+    Channel74 DOUBLE COMMENT '模拟量通道74',
+    Channel75 DOUBLE COMMENT '模拟量通道75',
+    Channel76 DOUBLE COMMENT '模拟量通道76',
+    Channel77 DOUBLE COMMENT '模拟量通道77',
+    Channel78 DOUBLE COMMENT '模拟量通道78',
+    Channel79 DOUBLE COMMENT '模拟量通道79',
+    Channel80 DOUBLE COMMENT '模拟量通道80',
+    Channel81 DOUBLE COMMENT '模拟量通道81',
+    Channel82 DOUBLE COMMENT '模拟量通道82',
+    Channel83 DOUBLE COMMENT '模拟量通道83',
+    Channel84 DOUBLE COMMENT '模拟量通道84',
+    Channel85 DOUBLE COMMENT '模拟量通道85',
+    Channel86 DOUBLE COMMENT '模拟量通道86',
+    Channel87 DOUBLE COMMENT '模拟量通道87',
+    Channel88 DOUBLE COMMENT '模拟量通道88',
+    Channel89 DOUBLE COMMENT '模拟量通道89',
+    Channel90 DOUBLE COMMENT '模拟量通道90',
+    Channel91 DOUBLE COMMENT '模拟量通道91',
+    Channel92 DOUBLE COMMENT '模拟量通道92',
+    Channel93 DOUBLE COMMENT '模拟量通道93',
+    Channel94 DOUBLE COMMENT '模拟量通道94',
+    Channel95 DOUBLE COMMENT '模拟量通道95',
+    Channel96 DOUBLE COMMENT '模拟量通道96',
+    Channel97 DOUBLE COMMENT '模拟量通道97',
+    Channel98 DOUBLE COMMENT '模拟量通道98',
+    Channel99 DOUBLE COMMENT '模拟量通道99',
+    Channel100 DOUBLE COMMENT '模拟量通道100',
+
     -- 数字量通道
     DigitalWords VARBINARY(100) COMMENT '数字量字（bitset，最多支持 800bit）',
-	SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
-	CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
-	UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
+
+    SeqNo INT DEFAULT 0 NOT NULL COMMENT '排序号',
+    CrtTime DATETIME NOT NULL COMMENT '创建时间',
+    UpdTime DATETIME NOT NULL COMMENT '最后修改时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV波形数据表';
 
+/*==============================================================*/
+/* ZWAV: Tb_ZwavSagEvent  电压暂降事件表（事件汇总）            */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ZwavSagEvent (
+   Id                        INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   AnalysisId                INT                 NOT NULL COMMENT '解析任务ID',
+
+   EventType                 VARCHAR(32)         NOT NULL COMMENT '事件类型（Sag=电压暂降，Interruption=短时中断）',
+
+   StartTimeUtc              DATETIME(3)         NOT NULL COMMENT '事件开始时间(UTC)',
+   EndTimeUtc                DATETIME(3)         NOT NULL COMMENT '事件结束时间(UTC)',
+   OccurTimeUtc              DATETIME(3)         NOT NULL COMMENT '事件发生时间(UTC)，通常等于开始时间',
+   DurationMs                DECIMAL(12,3)       NOT NULL COMMENT '事件持续时间(ms)',
+
+   TriggerPhase              VARCHAR(16)         NULL COMMENT '触发事件相别（首个越过阈值的相，如A/B/C/AB/BC/CA）',
+   EndPhase                  VARCHAR(16)         NULL COMMENT '事件终止相别（最后恢复的相，如A/B/C/AB/BC/CA）',
+   WorstPhase                VARCHAR(16)         NULL COMMENT '最严重相别（按最小残余电压或最大暂降百分比确定）',
+
+   ReferenceType             VARCHAR(32)         NOT NULL COMMENT '参考电压类型（Declared=公称输入电压，Sliding=滑动参考电压）',
+   ReferenceVoltage          DECIMAL(18,6)       NOT NULL COMMENT '事件主判据参考电压',
+
+   ResidualVoltage           DECIMAL(18,6)       NOT NULL COMMENT '事件残余电压，取最严重相或全事件最低Urms',
+   ResidualVoltagePct        DECIMAL(10,3)       NOT NULL COMMENT '事件残余电压百分比(%)=ResidualVoltage/ReferenceVoltage*100',
+
+   SagDepth                  DECIMAL(18,6)       NOT NULL COMMENT '事件暂降深度=ReferenceVoltage-ResidualVoltage',
+   SagPercent                DECIMAL(10,3)       NOT NULL COMMENT '事件暂降百分比(%)=(ReferenceVoltage-ResidualVoltage)/ReferenceVoltage*100',
+
+   PhaseJumpDeg              DECIMAL(12,6)       NULL COMMENT '事件相位跳变(度)，通常取最严重相',
+   StartAngleDeg             DECIMAL(12,6)       NULL COMMENT '事件起始角(度)，通常取最严重相',
+
+   SagThresholdPct           DECIMAL(10,3)       NULL COMMENT '暂降阈值(%)，如90',
+   InterruptThresholdPct     DECIMAL(10,3)       NULL COMMENT '短时中断阈值(%)，如10',
+   HysteresisPct             DECIMAL(10,3)       NULL COMMENT '迟滞电压(%)，通常约为Udin的2%',
+
+   IsMergedStatEvent         TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为统计归并事件（1是 0否）',
+   MergeGroupId              VARCHAR(64)         NULL COMMENT '1分钟归并统计分组号',
+   RawEventCount             INT DEFAULT 1       NOT NULL COMMENT '归并后包含的原始事件数，原始事件默认为1',
+
+   SeqNo                     INT DEFAULT 0       NOT NULL COMMENT '排序号',
+   Remark                    VARCHAR(500)        NULL COMMENT '备注',
+
+   CrtTime                   DATETIME            NOT NULL COMMENT '创建时间',
+   UpdTime                   DATETIME            NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='电压暂降事件表（事件汇总）';
+/*==============================================================*/
+/* ZWAV: Tb_ZwavSagEventPhase  电压暂降事件相别明细表           */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ZwavSagEventPhase (
+   Id                        INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   SagEventId                INT                 NOT NULL COMMENT '所属暂降事件ID，对应 Tb_ZwavSagEvent.Id',
+   AnalysisId                INT                 NOT NULL COMMENT '解析任务ID，冗余便于查询',
+
+   Phase                     VARCHAR(16)         NOT NULL COMMENT '相别（A/B/C/AB/BC/CA）',
+
+   StartTimeUtc              DATETIME(3)         NOT NULL COMMENT '该相暂降开始时间(UTC)',
+   EndTimeUtc                DATETIME(3)         NOT NULL COMMENT '该相暂降结束时间(UTC)',
+   DurationMs                DECIMAL(12,3)       NOT NULL COMMENT '该相暂降持续时间(ms)',
+
+   ReferenceType             VARCHAR(32)         NOT NULL COMMENT '参考电压类型（Declared=公称输入电压，Sliding=滑动参考电压）',
+   ReferenceVoltage          DECIMAL(18,6)       NOT NULL COMMENT '该相参考电压',
+
+   ResidualVoltage           DECIMAL(18,6)       NOT NULL COMMENT '该相残余电压（该相事件过程最低Urms）',
+   ResidualVoltagePct        DECIMAL(10,3)       NOT NULL COMMENT '该相残余电压百分比(%)',
+
+   SagDepth                  DECIMAL(18,6)       NOT NULL COMMENT '该相暂降深度=ReferenceVoltage-ResidualVoltage',
+   SagPercent                DECIMAL(10,3)       NOT NULL COMMENT '该相暂降百分比(%)',
+
+   SagThresholdPct           DECIMAL(10,3)       NULL COMMENT '该相暂降判据阈值(%)',
+   InterruptThresholdPct     DECIMAL(10,3)       NULL COMMENT '该相短时中断判据阈值(%)',
+   HysteresisPct             DECIMAL(10,3)       NULL COMMENT '该相迟滞电压(%)',
+
+   StartAngleDeg             DECIMAL(12,6)       NULL COMMENT '该相电压暂降起始角(度)',
+   PhaseJumpDeg              DECIMAL(12,6)       NULL COMMENT '该相相位跳变(度)',
+
+   IsTriggerPhase            TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为触发相（1是 0否）',
+   IsEndPhase                TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为终止相（1是 0否）',
+   IsWorstPhase              TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为最严重相（1是 0否）',
+
+   SeqNo                     INT DEFAULT 0       NOT NULL COMMENT '排序号',
+   Remark                    VARCHAR(500)        NULL COMMENT '备注',
+
+   CrtTime                   DATETIME            NOT NULL COMMENT '创建时间',
+   UpdTime                   DATETIME            NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+COMMENT='电压暂降事件相别明细表';
+
+CREATE TABLE IF NOT EXISTS Tb_ZwavSagRmsPoint (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   AnalysisId           INT NOT NULL COMMENT '解析任务ID',
+   ChannelIndex         INT NOT NULL COMMENT '通道序号',
+   Phase                VARCHAR(16) NULL COMMENT '相别',
+   SampleNo             INT NOT NULL COMMENT '对应窗口末尾样本号',
+   TimeMs               DOUBLE NOT NULL COMMENT '窗口时刻(ms)',
+   Rms                  DECIMAL(18,6) NOT NULL COMMENT 'RMS值',
+   RmsPct               DECIMAL(10,3) NOT NULL COMMENT 'RMS百分比',
+   ReferenceVoltage     DECIMAL(18,6) NOT NULL COMMENT '参考电压',
+   SeqNo                INT DEFAULT 0 NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='电压暂降RMS点表';
+
+CREATE TABLE IF NOT EXISTS Tb_ZwavSagChannelRule (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   RuleName             VARCHAR(100) NOT NULL COMMENT '规则名称（通道关键词，如A相电压、UA等）',
+   SeqNo                INT DEFAULT 0 NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='电压暂降通道词库规则表';
 /*==============================================================*/
 /* 视频分析: Tb_VideoAnalysisJob  视频智能分析任务表             */
 /*==============================================================*/

@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('@/views/zwavpages/ZwavOnlineViewer.vue'),
     },
     {
+      path: '/zwav-sag-events',
+      name: 'ZwavSagEvents',
+      component: () => import('@/views/zwavpages/ZwavSagEvents.vue')
+    },
+    {
       path: '/video-analytics',
       name: 'VideoAnalytics',
       component: () => import('@/views/videopages/VideoAnalytics.vue')

@@ -4,6 +4,7 @@ using Preferred.Api.Services;
 using Zwav.Infrastructure.Storage;
 using Zwav.Application.Workers;
 using Zwav.Application.Processing;
+using Zwav.Application.Sag;
 using Video.Application.Processing;
 using Preferred.Api.Models;
 
@@ -30,6 +31,8 @@ namespace Preferred.Api.Extensions
             services.AddScoped<IFileStorage, LocalFileStorage>();
             services.AddSingleton<IAnalysisQueue, AnalysisQueue>();
             services.AddScoped<IZwavAnalysisAppService, ZwavAnalysisAppService>();
+            services.AddScoped<IZwavSagAnalyzer, ZwavSagAnalyzer>();
+            services.AddScoped<IZwavSagEventService, ZwavSagEventService>();
             services.AddHostedService<AnalysisWorker>();
             //录波文件服务
             //视频分析服务

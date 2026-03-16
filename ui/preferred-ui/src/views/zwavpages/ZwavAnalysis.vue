@@ -39,6 +39,9 @@
         <el-button type="primary" @click="openUploadDialog">
           <el-icon><Upload /></el-icon> 批量上传
         </el-button>
+        <el-button @click="goSagEvents">
+          <el-icon><Histogram /></el-icon> 录波暂降分析
+        </el-button>
         <el-popconfirm title="确定要删除选中的任务和文件吗？" @confirm="handleBatchDelete" :disabled="selectedRows.length === 0">
           <template #reference>
             <el-button type="danger" :disabled="selectedRows.length === 0">
@@ -188,7 +191,7 @@
 
 <script setup lang="ts">
 import { zwavService, type ZwavFileAnalysis } from '@/services/zwavService'
-import { Delete, Upload, UploadFilled } from '@element-plus/icons-vue'
+import { Delete, Histogram, Upload, UploadFilled } from '@element-plus/icons-vue'
 import { ElMessage, type UploadFile, type UploadInstance, type UploadUserFile } from 'element-plus'
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -394,6 +397,11 @@ const viewOnline = (row: ZwavFileAnalysis) => {
     name: 'ZwavOnlineViewer',
     params: { guid: row.analysisGuid }
   })
+  window.open(routeUrl.href, '_blank')
+}
+
+const goSagEvents = () => {
+  const routeUrl = router.resolve({ name: 'ZwavSagEvents' })
   window.open(routeUrl.href, '_blank')
 }
 

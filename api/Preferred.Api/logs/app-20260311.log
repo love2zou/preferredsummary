@@ -1,0 +1,328 @@
+[2026-03-11 22:19:22 INF]  应用程序启动中... {}
+[2026-03-11 22:19:23 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 22:19:23 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 22:19:23 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 22:19:24 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 22:19:24 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 22:19:24 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 22:19:24 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 22:19:24 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 22:19:24 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:20:00 执行 {}
+[2026-03-11 22:20:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:20:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:20:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:20:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:20:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:20:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 26.61GB, 使用率: 66.67% {}
+[2026-03-11 22:20:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:20:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.38% {}
+[2026-03-11 22:20:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 37.38%, 使用内存: 160532676608 {}
+[2026-03-11 22:20:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 37.38% {}
+[2026-03-11 22:20:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:20:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.21秒 {}
+[2026-03-11 22:20:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:20:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:25:00 执行 {}
+[2026-03-11 22:25:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:25:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:25:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:25:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:25:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:25:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 25.59GB, 使用率: 66.67% {}
+[2026-03-11 22:25:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:25:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.39% {}
+[2026-03-11 22:25:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 37.39%, 使用内存: 160575283200 {}
+[2026-03-11 22:25:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 37.39% {}
+[2026-03-11 22:25:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:25:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.14秒 {}
+[2026-03-11 22:25:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:25:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:30:00 执行 {}
+[2026-03-11 22:30:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:30:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:30:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:30:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:30:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:30:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 26.43GB, 使用率: 66.67% {}
+[2026-03-11 22:30:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:30:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.36% {}
+[2026-03-11 22:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.10%, 内存: 66.67%, 磁盘: 37.36%, 使用内存: 160449232896 {}
+[2026-03-11 22:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.10%, 内存: 66.67%, 磁盘: 37.36% {}
+[2026-03-11 22:30:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:30:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.12秒 {}
+[2026-03-11 22:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:35:00 执行 {}
+[2026-03-11 22:35:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:35:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:35:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:35:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:35:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:35:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 26.11GB, 使用率: 66.67% {}
+[2026-03-11 22:35:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:35:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.36% {}
+[2026-03-11 22:35:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 37.36%, 使用内存: 160471412736 {}
+[2026-03-11 22:35:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 37.36% {}
+[2026-03-11 22:35:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:35:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.14秒 {}
+[2026-03-11 22:35:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:35:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:40:00 执行 {}
+[2026-03-11 22:48:46 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:48:46 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:48:46 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:48:46 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:48:46 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:48:47 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 25.27GB, 使用率: 66.67% {}
+[2026-03-11 22:48:47 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:48:47 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.34% {}
+[2026-03-11 22:48:47 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 37.34%, 使用内存: 160353382400 {}
+[2026-03-11 22:48:47 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 37.34% {}
+[2026-03-11 22:48:47 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:48:47 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.13秒 {}
+[2026-03-11 22:48:47 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:48:47 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:50:00 执行 {}
+[2026-03-11 22:48:49 ERR] Microsoft.EntityFrameworkCore.Database.Connection An error occurred using the connection to database 'Db_PreferredData' on server '159.75.184.108'. {"EventId":{"Id":20004,"Name":"Microsoft.EntityFrameworkCore.Database.Connection.ConnectionError"},"ActionId":"115b640f-c204-452f-bde8-0796fe1af060","ActionName":"Preferred.Api.Controllers.ZwavAnalysesController.GetListAsync (Preferred.Api)","RequestId":"0HNJVF5190N4O:00000002","RequestPath":"/api/ZwavAnalyses","SpanId":"|f5ef888-4e318c6bf62410b7.","TraceId":"f5ef888-4e318c6bf62410b7","ParentId":"","ConnectionId":"0HNJVF5190N4O"}
+[2026-03-11 22:48:49 ERR] Microsoft.EntityFrameworkCore.Query An exception occurred while iterating over the results of a query for context type 'Preferred.Api.Data.ApplicationDbContext'.
+System.InvalidOperationException: An exception has been raised that is likely due to a transient failure. Consider enabling transient error resiliency by adding 'EnableRetryOnFailure()' to the 'UseMySql' call.
+ ---> MySql.Data.MySqlClient.MySqlException (0x80004005): Connect Timeout expired.
+ ---> MySql.Data.MySqlClient.MySqlException (0x80004005): Connect Timeout expired.
+ ---> System.ObjectDisposedException: Cannot access a disposed object.
+Object name: 'System.Net.Sockets.Socket'.
+   at System.Net.Sockets.Socket.BeginConnect(IPAddress address, Int32 port, AsyncCallback requestCallback, Object state)
+   at System.Net.Sockets.TcpClient.BeginConnect(IPAddress address, Int32 port, AsyncCallback requestCallback, Object state)
+   at System.Net.Sockets.TcpClient.<>c.<ConnectAsync>b__27_0(IPAddress targetAddess, Int32 targetPort, AsyncCallback callback, Object state)
+   at System.Threading.Tasks.TaskFactory`1.FromAsyncImpl[TArg1,TArg2](Func`5 beginMethod, Func`2 endFunction, Action`1 endAction, TArg1 arg1, TArg2 arg2, Object state, TaskCreationOptions creationOptions)
+   at System.Threading.Tasks.TaskFactory.FromAsync[TArg1,TArg2](Func`5 beginMethod, Action`1 endMethod, TArg1 arg1, TArg2 arg2, Object state, TaskCreationOptions creationOptions)
+   at System.Threading.Tasks.TaskFactory.FromAsync[TArg1,TArg2](Func`5 beginMethod, Action`1 endMethod, TArg1 arg1, TArg2 arg2, Object state)
+   at System.Net.Sockets.TcpClient.ConnectAsync(IPAddress address, Int32 port)
+   at MySqlConnector.Core.ServerSession.OpenTcpSocketAsync(ConnectionSettings cs, ILoadBalancer loadBalancer, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 907
+   at MySqlConnector.Core.ServerSession.OpenTcpSocketAsync(ConnectionSettings cs, ILoadBalancer loadBalancer, IOBehavior ioBehavior, CancellationToken cancellationToken)
+   at MySqlConnector.Core.ServerSession.ConnectAsync(ConnectionSettings cs, Int32 startTickCount, ILoadBalancer loadBalancer, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 368
+   at MySqlConnector.Core.ConnectionPool.GetSessionAsync(MySqlConnection connection, Int32 startTickCount, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ConnectionPool.cs:line 143
+   at MySqlConnector.Core.ConnectionPool.GetSessionAsync(MySqlConnection connection, Int32 startTickCount, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ConnectionPool.cs:line 143
+   at MySql.Data.MySqlClient.MySqlConnection.CreateSessionAsync(ConnectionPool pool, Int32 startTickCount, Nullable`1 ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySql.Data.MySqlClient/MySqlConnection.cs:line 758
+   at MySql.Data.MySqlClient.MySqlConnection.CreateSessionAsync(ConnectionPool pool, Int32 startTickCount, Nullable`1 ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySql.Data.MySqlClient/MySqlConnection.cs:line 758
+   at MySql.Data.MySqlClient.MySqlConnection.OpenAsync(Nullable`1 ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySql.Data.MySqlClient/MySqlConnection.cs:line 416
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenDbConnectionAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenDbConnectionAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlRelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(DbContext _, Boolean result, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryingEnumerable`1.AsyncEnumerator.MoveNextAsync() {"EventId":{"Id":10100,"Name":"Microsoft.EntityFrameworkCore.Query.QueryIterationFailed"},"ActionId":"115b640f-c204-452f-bde8-0796fe1af060","ActionName":"Preferred.Api.Controllers.ZwavAnalysesController.GetListAsync (Preferred.Api)","RequestId":"0HNJVF5190N4O:00000002","RequestPath":"/api/ZwavAnalyses","SpanId":"|f5ef888-4e318c6bf62410b7.","TraceId":"f5ef888-4e318c6bf62410b7","ParentId":"","ConnectionId":"0HNJVF5190N4O"}
+System.InvalidOperationException: An exception has been raised that is likely due to a transient failure. Consider enabling transient error resiliency by adding 'EnableRetryOnFailure()' to the 'UseMySql' call.
+ ---> MySql.Data.MySqlClient.MySqlException (0x80004005): Connect Timeout expired.
+ ---> MySql.Data.MySqlClient.MySqlException (0x80004005): Connect Timeout expired.
+ ---> System.ObjectDisposedException: Cannot access a disposed object.
+Object name: 'System.Net.Sockets.Socket'.
+   at System.Net.Sockets.Socket.BeginConnect(IPAddress address, Int32 port, AsyncCallback requestCallback, Object state)
+   at System.Net.Sockets.TcpClient.BeginConnect(IPAddress address, Int32 port, AsyncCallback requestCallback, Object state)
+   at System.Net.Sockets.TcpClient.<>c.<ConnectAsync>b__27_0(IPAddress targetAddess, Int32 targetPort, AsyncCallback callback, Object state)
+   at System.Threading.Tasks.TaskFactory`1.FromAsyncImpl[TArg1,TArg2](Func`5 beginMethod, Func`2 endFunction, Action`1 endAction, TArg1 arg1, TArg2 arg2, Object state, TaskCreationOptions creationOptions)
+   at System.Threading.Tasks.TaskFactory.FromAsync[TArg1,TArg2](Func`5 beginMethod, Action`1 endMethod, TArg1 arg1, TArg2 arg2, Object state, TaskCreationOptions creationOptions)
+   at System.Threading.Tasks.TaskFactory.FromAsync[TArg1,TArg2](Func`5 beginMethod, Action`1 endMethod, TArg1 arg1, TArg2 arg2, Object state)
+   at System.Net.Sockets.TcpClient.ConnectAsync(IPAddress address, Int32 port)
+   at MySqlConnector.Core.ServerSession.OpenTcpSocketAsync(ConnectionSettings cs, ILoadBalancer loadBalancer, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 907
+   at MySqlConnector.Core.ServerSession.OpenTcpSocketAsync(ConnectionSettings cs, ILoadBalancer loadBalancer, IOBehavior ioBehavior, CancellationToken cancellationToken)
+   at MySqlConnector.Core.ServerSession.ConnectAsync(ConnectionSettings cs, Int32 startTickCount, ILoadBalancer loadBalancer, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ServerSession.cs:line 368
+   at MySqlConnector.Core.ConnectionPool.GetSessionAsync(MySqlConnection connection, Int32 startTickCount, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ConnectionPool.cs:line 143
+   at MySqlConnector.Core.ConnectionPool.GetSessionAsync(MySqlConnection connection, Int32 startTickCount, IOBehavior ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/Core/ConnectionPool.cs:line 143
+   at MySql.Data.MySqlClient.MySqlConnection.CreateSessionAsync(ConnectionPool pool, Int32 startTickCount, Nullable`1 ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySql.Data.MySqlClient/MySqlConnection.cs:line 758
+   at MySql.Data.MySqlClient.MySqlConnection.CreateSessionAsync(ConnectionPool pool, Int32 startTickCount, Nullable`1 ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySql.Data.MySqlClient/MySqlConnection.cs:line 758
+   at MySql.Data.MySqlClient.MySqlConnection.OpenAsync(Nullable`1 ioBehavior, CancellationToken cancellationToken) in /_/src/MySqlConnector/MySql.Data.MySqlClient/MySqlConnection.cs:line 416
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenDbConnectionAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenDbConnectionAsync(Boolean errorsExpected, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlRelationalConnection.OpenAsync(CancellationToken cancellationToken, Boolean errorsExpected)
+   at Microsoft.EntityFrameworkCore.Storage.RelationalCommand.ExecuteReaderAsync(RelationalCommandParameterObject parameterObject, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryingEnumerable`1.AsyncEnumerator.InitializeReaderAsync(DbContext _, Boolean result, CancellationToken cancellationToken)
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Pomelo.EntityFrameworkCore.MySql.Storage.Internal.MySqlExecutionStrategy.ExecuteAsync[TState,TResult](TState state, Func`4 operation, Func`4 verifySucceeded, CancellationToken cancellationToken)
+   at Microsoft.EntityFrameworkCore.Query.Internal.QueryingEnumerable`1.AsyncEnumerator.MoveNextAsync()
+[2026-03-11 22:50:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:50:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:50:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:50:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:50:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:50:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 25.20GB, 使用率: 66.67% {}
+[2026-03-11 22:50:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:50:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.34% {}
+[2026-03-11 22:50:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 37.34%, 使用内存: 160369922048 {}
+[2026-03-11 22:50:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 37.34% {}
+[2026-03-11 22:50:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:50:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.11秒 {}
+[2026-03-11 22:50:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:50:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:55:00 执行 {}
+[2026-03-11 22:52:53 INF]  应用程序启动中... {}
+[2026-03-11 22:52:54 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 22:52:54 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 22:52:55 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 22:52:55 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 22:52:55 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 22:52:55 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 22:52:55 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 22:52:55 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 22:52:55 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 22:55:00 执行 {}
+[2026-03-11 22:53:29 ERR] Zwav.Application.Workers.AnalysisWorker Analysis failed. guid=ea794cbdaa2947d790e4d5c36622fa81, fileId=226 {}
+System.InvalidOperationException: CFG analog channel count = 96 exceeds supported max 70. Storage schema has only 70 analog fields.
+   at Zwav.Application.Parsing.CfgParser.Parse(String cfgText) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\Helper\CfgParser.cs:line 54
+   at Zwav.Application.Workers.AnalysisWorker.ProcessOneAsync(ZwavAnalysisQueueItem item, CancellationToken ct) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 126
+   at Zwav.Application.Workers.AnalysisWorker.ExecuteAsync(CancellationToken stoppingToken) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 62
+[2026-03-11 22:55:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 22:55:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 22:55:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 22:55:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 22:55:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 22:55:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 25.24GB, 使用率: 66.67% {}
+[2026-03-11 22:55:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 22:55:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 149.00GB, 使用率: 37.34% {}
+[2026-03-11 22:55:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.10%, 内存: 66.67%, 磁盘: 37.34%, 使用内存: 160392863744 {}
+[2026-03-11 22:55:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.10%, 内存: 66.67%, 磁盘: 37.34% {}
+[2026-03-11 22:55:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 22:55:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.15秒 {}
+[2026-03-11 22:55:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 22:55:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:00:00 执行 {}
+[2026-03-11 22:58:21 INF]  应用程序启动中... {}
+[2026-03-11 22:58:22 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 22:58:22 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 22:58:22 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 22:58:23 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 22:58:23 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 22:58:23 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 22:58:23 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 22:58:23 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 22:58:23 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:00:00 执行 {}
+[2026-03-11 23:00:18 INF]  应用程序启动中... {}
+[2026-03-11 23:00:19 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:00:19 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:00:19 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:00:20 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:00:20 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:00:20 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:00:20 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:00:20 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:00:20 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:05:00 执行 {}
+[2026-03-11 23:00:36 ERR] Zwav.Application.Workers.AnalysisWorker Analysis failed. guid=2e0ede7f350943d7b44a9837bd1c010a, fileId=229 {}
+System.InvalidOperationException: CFG analog channel count = 96 exceeds supported max 70. Storage schema has only 70 analog fields.
+   at Zwav.Application.Parsing.CfgParser.Parse(String cfgText) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\Helper\CfgParser.cs:line 54
+   at Zwav.Application.Workers.AnalysisWorker.ProcessOneAsync(ZwavAnalysisQueueItem item, CancellationToken ct) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 126
+   at Zwav.Application.Workers.AnalysisWorker.ExecuteAsync(CancellationToken stoppingToken) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 62
+[2026-03-11 23:02:52 INF]  应用程序启动中... {}
+[2026-03-11 23:02:52 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:02:52 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:02:53 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:02:53 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:02:53 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:02:53 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:02:53 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:02:53 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:02:53 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:05:00 执行 {}
+[2026-03-11 23:13:42 INF]  应用程序启动中... {}
+[2026-03-11 23:13:42 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:13:42 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:13:42 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:13:43 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:13:43 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:13:43 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:13:43 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:13:43 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:13:43 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:15:00 执行 {}
+[2026-03-11 23:14:51 INF]  应用程序启动中... {}
+[2026-03-11 23:14:51 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:14:51 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:14:51 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:14:52 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:14:52 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:14:52 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:14:52 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:14:52 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:14:52 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:15:00 执行 {}
+[2026-03-11 23:15:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 23:15:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 23:15:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 23:15:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 23:15:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 23:15:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 26.52GB, 使用率: 66.67% {}
+[2026-03-11 23:15:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 23:15:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 146.00GB, 使用率: 36.65% {}
+[2026-03-11 23:15:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 1.62%, 内存: 66.67%, 磁盘: 36.65%, 使用内存: 157422981120 {}
+[2026-03-11 23:15:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 1.62%, 内存: 66.67%, 磁盘: 36.65% {}
+[2026-03-11 23:15:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 23:15:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.35秒 {}
+[2026-03-11 23:15:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 23:15:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:20:00 执行 {}
+[2026-03-11 23:17:23 INF]  应用程序启动中... {}
+[2026-03-11 23:17:23 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:17:23 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:17:24 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:17:24 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:17:24 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:17:24 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:17:24 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:17:24 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:17:24 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:20:00 执行 {}
+[2026-03-11 23:19:12 INF]  应用程序启动中... {}
+[2026-03-11 23:19:13 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:19:13 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:19:13 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:19:13 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:19:13 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:19:13 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:19:13 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:19:13 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:19:13 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:20:00 执行 {}
+[2026-03-11 23:19:31 ERR] Zwav.Application.Workers.AnalysisWorker Analysis failed. guid=7d197752dcb347ca9a9c8728a407cafa, fileId=234 {}
+System.InvalidOperationException: CFG analog channel count = 96 exceeds supported max 70. Storage schema has only 70 analog fields.
+   at Zwav.Application.Parsing.CfgParser.Parse(String cfgText) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\Helper\CfgParser.cs:line 54
+   at Zwav.Application.Workers.AnalysisWorker.ProcessOneAsync(ZwavAnalysisQueueItem item, CancellationToken ct) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 126
+   at Zwav.Application.Workers.AnalysisWorker.ExecuteAsync(CancellationToken stoppingToken) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 62
+[2026-03-11 23:19:54 INF]  应用程序启动中... {}
+[2026-03-11 23:19:55 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:19:55 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:19:55 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:19:56 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:19:56 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:19:56 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:19:56 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:19:56 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:19:56 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:20:00 执行 {}
+[2026-03-11 23:20:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-03-11 23:20:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-03-11 23:20:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-03-11 23:20:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-03-11 23:20:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-03-11 23:20:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 26.42GB, 使用率: 66.67% {}
+[2026-03-11 23:20:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-03-11 23:20:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 146.00GB, 使用率: 36.64% {}
+[2026-03-11 23:20:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 36.64%, 使用内存: 157381390336 {}
+[2026-03-11 23:20:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 36.64% {}
+[2026-03-11 23:20:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-03-11 23:20:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.23秒 {}
+[2026-03-11 23:20:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-03-11 23:20:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:25:00 执行 {}
+[2026-03-11 23:36:03 INF]  应用程序启动中... {}
+[2026-03-11 23:36:03 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:36:03 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:36:03 WRN] Microsoft.EntityFrameworkCore.Model.Validation The 'bool' property 'Enabled' on entity type 'ScheduledTask' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'. {"EventId":{"Id":20601,"Name":"Microsoft.EntityFrameworkCore.Model.Validation.BoolWithDefaultWarning"}}
+[2026-03-11 23:36:04 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {}
+[2026-03-11 23:36:04 INF] Microsoft.Hosting.Lifetime Now listening on: https://localhost:5001 {}
+[2026-03-11 23:36:04 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:36:04 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:36:04 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:36:04 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-11 23:40:00 执行 {}
+[2026-03-11 23:36:40 ERR] Zwav.Application.Workers.AnalysisWorker Analysis failed. guid=bb40626ba601419eb1fb34916bd983da, fileId=236 {}
+System.InvalidOperationException: CFG analog channel count = 96 exceeds supported max 70. Storage schema has only 70 analog fields.
+   at Zwav.Application.Parsing.CfgParser.Parse(String cfgText) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\Helper\CfgParser.cs:line 54
+   at Zwav.Application.Workers.AnalysisWorker.ProcessOneAsync(ZwavAnalysisQueueItem item, CancellationToken ct) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 126
+   at Zwav.Application.Workers.AnalysisWorker.ExecuteAsync(CancellationToken stoppingToken) in D:\github\preferredsummary\api\Preferred.Api\BusinessModule\ZwavAnalysis\AnalysisWorker.cs:line 62
+[2026-03-11 23:56:55 INF]  应用程序启动中... {}
+[2026-03-11 23:56:56 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-03-11 23:56:56 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-03-11 23:56:57 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-03-11 23:56:57 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-03-11 23:56:57 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-03-11 23:56:57 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-03-11 23:56:57 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-03-12 00:00:00 执行 {}
+[2026-03-11 23:57:13 WRN] Microsoft.EntityFrameworkCore.Query The query uses a row limiting operator ('Skip'/'Take') without an 'OrderBy' operator. This may lead to unpredictable results. If the 'Distinct' operator is used after 'OrderBy', then make sure to use the 'OrderBy' operator after 'Distinct' as the ordering would otherwise get erased. {"EventId":{"Id":10102,"Name":"Microsoft.EntityFrameworkCore.Query.RowLimitingOperationWithoutOrderByWarning"},"ActionId":"7301469a-c34a-44f4-b3cd-82958d51ebea","ActionName":"Preferred.Api.Controllers.ZwavAnalysesController.GetListAsync (Preferred.Api)","RequestId":"0HNJVGRDOGI8R:00000006","RequestPath":"/api/ZwavAnalyses","ConnectionId":"0HNJVGRDOGI8R"}
+[2026-03-11 23:57:13 WRN] Microsoft.EntityFrameworkCore.Query The query uses a row limiting operator ('Skip'/'Take') without an 'OrderBy' operator. This may lead to unpredictable results. If the 'Distinct' operator is used after 'OrderBy', then make sure to use the 'OrderBy' operator after 'Distinct' as the ordering would otherwise get erased. {"EventId":{"Id":10102,"Name":"Microsoft.EntityFrameworkCore.Query.RowLimitingOperationWithoutOrderByWarning"},"ActionId":"7301469a-c34a-44f4-b3cd-82958d51ebea","ActionName":"Preferred.Api.Controllers.ZwavAnalysesController.GetListAsync (Preferred.Api)","RequestId":"0HNJVGRDOGI8R:00000006","RequestPath":"/api/ZwavAnalyses","ConnectionId":"0HNJVGRDOGI8R"}

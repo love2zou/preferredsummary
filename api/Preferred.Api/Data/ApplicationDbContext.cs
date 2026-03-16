@@ -30,6 +30,12 @@ namespace Preferred.Api.Data
         public DbSet<ZwavHdr> ZwavHdrs { get; set; }
         public DbSet<ZwavData> ZwavDatas { get; set; }
         // ====================== ZWAV 录波分析表映射 - End ======================
+        // ====================== ZWAV 电压暂降分析表映射- Start======================
+        public DbSet<ZwavSagEvent> ZwavSagEvents { get; set; }
+        public DbSet<ZwavSagEventPhase> ZwavSagEventPhases { get; set; }
+        public DbSet<ZwavSagRmsPoint> ZwavSagRmsPoints { get; set; }
+        public DbSet<ZwavSagChannelRule> ZwavSagChannelRules { get; set; }
+        // ====================== ZWAV 电压暂降分析表映射 - End ======================
 
         // ====================== 视频分析表映射- Start======================
         public DbSet<VideoAnalysisJob> VideoAnalysisJobs { get; set; }
@@ -507,7 +513,252 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
             });
-            
+
+            // ====================== ZWAV 电压暂降分析表映射 ======================
+            modelBuilder.Entity<ZwavSagEvent>(entity =>
+            {
+                entity.ToTable("Tb_ZwavSagEvent");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisId).IsRequired();
+
+                entity.Property(e => e.EventType)
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasComment("事件类型（Sag=电压暂降，Interruption=短时中断）");
+
+                entity.Property(e => e.StartTimeUtc).IsRequired();
+                entity.Property(e => e.EndTimeUtc).IsRequired();
+                entity.Property(e => e.OccurTimeUtc).IsRequired();
+
+                entity.Property(e => e.DurationMs)
+                    .HasColumnType("decimal(12,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.TriggerPhase)
+                    .HasMaxLength(16)
+                    .HasComment("触发事件相别（首个越过阈值的相，如A/B/C/AB/BC/CA）");
+
+                entity.Property(e => e.EndPhase)
+                    .HasMaxLength(16)
+                    .HasComment("事件终止相别（最后恢复的相，如A/B/C/AB/BC/CA）");
+
+                entity.Property(e => e.WorstPhase)
+                    .HasMaxLength(16)
+                    .HasComment("最严重相别（按最小残余电压或最大暂降百分比确定）");
+
+                entity.Property(e => e.ReferenceType)
+                    .IsRequired()
+                    .HasMaxLength(32)
+                    .HasComment("参考电压类型（Declared=公称输入电压，Sliding=滑动参考电压）");
+
+                entity.Property(e => e.ReferenceVoltage)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.ResidualVoltage)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.ResidualVoltagePct)
+                    .HasColumnType("decimal(10,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.SagDepth)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.SagPercent)
+                    .HasColumnType("decimal(10,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.PhaseJumpDeg)
+                    .HasColumnType("decimal(12,6)");
+
+                entity.Property(e => e.StartAngleDeg)
+                    .HasColumnType("decimal(12,6)");
+
+                entity.Property(e => e.SagThresholdPct)
+                    .HasColumnType("decimal(10,3)");
+
+                entity.Property(e => e.InterruptThresholdPct)
+                    .HasColumnType("decimal(10,3)");
+
+                entity.Property(e => e.HysteresisPct)
+                    .HasColumnType("decimal(10,3)");
+
+                entity.Property(e => e.IsMergedStatEvent)
+                    .IsRequired()
+                    .HasDefaultValue(false);
+
+                entity.Property(e => e.MergeGroupId)
+                    .HasMaxLength(64);
+
+                entity.Property(e => e.RawEventCount)
+                    .IsRequired()
+                    .HasDefaultValue(1);
+
+                entity.Property(e => e.SeqNo)
+                    .IsRequired()
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.Remark)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+            });
+
+            modelBuilder.Entity<ZwavSagEventPhase>(entity =>
+            {
+                entity.ToTable("Tb_ZwavSagEventPhase");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.SagEventId).IsRequired();
+                entity.Property(e => e.AnalysisId).IsRequired();
+
+                entity.Property(e => e.Phase)
+                    .IsRequired()
+                    .HasColumnName("PHASE")
+                    .HasMaxLength(16)
+                    .HasComment("相别（A/B/C/AB/BC/CA）");
+
+                entity.Property(e => e.StartTimeUtc).IsRequired();
+                entity.Property(e => e.EndTimeUtc).IsRequired();
+
+                entity.Property(e => e.DurationMs)
+                    .HasColumnType("decimal(12,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.ReferenceType)
+                    .IsRequired()
+                    .HasMaxLength(32);
+
+                entity.Property(e => e.ReferenceVoltage)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.ResidualVoltage)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.ResidualVoltagePct)
+                    .HasColumnType("decimal(10,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.SagDepth)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.SagPercent)
+                    .HasColumnType("decimal(10,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.SagThresholdPct)
+                    .HasColumnType("decimal(10,3)");
+
+                entity.Property(e => e.InterruptThresholdPct)
+                    .HasColumnType("decimal(10,3)");
+
+                entity.Property(e => e.HysteresisPct)
+                    .HasColumnType("decimal(10,3)");
+
+                entity.Property(e => e.StartAngleDeg)
+                    .HasColumnType("decimal(12,6)");
+
+                entity.Property(e => e.PhaseJumpDeg)
+                    .HasColumnType("decimal(12,6)");
+
+                entity.Property(e => e.IsTriggerPhase)
+                    .IsRequired()
+                    .HasDefaultValue(false);
+
+                entity.Property(e => e.IsEndPhase)
+                    .IsRequired()
+                    .HasDefaultValue(false);
+
+                entity.Property(e => e.IsWorstPhase)
+                    .IsRequired()
+                    .HasDefaultValue(false);
+
+                entity.Property(e => e.SeqNo)
+                    .IsRequired()
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.Remark)
+                    .HasMaxLength(500);
+
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+            });
+
+            modelBuilder.Entity<ZwavSagRmsPoint>(entity =>
+            {
+                entity.ToTable("Tb_ZwavSagRmsPoint");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.ChannelIndex).IsRequired();
+
+                entity.Property(e => e.Phase)
+                    .HasColumnName("PHASE")
+                    .HasMaxLength(16)
+                    .HasComment("相别");
+
+                entity.Property(e => e.SampleNo).IsRequired();
+
+                entity.Property(e => e.TimeMs)
+                    .HasColumnType("DOUBLE")
+                    .IsRequired();
+
+                entity.Property(e => e.Rms)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.RmsPct)
+                    .HasColumnType("decimal(10,3)")
+                    .IsRequired();
+
+                entity.Property(e => e.ReferenceVoltage)
+                    .HasColumnType("decimal(18,6)")
+                    .IsRequired();
+
+                entity.Property(e => e.SeqNo)
+                    .IsRequired()
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+            });
+            // 电压暂降通道词库规则表
+            modelBuilder.Entity<ZwavSagChannelRule>(entity =>
+            {
+                entity.ToTable("Tb_ZwavSagChannelRule");
+
+                entity.HasKey(e => e.Id);
+
+                entity.Property(e => e.RuleName)
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasComment("通道关键词，如A相电压、UA等");
+
+                entity.Property(e => e.SeqNo)
+                    .HasDefaultValue(0)
+                    .HasComment("排序号");
+
+                entity.Property(e => e.CrtTime)
+                    .HasComment("创建时间");
+
+                entity.Property(e => e.UpdTime)
+                    .HasComment("最后修改时间");
+                    
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+            });   
             // ====================== 视频分析表映射 ======================
             modelBuilder.Entity<VideoAnalysisJob>(entity =>
             {

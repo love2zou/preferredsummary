@@ -1,0 +1,1470 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>COMTRADE (.ZWAV) 解析 + 波形展示（增强版·全通道）</title>
+<link rel="preconnect" href="https://unpkg.com">
+<style>
+  :root {
+    --bg:#0f172a; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb;
+    --brand:#22d3ee; --ok:#86efac; --warn:#fde68a; --err:#fca5a5;
+    --card:#0b1220; --border:#1f2937;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:24px;
+    background:
+      radial-gradient(1200px 600px at 10% 0%, #0b1220 0%, var(--bg) 60%),
+      radial-gradient(900px 400px at 100% 0%, #06121a 0% ,transparent 60%);
+    color:var(--text);
+    font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"PingFang SC","Microsoft YaHei","Noto Sans CJK",Arial
+  }
+  h1{font-size:22px;margin:0 0 16px;display:flex;align-items:center;gap:10px}
+  .pill{font-size:12px;padding:2px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted)}
+  .row{display:grid;gap:16px;grid-template-columns:1.2fr 2fr}
+  .card{
+    background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,0));
+    border:1px solid var(--border);border-radius:16px;
+    padding:16px;box-shadow:0 20px 40px rgba(0,0,0,.25)
+  }
+  .card h2{margin:0 0 10px;font-size:16px;color:#dbeafe}
+  .card h3{margin:16px 0 8px;font-size:14px;color:#c7d2fe}
+  .meta{font-size:13px;color:var(--muted);line-height:1.5}
+  .grid{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kv{border:1px dashed var(--border);border-radius:12px;padding:10px;background:rgba(255,255,255,.02)}
+  .k{font-size:12px;color:#a5b4fc}
+  .v{font-size:14px;margin-top:4px;word-break:break-all}
+  .uploader{
+    display:flex;gap:12px;align-items:center;flex-wrap:wrap;
+    border:1px dashed var(--border);padding:12px;border-radius:12px;
+    background:rgba(255,255,255,.03)
+  }
+  input[type=file]{display:none}
+  .btn{
+    background:linear-gradient(90deg,#0ea5e9,#22d3ee);
+    border:none;color:#052b33;font-weight:700;
+    padding:10px 14px;border-radius:12px;cursor:pointer
+  }
+  .btn.secondary{background:transparent;color:var(--text);border:1px solid var(--border)}
+  .btn.small{padding:6px 10px;font-weight:600}
+  .tag{
+    font-size:12px;color:#93c5fd;background:rgba(147,197,253,.12);
+    padding:2px 8px;border-radius:999px;border:1px solid rgba(147,197,253,.25)
+  }
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace}
+  table{width:100%;border-collapse:collapse}
+  th,td{
+    border-bottom:1px solid var(--border);
+    padding:8px 10px;
+    text-align:right;
+    font-size:13px
+  }
+  th{color:#cbd5e1;text-align:center}
+  td:first-child,th:first-child{text-align:center}
+  /* HDR 5 部分的表格全部居中 */
+  .hdr-table th,
+  .hdr-table td{
+    text-align:center;
+  }
+  .ok{color:var(--ok)} .err{color:var(--err)}
+  .sp{height:10px}
+  .flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .hint{font-size:12px;color:#9ca3af}
+  .code{
+    background:#0a0f1a;border:1px solid var(--border);
+    padding:10px;border-radius:10px;overflow:auto;
+    font-size:12px;max-height:260px;white-space:pre;
+  }
+
+  /* Wave */
+  .wave-wrap{display:grid;grid-template-columns:1fr 300px;gap:12px}
+  @media (max-width:1000px){
+    .row{grid-template-columns:1fr}
+    .wave-wrap{grid-template-columns:1fr}
+  }
+  .wave-tool{
+    border:1px dashed var(--border);border-radius:12px;
+    padding:10px;background:rgba(255,255,255,.02)
+  }
+  .tool-row{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    flex-wrap:wrap;
+    margin-bottom:8px
+  }
+  .chk{display:flex;gap:6px;align-items:center;font-size:12px;color:#b6c2d9}
+  .num{
+    width:100px;background:transparent;color:var(--text);
+    border:1px solid var(--border);border-radius:8px;padding:6px 8px
+  }
+  canvas.wave{
+    width:100%;height:360px;background:#0a0f1a;
+    border:1px solid #1f2937;border-radius:8px;display:block
+  }
+  .legend{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    font-size:12px;
+    color:#cbd5e1;
+    margin-top:6px;
+    flex-wrap:wrap;
+  }
+  .legend-channels{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .lg{
+    display:inline-flex;
+    align-items:center;
+    gap:4px;
+  }
+  .lg::before{
+    content:"";
+    display:inline-block;
+    width:10px;
+    height:10px;
+    margin-right:2px;
+    border-radius:2px;
+    vertical-align:-1px;
+    background:var(--ch-color,#60a5fa);
+  }
+  .cursor{font-size:12px;color:#cbd5e1;margin-left:auto}
+  .stats{
+    margin-top:8px;border:1px dashed var(--border);
+    border-radius:8px;padding:8px;font-size:12px;color:#cbd5e1
+  }
+  .stats table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  .stats th,.stats td{
+    border-bottom:1px solid var(--border);
+    padding:4px 6px;
+    font-size:12px;
+    text-align:center;
+  }
+  .stat-k{color:#94a3b8}
+  .tooltip{
+    position:absolute;pointer-events:none;background:#111827;
+    border:1px solid #1f2937;border-radius:6px;
+    padding:6px 8px;font-size:12px;color:#e5e7eb;
+    box-shadow:0 10px 20px rgba(0,0,0,.35)
+  }
+  .rel{position:relative}
+  details summary{cursor:pointer;color:#cbd5e1;font-size:13px}
+  details{margin-top:6px}
+
+  /* Tabs for CFG / HDR */
+  .tabs{display:flex;gap:8px;margin-bottom:8px;border-bottom:1px solid var(--border)}
+  .tab{
+    border:none;background:transparent;color:var(--muted);
+    padding:6px 12px;cursor:pointer;font-size:13px;border-bottom:2px solid transparent
+  }
+  .tab.active{color:#e5e7eb;border-bottom-color:var(--brand)}
+  .tab-panel{display:none}
+  .tab-panel.active{display:block}
+
+  /* 通道列表 */
+  #channelList{
+    flex-direction:column;
+    align-items:flex-start;
+    max-height:220px;
+    overflow:auto;
+  }
+  #channelList .chk{
+    width:100%;
+    justify-content:flex-start;
+  }
+  #channelList .ch-label{
+    border-left:3px solid transparent;
+    padding-left:6px;
+  }
+</style>
+</head>
+<body>
+  <h1>COMTRADE / ZWAV 解析预览 <span class="pill">纯前端 · 无需后端</span></h1>
+
+  <div class="row">
+    <div class="card">
+      <h2>1) 选择 .ZWAV 文件</h2>
+      <div class="uploader">
+        <label for="fileInput" class="btn">选择 .ZWAV</label>
+        <input type="file" id="fileInput" accept=".ZWAV,.zwav,.zip">
+        <span id="fileName" class="meta">尚未选择文件</span>
+        <button id="demoBtn" class="btn secondary small">查看使用提示</button>
+      </div>
+      <div class="sp"></div>
+      <div class="meta">
+        说明：本页在浏览器内存中解压 .ZWAV，解析
+        <span class="tag">.cfg</span>、
+        <span class="tag">.dat</span>、
+        <span class="tag">.hdr</span>，
+        并展示表格与波形。
+      </div>
+      <div class="sp"></div>
+      <pre id="log" class="code mono" style="display:none;"></pre>
+    </div>
+
+    <div class="card">
+      <h2>2) 概览</h2>
+      <div class="grid">
+        <div class="kv"><div class="k">站/装置/标准</div><div class="v" id="basic1">—</div></div>
+        <div class="kv"><div class="k">通道数</div><div class="v" id="basic2">—</div></div>
+        <div class="kv"><div class="k">采样段</div><div class="v" id="basic3">—</div></div>
+        <div class="kv"><div class="k">起始/触发</div><div class="v" id="basic4">—</div></div>
+        <div class="kv"><div class="k">数据文件</div><div class="v" id="basic5">—</div></div>
+        <div class="kv"><div class="k">解析状态</div><div class="v" id="basic6">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sp"></div>
+
+  <div class="row">
+    <div class="card">
+      <h2>3) CFG / HDR 详情</h2>
+      <div class="tabs">
+        <button class="tab active" data-tab="cfgTab">CFG 文件解析</button>
+        <button class="tab" data-tab="hdrTab">HDR 文件解析</button>
+      </div>
+      <div class="tab-panels">
+        <!-- CFG -->
+        <div id="cfgTab" class="tab-panel active">
+          <h3>CFG 摘要</h3>
+          <div id="cfgSummary" class="meta">—</div>
+          <details style="margin-top:8px">
+            <summary>展开查看 .cfg 原文</summary>
+            <pre id="cfgRaw" class="code mono" style="display:block;max-height:220px;"></pre>
+          </details>
+        </div>
+
+        <!-- HDR -->
+        <div id="hdrTab" class="tab-panel">
+          <h3>HDR 摘要</h3>
+          <div id="hdrSummary" class="meta">—</div>
+
+          <!-- 设备参数信息 -->
+          <details open>
+            <summary>设备参数信息（DeviceInfo）</summary>
+            <div id="hdrDeviceInfo" class="meta">—</div>
+          </details>
+
+          <!-- 保护动作 TripInfo -->
+          <details>
+            <summary>保护动作（FaultStartTime / FaultKeepingTime / TripInfo）</summary>
+            <div class="meta" id="hdrFaultStart">故障开始时间：—；故障持续时间：—</div>
+            <div id="hdrTripInfo" class="meta" style="margin-top:4px;">—</div>
+          </details>
+
+          <!-- 启动时切换状态 DigitalStatus -->
+          <details>
+            <summary>启动时切换状态（DigitalStatus）</summary>
+            <div id="hdrDigitalStatus" class="meta">—</div>
+          </details>
+
+          <!-- 启动后变化信息 DigitalEvent -->
+          <details>
+            <summary>启动后变化信息（DigitalEvent）</summary>
+            <div id="hdrDigitalEvent" class="meta">—</div>
+          </details>
+
+          <!-- 设备设置 SettingValue -->
+          <details>
+            <summary>设备设置（SettingValue）</summary>
+            <div id="hdrSettingValue" class="meta">—</div>
+          </details>
+
+          <details style="margin-top:8px">
+            <summary>展开查看 .hdr 原文</summary>
+            <pre id="hdrRaw" class="code mono" style="display:block;max-height:260px;"></pre>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>4) DAT 数据（前三个模拟量）</h2>
+      <div class="flex">
+        <div class="hint">显示前</div>
+        <input id="sampleCount" type="number" value="514" min="10" max="200000" class="num">
+        <div class="hint">个样本</div>
+        <button id="refreshBtn" class="btn secondary small">刷新表格</button>
+        <button id="downloadCsv" class="btn small">导出 CSV</button>
+      </div>
+      <div class="sp"></div>
+      <div id="tableWrap" style="overflow:auto; max-height:280px;">
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>时标(raw)</th>
+              <th>A相电流(A)</th>
+              <th>B相电流(A)</th>
+              <th>C相电流(A)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5" class="meta">—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="meta" style="margin-top:6px;">注：物理值计算 <span class="mono">value = a * raw + b</span>。</div>
+    </div>
+  </div>
+
+  <div class="sp"></div>
+
+  <div class="card rel">
+    <h2>5) 波形展示（全部模拟通道 + 中文名称）</h2>
+    <div class="wave-wrap">
+      <div>
+        <canvas id="wave" class="wave" width="1200" height="360"></canvas>
+        <div class="legend">
+          <div id="legendChannels" class="legend-channels"></div>
+          <div class="cursor" id="cursorText">—</div>
+        </div>
+        <div class="stats" id="statsBox" style="display:none;"></div>
+        <div id="tooltip" class="tooltip" style="display:none;"></div>
+      </div>
+      <div class="wave-tool">
+        <div class="tool-row" id="channelList">
+          <!-- 动态填充通道勾选，显示中文名称 -->
+        </div>
+        <div class="tool-row">
+          <label class="chk"><input type="checkbox" id="chkLockY"> 锁定纵轴</label>
+          <label class="chk"><input type="checkbox" id="chkGrid" checked> 显示网格</label>
+          <label class="chk"><input type="checkbox" id="chkAntialias" checked> 抗锯齿</label>
+        </div>
+        <div class="tool-row">
+          <span class="hint">水平范围（样本）</span>
+          <input id="rangeStart" type="number" class="num" value="0" min="0">
+          <span class="hint">~</span>
+          <input id="rangeEnd" type="number" class="num" value="514" min="1">
+          <button id="btnApplyRange" class="btn secondary small">应用</button>
+          <button id="btnReset" class="btn secondary small">重置视图</button>
+        </div>
+        <div class="tool-row">
+          <button id="btnPng" class="btn small">导出 PNG</button>
+        </div>
+        <div class="meta">交互：滚轮缩放（以指针为中心）；拖动平移；双击复位；悬停显示十字光标与坐标；右侧可勾选任意通道，图例展示中文名称。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JSZip for unzip -->
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script>
+    // ---------- DOM refs ----------
+    const els = {
+      file: document.getElementById('fileInput'),
+      name: document.getElementById('fileName'),
+      log: document.getElementById('log'),
+      basic1: document.getElementById('basic1'),
+      basic2: document.getElementById('basic2'),
+      basic3: document.getElementById('basic3'),
+      basic4: document.getElementById('basic4'),
+      basic5: document.getElementById('basic5'),
+      basic6: document.getElementById('basic6'),
+      cfgSummary: document.getElementById('cfgSummary'),
+      hdrSummary: document.getElementById('hdrSummary'),
+      cfgRaw: document.getElementById('cfgRaw'),
+      hdrRaw: document.getElementById('hdrRaw'),
+      hdrDeviceInfo: document.getElementById('hdrDeviceInfo'),
+      hdrFaultStart: document.getElementById('hdrFaultStart'),
+      hdrTripInfo: document.getElementById('hdrTripInfo'),
+      hdrDigitalStatus: document.getElementById('hdrDigitalStatus'),
+      hdrDigitalEvent: document.getElementById('hdrDigitalEvent'),
+      hdrSettingValue: document.getElementById('hdrSettingValue'),
+      dataTbody: document.getElementById('dataTable').querySelector('tbody'),
+      sampleCount: document.getElementById('sampleCount'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      downloadCsv: document.getElementById('downloadCsv'),
+      wave: document.getElementById('wave'),
+      chkLockY: document.getElementById('chkLockY'),
+      chkGrid: document.getElementById('chkGrid'),
+      chkAA: document.getElementById('chkAntialias'),
+      rangeStart: document.getElementById('rangeStart'),
+      rangeEnd: document.getElementById('rangeEnd'),
+      btnApplyRange: document.getElementById('btnApplyRange'),
+      btnReset: document.getElementById('btnReset'),
+      btnPng: document.getElementById('btnPng'),
+      cursorText: document.getElementById('cursorText'),
+      statsBox: document.getElementById('statsBox'),
+      tooltip: document.getElementById('tooltip'),
+      demoBtn: document.getElementById('demoBtn'),
+      channelList: document.getElementById('channelList'),
+      legendChannels: document.getElementById('legendChannels')
+    };
+
+    // ---------- State ----------
+    let state = {
+      zipName:'',
+      cfgText:'',
+      hdrText:'',
+      datBuf:null,
+      cfg:null,
+      totalRecords:0,
+      recordSize:0,
+      digitalWords:0,
+      tableRows:[],
+      wave: { t:[], channels:[], meta:[] },
+      view: { x0:0, x1:0, yLock:false, yMin:-1, yMax:1 },
+      hover: { active:false, x:0, y:0, idx:0 }
+    };
+
+    function logMsg(s){
+      els.log.style.display='block';
+      els.log.textContent += s + '\n';
+    }
+    function resetUI(){
+      [
+        els.basic1,els.basic2,els.basic3,els.basic4,els.basic5,els.basic6,
+        els.cfgSummary,els.hdrSummary,
+        els.hdrDeviceInfo,els.hdrFaultStart,els.hdrTripInfo,
+        els.hdrDigitalStatus,els.hdrDigitalEvent,els.hdrSettingValue
+      ].forEach(e=>e.textContent='—');
+      els.cfgRaw.textContent = '';
+      els.hdrRaw.textContent = '';
+      els.dataTbody.innerHTML='<tr><td colspan="5" class="meta">—</td></tr>';
+      els.log.style.display='none';
+      els.log.textContent='';
+      state.wave={t:[],channels:[],meta:[]};
+      state.view={x0:0,x1:0,yLock:false,yMin:-1,yMax:1};
+      els.channelList.innerHTML='';
+      els.legendChannels.innerHTML='';
+      els.statsBox.style.display='none';
+      drawWave();
+      updateStats();
+    }
+
+    // ---------- decode helpers ----------
+    function isLikelyText(text,want){
+      const lines=text.split('\n');
+      return want==='cfg'
+        ? (text.includes(',') && lines.length>=6)
+        : lines.length>=1;
+    }
+
+    function isValidXml(text){
+      try{
+        const xml = new DOMParser().parseFromString(text,"application/xml");
+        return !xml.getElementsByTagName("parsererror").length && !!xml.documentElement;
+      }catch{
+        return false;
+      }
+    }
+
+    // 根据 BOM / XML 声明智能检测编码
+    function detectXmlEncoding(u8){
+      if(u8.length >= 3 && u8[0]===0xEF && u8[1]===0xBB && u8[2]===0xBF) return 'utf-8';
+      if(u8.length >= 2 && u8[0]===0xFE && u8[1]===0xFF) return 'utf-16be';
+      if(u8.length >= 2 && u8[0]===0xFF && u8[1]===0xFE) return 'utf-16le';
+
+      const ascii = Array.from(u8.slice(0, 256)).map(b => String.fromCharCode(b)).join('');
+      const m = ascii.match(/encoding=["']([^"']+)["']/i);
+      if(m){
+        let enc = m[1].trim().toLowerCase();
+        if(enc === 'gb2312') enc = 'gb18030';
+        if(enc === 'gbk') enc = 'gbk';
+        if(enc === 'utf8') enc = 'utf-8';
+        if(enc === 'unicode') enc = 'utf-16le';
+        if(enc === 'utf-16') enc = 'utf-16le';
+        return enc;
+      }
+      return null;
+    }
+
+    async function decodeWithFallbacks(arrayBuffer, want='cfg'){
+      const u8 = new Uint8Array(arrayBuffer);
+
+      // HDR：优先根据 BOM / XML 声明解一次
+      if (want === 'hdr') {
+        const encFromXml = detectXmlEncoding(u8);
+        if(encFromXml){
+          try{
+            const dec = new TextDecoder(encFromXml,{fatal:false});
+            const t = dec.decode(u8).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+            if(isValidXml(t)){
+              return t;
+            }
+          }catch{}
+        }
+      }
+
+      // 通用编码尝试列表
+      const tryList = ['utf-8','utf-16le','utf-16be','gb18030','gbk'];
+      let bestText = '';
+      let bestScore = -Infinity;
+
+      for (const enc of tryList){
+        try{
+          const dec = new TextDecoder(enc,{fatal:false});
+          const t = dec.decode(u8).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+          if (!isLikelyText(t,want)) continue;
+
+          const badCount = (t.match(/\uFFFD/g) || []).length;
+          const cjkCount = (t.match(/[\u4e00-\u9fa5]/g) || []).length;
+          const xmlBonus = (want === 'hdr' && isValidXml(t)) ? 80 : 0;
+          const score = -badCount * 15 + cjkCount + xmlBonus;
+
+          if (score > bestScore){
+            bestScore = score;
+            bestText = t;
+          }
+        }catch{}
+      }
+
+      if (bestScore > -Infinity){
+        return bestText;
+      }
+
+      // 最后兜底
+      try{
+        return new TextDecoder('utf-8').decode(u8).replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+      }catch{
+        let s = '';
+        for (let i=0;i<u8.length;i++) s += String.fromCharCode(u8[i]);
+        return s;
+      }
+    }
+
+    // ---------- CFG 解析 ----------
+    function parseCfg(text) {
+      const rawLines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+      const lines = rawLines.map(s => s.trim());
+      if (lines.length < 6) throw new Error('CFG 行数过少（疑似编码问题或内容不完整）');
+
+      const first = (lines[0]||'').split(',');
+      const station_name = (first[0]||'').trim();
+      const device_id = (first[1]||'').trim();
+      const rev_year = (first[2]||'').trim();
+
+      const l2 = (lines[1]||'').split(',');
+      let total = parseInt(l2[0]);
+      let aCount = 0, dCount = 0;
+      for (let i=1;i<l2.length;i++){
+        const s = l2[i]||'';
+        const mA = s.match(/(\d+)A/i);
+        const mD = s.match(/(\d+)D/i);
+        if (mA) aCount = parseInt(mA[1]);
+        if (mD) dCount = parseInt(mD[1]);
+      }
+
+      const analogs = [];
+      let idx = 2;
+      for (let i=0;i<aCount;i++, idx++){
+        const parts = (lines[idx]||'').split(',').map(s=>s.trim());
+        const ai = {
+          index: parseInt(parts[0]||`${i+1}`),
+          name: parts[1] || '',
+          phase: parts[2] || '',
+          unit: parts[4] || '',
+          a: parseFloat(parts[5] || '1'),
+          b: parseFloat(parts[6] || '0'),
+          skew: parseFloat(parts[7] || '0'),
+          min: parseFloat(parts[8] || '0'),
+          max: parseFloat(parts[9] || '0'),
+        };
+        analogs.push(ai);
+      }
+      idx += dCount;
+
+      const nominalFreq = parseFloat(lines[idx++]||'50');
+      const nsamp = parseInt(lines[idx++]||'1');
+      const sampleRates = [];
+      for (let i=0;i<nsamp;i++, idx++){
+        const [rateStr, endStr] = ((lines[idx]||'')+'').split(',').map(s=>s.trim());
+        sampleRates.push({ rate: parseFloat(rateStr||'0'), endsAt: parseInt(endStr||'0') });
+      }
+      const startTime = (lines[idx++]||'').trim();
+      const triggerTime = (lines[idx++]||'').trim();
+
+      const typeLine = ((lines[idx]||'')+'').toUpperCase();
+      const isBinary = typeLine.includes('BINARY');
+      const timeMulLine = lines[idx+1] || '';
+      const timeMul = parseInt(timeMulLine) || 1;
+
+      return {
+        station_name, device_id, rev_year,
+        total, aCount, dCount,
+        analogs, nominalFreq, nsamp, sampleRates,
+        startTime, triggerTime, isBinary, timeMul
+      };
+    }
+
+    // ---------- HDR 解析（5 部分） ----------
+    function parseHdr(text){
+      try{
+        const xml=new DOMParser().parseFromString(text,"application/xml");
+        if(xml.getElementsByTagName('parsererror').length) return null;
+
+        const getFirst = tagName => {
+          const el = xml.getElementsByTagName(tagName)[0];
+          return el ? (el.textContent||'').trim() : '';
+        };
+
+        function getByLocalName(name){
+          const all = xml.getElementsByTagName('*');
+          const res=[];
+          for(let i=0;i<all.length;i++){
+            if(all[i].localName===name) res.push(all[i]);
+          }
+          return res;
+        }
+        function val(el,key){
+          const attr = el.getAttribute(key);
+          if(attr!=null) return attr.trim();
+          const lower = el.getElementsByTagName(key)[0];
+          const upper = el.getElementsByTagName(key.charAt(0).toUpperCase()+key.slice(1))[0];
+          const node = lower || upper;
+          return node ? (node.textContent||'').trim() : '';
+        }
+
+        // (1) DeviceInfo
+        const deviceParams = getByLocalName('DeviceInfo').map(el=>({
+          name: val(el,'name'),
+          value: val(el,'value')
+        }));
+
+        // (2) FaultStartTime + FaultKeepingTime + TripInfo
+        const faultStartTime = getFirst('FaultStartTime') ||
+                               getFirst('FaultStartTimeStr') ||
+                               '';
+        const faultKeepingTime = getFirst('FaultKeepingTime') ||
+                                 getFirst('FaultDuration') ||
+                                 '';
+        const tripInfos = getByLocalName('TripInfo').map(el=>({
+          time:  val(el,'time'),
+          name:  val(el,'name'),
+          phase: val(el,'phase'),
+          value: val(el,'value')
+        }));
+
+        // (3) DigitalStatus
+        const digitalStatus = getByLocalName('DigitalStatus').map(el=>({
+          name:  val(el,'name'),
+          value: val(el,'value')
+        }));
+
+        // (4) DigitalEvent
+        const digitalEvents = getByLocalName('DigitalEvent').map(el=>({
+          time:  val(el,'time'),
+          name:  val(el,'name'),
+          value: val(el,'value')
+        }));
+
+        // (5) SettingValue
+        const settings = getByLocalName('SettingValue').map(el=>({
+          name:  val(el,'name'),
+          value: val(el,'value'),
+          unit:  val(el,'unit')
+        }));
+
+        return {
+          Manufacturer: getFirst('Manufacturer') || getFirst('制造厂家') || '',
+          StationName:  getFirst('StationName')  || getFirst('厂站名称') || '',
+          DeviceName:   getFirst('DeviceName')   || getFirst('装置名称') || '',
+          DeviceType:   getFirst('DeviceType')   || getFirst('装置型号') || '',
+          Instance:     getFirst('InstanceName') || getFirst('实例名称') || '',
+          Version:      getFirst('ProgramVersion') || getFirst('程序版本') || '',
+          faultStartTime,
+          faultKeepingTime,
+          deviceParams,
+          tripInfos,
+          digitalStatus,
+          digitalEvents,
+          settings
+        };
+      }catch{
+        return null;
+      }
+    }
+
+    // ---------- DAT ----------
+    function inspectDat(buf,A,D){
+      const dvWords=Math.ceil(D/16);
+      const recordSize=4+4+(A*2)+(dvWords*2);
+      const totalRecords=Math.floor(buf.byteLength/recordSize);
+      return { dvWords, recordSize, totalRecords };
+    }
+
+    // 用于表格（仍然只取前三个模拟量展示详细数值）
+    function parseDatFirst3(buf,cfg,N=20){
+      const { dvWords, recordSize, totalRecords }=inspectDat(buf,cfg.aCount,cfg.dCount);
+      const bytes=new DataView(buf);
+      const take=Math.min(N,totalRecords);
+      const rows=[];
+      let offset=0;
+      for(let i=0;i<take;i++){
+        const sampleNo=bytes.getInt32(offset,true); offset+=4;
+        const timeRaw =bytes.getInt32(offset,true); offset+=4;
+        const out=[];
+        for(let k=0;k<Math.min(3,cfg.aCount);k++){
+          const raw=bytes.getInt16(offset+k*2,true);
+          const a=cfg.analogs[k]?.a??1;
+          const b=cfg.analogs[k]?.b??0;
+          out.push(a*raw+b);
+        }
+        offset += cfg.aCount*2;
+        offset += dvWords*2;
+        rows.push({ idx:i+1, timeRaw, A:out[0]??null, B:out[1]??null, C:out[2]??null });
+      }
+      return { rows, dvWords, recordSize, totalRecords };
+    }
+
+    // 解析全部模拟通道用于波形
+    function parseDatAllChannels(buf,cfg,maxSamples){
+      const { dvWords, recordSize, totalRecords } = inspectDat(buf,cfg.aCount,cfg.dCount);
+      const bytes = new DataView(buf);
+      const take = Math.min(maxSamples,totalRecords);
+      const t = new Array(take);
+      const channels = Array.from({length:cfg.aCount}, ()=> new Array(take));
+      let offset = 0;
+      for(let i=0;i<take;i++){
+        const sampleNo = bytes.getInt32(offset,true); offset+=4;
+        const timeRaw  = bytes.getInt32(offset,true); offset+=4;
+        t[i] = timeRaw;
+        for(let k=0;k<cfg.aCount;k++){
+          const raw = bytes.getInt16(offset + k*2,true);
+          const a = cfg.analogs[k]?.a ?? 1;
+          const b = cfg.analogs[k]?.b ?? 0;
+          channels[k][i] = a*raw + b;
+        }
+        offset += cfg.aCount*2;
+        offset += dvWords*2;
+      }
+      return { t, channels, totalRecords, recordSize, dvWords };
+    }
+
+    // ---------- UI helpers ----------
+    function fillOverview(cfg,hdr,zipName){
+      els.basic1.innerHTML =
+        `<span class="mono">${cfg.station_name||'—'}</span> ／ `+
+        `<span class="mono">${cfg.device_id||'—'}</span> ／ `+
+        `<span class="mono">COMTRADE ${cfg.rev_year||'1999'}</span>`;
+      els.basic2.textContent = `${cfg.total} = ${cfg.aCount}A + ${cfg.dCount}D`;
+      els.basic3.textContent = cfg.sampleRates.map(s=>`${s.rate}Hz（至 ${s.endsAt}）`).join('； ');
+      els.basic4.textContent = `Start: ${cfg.startTime}； Trigger: ${cfg.triggerTime}`;
+      els.basic5.innerHTML = `<span class="tag">${zipName}</span> · 格式：<b>${cfg.isBinary?'BINARY':'ASCII'}</b>`;
+      els.basic6.innerHTML = `<span class="ok">已解析</span>`;
+    }
+    function fillCfgSummary(cfg){
+      const first3 = cfg.analogs.slice(0,3)
+        .map((a,i)=>`${i+1}.${a.name}（${a.unit||'?'}） a=${a.a} b=${a.b}`)
+        .join('； ');
+      els.cfgSummary.innerHTML =
+        `额定频率：<b>${cfg.nominalFreq} Hz</b>； 采样段数：<b>${cfg.nsamp}</b><br>`+
+        `前三路：${first3||'—'}； 时间倍率：<span class="mono">${cfg.timeMul}</span>`;
+    }
+    function fillHdrSummary(hdr){
+      if(!hdr){
+        els.hdrSummary.textContent='HDR 解析失败或不是 XML';
+        els.hdrFaultStart.textContent='故障开始时间：—；故障持续时间：—';
+        return;
+      }
+      els.hdrSummary.innerHTML =
+        `厂家：<b>${hdr.Manufacturer||'—'}</b>； 装置：<b>${hdr.DeviceName||'—'}</b>（${hdr.DeviceType||'—'}）<br>`+
+        `站名：${hdr.StationName||'—'}； 实例：${hdr.Instance||'—'}； 版本：${hdr.Version||'—'}`;
+      els.hdrFaultStart.textContent =
+        '故障开始时间：' + (hdr.faultStartTime || '—') +
+        '；故障持续时间：' + (hdr.faultKeepingTime || '—');
+    }
+
+    function renderTableSection(containerId, rows, columns, emptyText, withIndex){
+      const container = document.getElementById(containerId);
+      if(!container) return;
+      if(!rows || !rows.length){
+        container.innerHTML = `<div class="meta">${emptyText}</div>`;
+        return;
+      }
+      let header = withIndex ? '<th>序号</th>' : '';
+      header += columns.map(c=>`<th>${c.title}</th>`).join('');
+
+      const body = rows.map((r,idx)=>{
+        let cells = withIndex ? `<td>${idx+1}</td>` : '';
+        cells += columns.map(c=>{
+          const v = (r[c.key] ?? '').toString() || '—';
+          return `<td>${v}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+
+      container.innerHTML =
+        `<div style="overflow:auto;max-height:220px;">`+
+          `<table class="hdr-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table>`+
+        `</div>`;
+    }
+
+    function fillHdrDetails(hdr){
+      if(!hdr){
+        renderTableSection('hdrDeviceInfo',[],[], 'HDR 解析失败或不是 XML', true);
+        renderTableSection('hdrTripInfo',[],[], '无 TripInfo 数据', true);
+        renderTableSection('hdrDigitalStatus',[],[], '无 DigitalStatus 数据', true);
+        renderTableSection('hdrDigitalEvent',[],[], '无 DigitalEvent 数据', true);
+        renderTableSection('hdrSettingValue',[],[], '无 SettingValue 数据', true);
+        return;
+      }
+
+      // 设备参数信息
+      renderTableSection(
+        'hdrDeviceInfo',
+        hdr.deviceParams,
+        [
+          {key:'name',title:'名称'},
+          {key:'value',title:'数据'}
+        ],
+        '无设备参数信息（DeviceInfo）',
+        true
+      );
+
+      // 保护动作 TripInfo
+      renderTableSection(
+        'hdrTripInfo',
+        hdr.tripInfos,
+        [
+          {key:'time', title:'时间'},
+          {key:'name', title:'名称'},
+          {key:'phase',title:'阶段'},
+          {key:'value',title:'值'}
+        ],
+        '无保护动作信息（TripInfo）',
+        true
+      );
+
+      // 启动时切换状态 DigitalStatus
+      renderTableSection(
+        'hdrDigitalStatus',
+        hdr.digitalStatus,
+        [
+          {key:'name', title:'名称'},
+          {key:'value',title:'状态'}
+        ],
+        '无启动时切换状态（DigitalStatus）',
+        true
+      );
+
+      // 启动后变化信息 DigitalEvent
+      renderTableSection(
+        'hdrDigitalEvent',
+        hdr.digitalEvents,
+        [
+          {key:'time', title:'时间'},
+          {key:'name', title:'名称'},
+          {key:'value',title:'状态/值'}
+        ],
+        '无启动后变化信息（DigitalEvent）',
+        true
+      );
+
+      // 设备设置 SettingValue
+      renderTableSection(
+        'hdrSettingValue',
+        hdr.settings,
+        [
+          {key:'name', title:'名称'},
+          {key:'value',title:'设定值'},
+          {key:'unit', title:'单位'}
+        ],
+        '无设备设置信息（SettingValue）',
+        true
+      );
+    }
+
+    function renderTable(rows){
+      if(!rows.length){
+        els.dataTbody.innerHTML='<tr><td colspan="5" class="meta">无数据</td></tr>';
+        return;
+      }
+      const fmt=x=> (x==null?'—':(Math.abs(x)<1e-6?'0':(+x).toFixed(6)));
+      els.dataTbody.innerHTML = rows.map(r=>`<tr>
+        <td>${r.idx}</td><td class="mono">${r.timeRaw}</td>
+        <td>${fmt(r.A)}</td><td>${fmt(r.B)}</td><td>${fmt(r.C)}</td>
+      </tr>`).join('');
+    }
+    function downloadCSV(rows){
+      const header=['index','time_raw','Ia','Ib','Ic'];
+      const lines=[header.join(',')].concat(
+        rows.map(r=>[r.idx,r.timeRaw,r.A,r.B,r.C].join(','))
+      );
+      const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download='first3_channels.csv';
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      a.remove();
+    }
+
+    // ---------- Wave helpers ----------
+    let dpi = window.devicePixelRatio||1;
+
+    function extractCnName(name){
+      if(!name) return '';
+      const idx = name.indexOf('(');
+      let base = idx>=0 ? name.slice(0,idx) : name;
+      return base.trim();
+    }
+
+    const baseColors = ['#60a5fa','#34d399','#f87171','#e5e7eb','#a78bfa','#fb923c','#22c55e','#facc15','#f472b6'];
+    function pickColor(i){
+      if(i < baseColors.length) return baseColors[i];
+      const hue = (i*55)%360;
+      return `hsl(${hue} 70% 60%)`;
+    }
+
+    function buildLegend(){
+      const { meta } = state.wave;
+      els.legendChannels.innerHTML = '';
+      meta.forEach((m,i)=>{
+        if(!m.visible) return;
+        const span = document.createElement('span');
+        span.className = 'lg';
+        span.style.setProperty('--ch-color', m.color || '#60a5fa');
+        // 显示“通道号 + 中文名称（原始名称/单位）”
+        const cn = m.cnName || m.rawName || `CH${m.idx}`;
+        const extra = m.unit ? `（${m.unit}）` : '';
+        span.textContent = `${m.idx}.${cn}${extra}`;
+        els.legendChannels.appendChild(span);
+      });
+      if(!els.legendChannels.children.length){
+        const span = document.createElement('span');
+        span.className='lg';
+        span.textContent='未选择通道';
+        els.legendChannels.appendChild(span);
+      }
+    }
+
+    function buildChannelUI(cfg){
+      const { meta } = state.wave;
+      els.channelList.innerHTML = '';
+      meta.forEach((m,i)=>{
+        const label = document.createElement('label');
+        label.className = 'chk';
+
+        const cb = document.createElement('input');
+        cb.type='checkbox';
+        cb.checked = !!m.visible;
+        cb.dataset.idx = i;
+
+        const span = document.createElement('span');
+        span.className = 'ch-label';
+        span.style.borderLeftColor = m.color || '#60a5fa';
+        const cn = m.cnName || m.rawName || `CH${m.idx}`;
+        const extra = m.unit ? `（${m.unit}）` : '';
+        span.textContent = `${m.idx}. ${cn}${extra}`;
+
+        cb.addEventListener('change',()=>{
+          state.wave.meta[i].visible = cb.checked;
+          buildLegend();
+          drawWave();
+        });
+
+        label.appendChild(cb);
+        label.appendChild(span);
+        els.channelList.appendChild(label);
+      });
+      buildLegend();
+    }
+
+    function computeStats(x0,x1){
+      const { channels, meta } = state.wave;
+      const stats = [];
+      for(let i=0;i<channels.length;i++){
+        if(!meta[i]?.visible) continue;
+        const arr = channels[i];
+        let mn=Infinity, mx=-Infinity;
+        for(let j=x0;j<x1;j++){
+          const v = arr[j];
+          if(v<mn) mn=v;
+          if(v>mx) mx=v;
+        }
+        if(isFinite(mn) && isFinite(mx)){
+          stats.push({ idx: meta[i].idx, cnName: meta[i].cnName, rawName: meta[i].rawName, unit: meta[i].unit, mn, mx });
+        }
+      }
+      return stats;
+    }
+
+    function updateStats(){
+      const N = state.wave.t.length;
+      if(!N){
+        els.statsBox.style.display='none';
+        return;
+      }
+      const x0 = Math.max(0, Math.min(state.view.x0|0, N-1));
+      const x1 = Math.max(x0+1, Math.min(state.view.x1||N, N));
+      const stats = computeStats(x0,x1);
+      if(!stats.length){
+        els.statsBox.style.display='none';
+        return;
+      }
+      const fmt = v => !isFinite(v)? '—' : (Math.abs(v)<1e-6?'0':(+v).toFixed(6));
+      let html = '<table><thead><tr><th>通道</th><th>名称</th><th>最大值</th><th>最小值</th></tr></thead><tbody>';
+      stats.forEach(s=>{
+        const name = s.cnName || s.rawName || `CH${s.idx}`;
+        html += `<tr>
+          <td>${s.idx}</td>
+          <td>${name}${s.unit?`（${s.unit}）`:''}</td>
+          <td>${fmt(s.mx)}</td>
+          <td>${fmt(s.mn)}</td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      els.statsBox.innerHTML = html;
+      els.statsBox.style.display='';
+    }
+
+    function drawWave(){
+      const cvs = els.wave, ctx = cvs.getContext('2d');
+      const Wcss = cvs.clientWidth, Hcss = cvs.clientHeight;
+      const W = Math.floor(Wcss * dpi), H = Math.floor(Hcss * dpi);
+      if(cvs.width!==W || cvs.height!==H){
+        cvs.width=W;
+        cvs.height=H;
+      }
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.imageSmoothingEnabled = !!els.chkAA.checked;
+      ctx.clearRect(0,0,W,H);
+
+      const margin={l:60,r:12,t:12,b:28};
+      const plotW = W - margin.l - margin.r;
+      const plotH = H - margin.t - margin.b;
+
+      const N = state.wave.t.length;
+      const { channels, meta } = state.wave;
+
+      if(!N || !channels.length){
+        ctx.strokeStyle='#334155';
+        ctx.strokeRect(margin.l, margin.t, plotW, plotH);
+        els.cursorText.textContent='—';
+        els.tooltip.style.display='none';
+        return;
+      }
+
+      const x0 = Math.max(0, Math.min(state.view.x0|0, N-1));
+      const x1 = Math.max(x0+1, Math.min(state.view.x1||N, N));
+      els.rangeStart.value = x0;
+      els.rangeEnd.value = x1;
+
+      // y 轴范围：所有可见通道的整体 min/max
+      let ymin=Infinity,ymax=-Infinity;
+      for(let ci=0;ci<channels.length;ci++){
+        if(!meta[ci]?.visible) continue;
+        const arr = channels[ci];
+        for(let i=x0;i<x1;i++){
+          const v=arr[i];
+          if(v<ymin)ymin=v;
+          if(v>ymax)ymax=v;
+        }
+      }
+      if(!isFinite(ymin)||!isFinite(ymax)){
+        ymin=-1; ymax=1;
+      }
+      if(els.chkLockY.checked){
+        ymin=state.view.yMin;
+        ymax=state.view.yMax;
+      }else{
+        const pad=(ymax-ymin)*0.1+1e-9;
+        ymin-=pad;
+        ymax+=pad;
+        state.view.yMin=ymin;
+        state.view.yMax=ymax;
+      }
+
+      // 边框 + 网格
+      ctx.strokeStyle='#334155';
+      ctx.lineWidth=1;
+      ctx.strokeRect(margin.l, margin.t, plotW, plotH);
+      if(els.chkGrid.checked){
+        ctx.beginPath();
+        for(let i=1;i<4;i++){
+          const y=margin.t+plotH*i/4;
+          ctx.moveTo(margin.l,y);
+          ctx.lineTo(margin.l+plotW,y);
+        }
+        for(let i=1;i<8;i++){
+          const x=margin.l+plotW*i/8;
+          ctx.moveTo(x,margin.t);
+          ctx.lineTo(x,margin.t+plotH);
+        }
+        ctx.stroke();
+      }
+      // y 轴刻度
+      ctx.fillStyle='#9ca3af';
+      ctx.font=(12*dpi)+'px ui-sans-serif';
+      ctx.textAlign='right';
+      ctx.textBaseline='middle';
+      for(let i=0;i<=4;i++){
+        const yv=ymin+(ymax-ymin)*i/4;
+        const y=margin.t+plotH*(1-i/4);
+        ctx.fillText(yv.toFixed(3), margin.l-6, y);
+      }
+      // x 轴刻度
+      ctx.textAlign='center';
+      ctx.textBaseline='top';
+      for(let i=0;i<=8;i++){
+        const xv=x0+(x1-x0)*i/8;
+        const x=margin.l+plotW*i/8;
+        ctx.fillText(Math.round(xv).toString(), x, margin.t+plotH+6);
+      }
+
+      const maxPx = Math.max(1, Math.floor(plotW));
+      const span = x1-x0;
+      const step = Math.max(1, Math.floor(span / maxPx));
+      const x2px = i => margin.l + (i - x0) / (x1 - x0) * plotW;
+      const y2px = v => margin.t + (1 - (v - ymin) / (ymax - ymin)) * plotH;
+
+      function drawLine(arr, color, width){
+        const firstMode = step<=1;
+        ctx.strokeStyle=color;
+        ctx.lineWidth=width;
+        ctx.beginPath();
+        let first=true;
+        if(firstMode){
+          for(let i=x0;i<x1;i++){
+            const x=x2px(i), y=y2px(arr[i]);
+            if(first){ctx.moveTo(x,y); first=false;}
+            else ctx.lineTo(x,y);
+          }
+        }else{
+          for(let s=x0; s<x1; s+=step){
+            let mn=Infinity,mx=-Infinity, mni=s, mxi=s;
+            const hi=Math.min(x1, s+step);
+            for(let j=s;j<hi;j++){
+              const v=arr[j];
+              if(v<mn){mn=v;mni=j}
+              if(v>mx){mx=v;mxi=j}
+            }
+            const xlo=x2px(mni), ylo=y2px(mn);
+            const xhi=x2px(mxi), yhi=y2px(mx);
+            if(first){ctx.moveTo(xlo,ylo); first=false;}
+            else ctx.lineTo(xlo,ylo);
+            ctx.lineTo(xhi,yhi);
+          }
+        }
+        ctx.stroke();
+      }
+
+      // 逐通道绘制
+      for(let ci=0;ci<channels.length;ci++){
+        if(!meta[ci]?.visible) continue;
+        drawLine(channels[ci], meta[ci].color || '#60a5fa', 1.4);
+      }
+
+      const rect = cvs.getBoundingClientRect();
+      if(state.hover.active){
+        const cx = state.hover.x * dpi, cy = state.hover.y * dpi;
+        const inside = (cx>=margin.l && cx<=margin.l+plotW && cy>=margin.t && cy<=margin.t+plotH);
+        if(inside){
+          const idx = Math.round( x0 + (cx - margin.l)/plotW * (x1-x0) );
+          const clamp = Math.max(x0, Math.min(x1-1, idx));
+          const xa = x2px(clamp);
+          ctx.save();
+          ctx.strokeStyle='rgba(255,255,255,.35)';
+          ctx.lineWidth=1;
+          ctx.setLineDash([4,4]);
+          ctx.beginPath();
+          ctx.moveTo(xa, margin.t);
+          ctx.lineTo(xa, margin.t+plotH);
+          ctx.moveTo(margin.l, cy);
+          ctx.lineTo(margin.l+plotW, cy);
+          ctx.stroke();
+          ctx.restore();
+
+          const f = v => (Math.abs(v)<1e-6?'0':(+v).toFixed(6));
+
+          // 光标文字：只显示前 4 个可见通道，防止太长
+          const items = [];
+          for(let ci=0;ci<channels.length;ci++){
+            if(!meta[ci]?.visible) continue;
+            const name = meta[ci].cnName || meta[ci].rawName || `CH${meta[ci].idx}`;
+            items.push(`${name}=${f(channels[ci][clamp])}`);
+            if(items.length>=4) break;
+          }
+          els.cursorText.textContent =
+            `样本=${clamp}` + (items.length?('  ' + items.join('  ') + (items.length>=4?' ...':'')) : '');
+
+          // tooltip：列出所有可见通道
+          const tip = els.tooltip;
+          tip.style.display='block';
+          let tipHtml = `<div class="mono">样本：${clamp}</div>`;
+          for(let ci=0;ci<channels.length;ci++){
+            if(!meta[ci]?.visible) continue;
+            const name = meta[ci].cnName || meta[ci].rawName || `CH${meta[ci].idx}`;
+            tipHtml += `<div>${meta[ci].idx}. ${name}=${f(channels[ci][clamp])}</div>`;
+          }
+          tip.innerHTML = tipHtml;
+          const pad=12;
+          let tx = state.hover.x + pad, ty = state.hover.y + pad;
+          const tipW = 180, tipH = 140;
+          if(tx + tipW > rect.width) tx = state.hover.x - tipW - pad;
+          if(ty + tipH > rect.height) ty = state.hover.y - tipH - pad;
+          tip.style.left = (rect.left + tx) + 'px';
+          tip.style.top  = (rect.top + ty) + 'px';
+        }else{
+          els.cursorText.textContent='—';
+          els.tooltip.style.display='none';
+        }
+      }else{
+        els.cursorText.textContent='—';
+        els.tooltip.style.display='none';
+      }
+
+      updateStats();
+    }
+
+    // ---------- Interactions ----------
+    function attachWaveEvents(){
+      const cvs = els.wave;
+      let dragging=false, lastX=0;
+      cvs.addEventListener('mousedown', ev=>{ dragging=true; lastX=ev.clientX; });
+      window.addEventListener('mouseup', ()=> dragging=false);
+      window.addEventListener('mousemove', ev=>{
+        if(!state.wave.t.length) return;
+        const r = cvs.getBoundingClientRect();
+        state.hover.active = true;
+        state.hover.x = ev.clientX - r.left;
+        state.hover.y = ev.clientY - r.top;
+
+        if(dragging){
+          const dpi = window.devicePixelRatio||1;
+          const Wcss = cvs.clientWidth, W = Math.floor(Wcss * dpi);
+          const margin={l:60,r:12,t:12,b:28};
+          const plotW = W - margin.l - margin.r;
+          const dx = (ev.clientX - lastX) * dpi;
+          lastX = ev.clientX;
+          const N = state.wave.t.length;
+          const x0 = Math.max(0, Math.min(state.view.x0|0, N-1));
+          const x1 = Math.max(x0+1, Math.min(state.view.x1||N, N));
+          const shift = Math.round( dx / plotW * (x1-x0) );
+          state.view.x0 = Math.max(0, Math.min(N-2, x0 - shift));
+          state.view.x1 = Math.max(state.view.x0+1, Math.min(N, x1 - shift));
+        }
+        drawWave();
+      }, { passive:true });
+
+      cvs.addEventListener('mouseleave', ()=>{
+        state.hover.active=false;
+        drawWave();
+      });
+
+      cvs.addEventListener('wheel', ev=>{
+        if(!state.wave.t.length) return;
+        ev.preventDefault();
+        const r=cvs.getBoundingClientRect();
+        const dpi=window.devicePixelRatio||1;
+        const margin={l:60,r:12,t:12,b:28};
+        const Wcss=cvs.clientWidth, W=Math.floor(Wcss*dpi), plotW=W-margin.l-margin.r;
+        const cx = (ev.clientX - r.left) * dpi;
+        const ratio = (cx - margin.l) / plotW;
+        const N = state.wave.t.length;
+        const x0 = Math.max(0, Math.min(state.view.x0|0, N-1));
+        const x1 = Math.max(x0+1, Math.min(state.view.x1||N, N));
+        const center = x0 + (x1-x0) * ratio;
+        const zoom = Math.exp(-ev.deltaY * 0.0015);
+        const newSpan = Math.max(20, Math.min(N, (x1-x0)/zoom));
+        let nx0 = Math.round(center - newSpan*ratio),
+            nx1 = Math.round(center + newSpan*(1-ratio));
+        nx0 = Math.max(0, Math.min(N-2, nx0));
+        nx1 = Math.max(nx0+1, Math.min(N, nx1));
+        state.view.x0 = nx0;
+        state.view.x1 = nx1;
+        drawWave();
+      }, { passive:false });
+
+      cvs.addEventListener('dblclick', ()=>{
+        const N = state.wave.t.length;
+        state.view.x0=0;
+        state.view.x1=N;
+        drawWave();
+      });
+    }
+
+    // Tabs
+    function attachTabEvents(){
+      const tabButtons = document.querySelectorAll('.tab');
+      const tabPanels = document.querySelectorAll('.tab-panel');
+      tabButtons.forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const target = btn.dataset.tab;
+          tabButtons.forEach(b=>b.classList.remove('active'));
+          tabPanels.forEach(p=>p.classList.remove('active'));
+          btn.classList.add('active');
+          const panel = document.getElementById(target);
+          if(panel) panel.classList.add('active');
+        });
+      });
+    }
+
+    // ---------- File load ----------
+    document.getElementById('fileInput').addEventListener('change', async (e)=>{
+      const f = e.target.files?.[0];
+      if(!f) return;
+      resetUI();
+      state.zipName=f.name;
+      els.name.textContent=f.name;
+      try{
+        const buf = await f.arrayBuffer();
+        const zip = await JSZip.loadAsync(buf);
+        const names = Object.keys(zip.files);
+        const findExt = ext=>names
+          .filter(n=>n.toLowerCase().endsWith(ext))
+          .sort((a,b)=>a.length-b.length||a.localeCompare(b))[0]||null;
+        const cfgName=findExt('.cfg'),
+              datName=findExt('.dat'),
+              hdrName=findExt('.hdr');
+        if(!cfgName||!datName) throw new Error('未找到 .cfg 或 .dat');
+        logMsg('ZIP 文件列表:\n' + names.join('\n'));
+
+        const cfgTxt = await decodeWithFallbacks(await zip.file(cfgName).async('arraybuffer'),'cfg');
+        const hdrTxt = hdrName ? await decodeWithFallbacks(await zip.file(hdrName).async('arraybuffer'),'hdr') : '';
+        const datBuf = await zip.file(datName).async('arraybuffer');
+        state.cfgText=cfgTxt;
+        state.hdrText=hdrTxt;
+        state.datBuf=datBuf;
+
+        els.cfgRaw.textContent = cfgTxt;
+        els.hdrRaw.textContent = hdrTxt || '(无 .hdr 文件)';
+
+        const cfg=parseCfg(cfgTxt);
+        state.cfg=cfg;
+        const hdrObj = parseHdr(hdrTxt||'');
+        const { dvWords, recordSize, totalRecords } = inspectDat(datBuf, cfg.aCount, cfg.dCount);
+        state.recordSize=recordSize;
+        state.totalRecords=totalRecords;
+        state.digitalWords=dvWords;
+
+        fillOverview(cfg, hdrObj, f.name);
+        fillCfgSummary(cfg);
+        fillHdrSummary(hdrObj);
+        fillHdrDetails(hdrObj);
+
+        // 表格：仍然取前三路
+        const N = Math.min(parseInt(els.sampleCount.value||'514',10), totalRecords);
+        const { rows } = parseDatFirst3(datBuf, cfg, N);
+        state.tableRows = rows;
+        renderTable(rows);
+
+        // 波形：解析全部模拟通道
+        const maxWave = Math.min(totalRecords, 50000);
+        const waveAll = parseDatAllChannels(datBuf, cfg, maxWave);
+
+        // 构建通道元数据（带中文名称）
+        const meta = cfg.analogs.map((ai,idx)=>({
+          idx: ai.index || (idx+1),
+          rawName: ai.name,
+          cnName: extractCnName(ai.name),
+          unit: ai.unit,
+          color: pickColor(idx),
+          visible: idx < 3   // 默认勾选前三路，一般是 Ia/Ib/Ic
+        }));
+
+        // 额外增加一个虚拟通道：3I0（零序电流），使用前三路电流叠加
+        if(cfg.aCount >= 3){
+          const len = waveAll.t.length;
+          const ch0 = waveAll.channels[0];
+          const ch1 = waveAll.channels[1];
+          const ch2 = waveAll.channels[2];
+          const i0 = new Array(len);
+          for(let i=0;i<len;i++){
+            i0[i] = (ch0[i]||0)+(ch1[i]||0)+(ch2[i]||0);
+          }
+          waveAll.channels.push(i0);
+          meta.push({
+            idx: cfg.aCount + 1,
+            rawName: '3I0',
+            cnName: '零序电流(3I0)',
+            unit: cfg.analogs[0]?.unit || '',
+            color: pickColor(cfg.aCount),
+            visible: false
+          });
+        }
+
+        state.wave = {
+          t: waveAll.t,
+          channels: waveAll.channels,
+          meta
+        };
+        state.view.x0=0;
+        state.view.x1=state.wave.t.length;
+        els.rangeStart.max = state.wave.t.length-2;
+        els.rangeEnd.max = state.wave.t.length;
+        els.rangeEnd.value = state.wave.t.length;
+
+        buildChannelUI(cfg);
+        drawWave();
+      }catch(err){
+        els.basic6.innerHTML='<span class="err">失败</span>';
+        logMsg('解析失败：'+(err?.message||err));
+        alert('解析失败：'+(err?.message||err));
+      }
+    });
+
+    // 表格控件
+    els.refreshBtn.onclick = ()=>{
+      if(!state.cfg || !state.datBuf) return;
+      try{
+        const N=Math.min(
+          Math.max(parseInt(els.sampleCount.value||'20',10),1),
+          state.totalRecords
+        );
+        const { rows } = parseDatFirst3(state.datBuf, state.cfg, N);
+        state.tableRows=rows;
+        renderTable(rows);
+      }catch(e){
+        alert('刷新失败：'+(e?.message||e));
+      }
+    };
+    els.downloadCsv.onclick = ()=>{
+      if(!state.tableRows.length) return alert('无可导出数据');
+      downloadCSV(state.tableRows);
+    };
+
+    // 波形控件
+    [els.chkLockY,els.chkGrid,els.chkAA]
+      .forEach(x=> x.addEventListener('change', ()=>{ drawWave(); }));
+
+    els.btnApplyRange.onclick = ()=>{
+      const N=state.wave.t.length;
+      let x0=Math.max(0, Math.min(+els.rangeStart.value|0, N-2));
+      let x1=Math.max(x0+1, Math.min(+els.rangeEnd.value|0, N));
+      state.view.x0=x0;
+      state.view.x1=x1;
+      drawWave();
+    };
+    els.btnReset.onclick = ()=>{
+      state.view.x0=0;
+      state.view.x1=state.wave.t.length;
+      drawWave();
+    };
+    els.btnPng.onclick = ()=>{
+      const a=document.createElement('a');
+      a.href=els.wave.toDataURL('image/png');
+      a.download='wave.png';
+      a.click();
+    };
+
+    // 提示
+    els.demoBtn.onclick = ()=> alert([
+      '1) 选择 .ZWAV → 自动解析；',
+      '2) HDR 按 BOM/encoding 智能识别编码，拆成 5 个部分展示；',
+      '   保护动作区块包含故障开始时间(FaultStartTime)和故障持续时间(FaultKeepingTime)；',
+      '3) DAT：表格展示前三路模拟量，波形解析全部模拟通道；',
+      '4) 波形：每个通道按 CFG 名称自动提取中文名称，右侧可单独勾选显示；',
+      '5) 支持虚拟通道 3I0（零序电流），可选显示；',
+      '6) 波形支持缩放、拖拽、十字光标提示、视窗内多通道统计 Max/Min。'
+    ].join('\n'));
+
+    // 初始
+    attachWaveEvents();
+    attachTabEvents();
+  </script>
+</body>
+</html>

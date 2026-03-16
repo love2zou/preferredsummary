@@ -76,8 +76,6 @@ interface NetworkUrlListParams {
   isAvailable?: number
 }
 
-const API_BASE_URL = 'http://localhost:5000'
-
 const api = axios.create({
   baseURL: API_CONFIG.BASE_URL,
   timeout: API_CONFIG.TIMEOUT,
