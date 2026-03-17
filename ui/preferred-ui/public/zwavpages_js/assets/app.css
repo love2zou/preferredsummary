@@ -692,6 +692,29 @@ body {
   width: 100%;
 }
 
+.marker-footer {
+  margin-top: 8px;
+  padding: 2px 8px;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.marker-footer-text {
+  font-size: 12px;
+  line-height: 16px;
+  color: #606266;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
 .chart-controls {
   padding: 10px;
   border-bottom: 1px solid #ebeef5;

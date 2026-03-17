@@ -16,6 +16,8 @@ const state = {
   detail: null,
   chart: null,
   lastWaveData: null,
+  markerLeftXPixel: null,
+  markerRightXPixel: null,
   gridHeight: 50,
   searchFromSample: 0,
   searchToSample: 10000,
@@ -457,7 +459,243 @@ function initChart() {
     yAxis: { type: 'value', scale: true },
     series: []
   })
-  window.addEventListener('resize', () => state.chart && state.chart.resize())
+  state.chart.on('datazoom', () => {
+    refreshMarkerSummary()
+    renderMarkerGraphics()
+  })
+  window.addEventListener('resize', () => {
+    if (!state.chart) return
+    state.chart.resize()
+    refreshMarkerSummary()
+    renderMarkerGraphics()
+  })
+}
+
+function clamp(v, min, max) {
+  return Math.max(min, Math.min(max, v))
+}
+
+function getGridRect() {
+  if (!state.chart) return null
+  const model = state.chart.getModel && state.chart.getModel()
+  const grid0 = model && model.getComponent && model.getComponent('grid', 0)
+  const rect = grid0 && grid0.coordinateSystem && grid0.coordinateSystem.getRect && grid0.coordinateSystem.getRect()
+  return rect || null
+}
+
+function getAllGridYRange() {
+  if (!state.chart) return { minY: 0, maxY: 0 }
+  const model = state.chart.getModel && state.chart.getModel()
+  const grids = (model && model.getComponents && model.getComponents('grid')) || []
+  let minY = Infinity
+  let maxY = -Infinity
+  for (let i = 0; i < grids.length; i++) {
+    const rect = grids[i] && grids[i].coordinateSystem && grids[i].coordinateSystem.getRect && grids[i].coordinateSystem.getRect()
+    if (!rect) continue
+    minY = Math.min(minY, rect.y)
+    maxY = Math.max(maxY, rect.y + rect.height)
+  }
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return { minY: 0, maxY: state.chart.getHeight() }
+  return { minY, maxY }
+}
+
+function initMarkersIfNeeded() {
+  const rect = getGridRect()
+  if (!rect) return
+  if (state.markerLeftXPixel === null) state.markerLeftXPixel = rect.x + rect.width * 0.25
+  if (state.markerRightXPixel === null) state.markerRightXPixel = rect.x + rect.width * 0.75
+}
+
+function getWaveAtXPixel(xPixel) {
+  const data = state.lastWaveData
+  if (!state.chart || !data || !data.rows || data.rows.length === 0) return null
+  const rect = getGridRect()
+  if (rect) xPixel = clamp(xPixel, rect.x, rect.x + rect.width)
+
+  const times = data.rows.map((r) => Number(r.timeMs))
+  const n = times.length
+  const opt = state.chart.getOption ? state.chart.getOption() : null
+  const dz = opt && Array.isArray(opt.dataZoom) ? opt.dataZoom[0] : null
+  const startPct = Number((dz && dz.start) ?? 0)
+  const endPct = Number((dz && dz.end) ?? 100)
+  const startIdx = (clamp(startPct, 0, 100) / 100) * (n - 1)
+  const endIdx = (clamp(endPct, 0, 100) / 100) * (n - 1)
+  const width = rect && rect.width > 0 ? rect.width : 1
+  const ratio = rect ? clamp((xPixel - rect.x) / width, 0, 1) : 0
+  const idxFloat = startIdx + ratio * (endIdx - startIdx)
+
+  const i0 = clamp(Math.floor(idxFloat), 0, data.rows.length - 1)
+  const i1 = clamp(i0 + 1, 0, data.rows.length - 1)
+  const frac = i1 === i0 ? 0 : clamp(idxFloat - i0, 0, 1)
+  const t0 = times[i0]
+  const t1 = times[i1]
+  const timeMs = t0 + (t1 - t0) * frac
+  return { i0, i1, frac, timeMs }
+}
+
+function setMarkerFooterVisible(visible) {
+  const el = byId('markerFooter')
+  if (!el) return
+  el.style.display = visible ? '' : 'none'
+}
+
+function refreshMarkerSummary() {
+  const data = state.lastWaveData
+  if (!state.chart || !data || !data.rows || data.rows.length === 0) {
+    setMarkerFooterVisible(false)
+    return
+  }
+
+  initMarkersIfNeeded()
+  if (state.markerLeftXPixel === null || state.markerRightXPixel === null) {
+    setMarkerFooterVisible(false)
+    return
+  }
+
+  const left = getWaveAtXPixel(state.markerLeftXPixel)
+  const right = getWaveAtXPixel(state.markerRightXPixel)
+  if (!left || !right) {
+    setMarkerFooterVisible(false)
+    return
+  }
+
+  const leftMs = left.timeMs
+  const rightMs = right.timeMs
+  const leftNearest = left.frac >= 0.5 ? left.i1 : left.i0
+  const rightNearest = right.frac >= 0.5 ? right.i1 : right.i0
+
+  const leftXText = `${Number(leftMs).toFixed(3)}ms`
+  const rightXText = `${Number(rightMs).toFixed(3)}ms`
+  const deltaXText = `${Math.abs(Number(rightMs) - Number(leftMs)).toFixed(3)}ms`
+
+  const text = `LeftLine：[${leftXText}][第${leftNearest + 1}个点] | RightLine：[${rightXText}][第${rightNearest + 1}个点] | RightLine - LeftLine：${deltaXText}`
+  const tEl = byId('markerFooterText')
+  if (tEl) tEl.textContent = text
+  setMarkerFooterVisible(true)
+}
+
+function updateMarkerByPixelX(side, xPixel) {
+  const rect = getGridRect()
+  if (rect) xPixel = clamp(xPixel, rect.x, rect.x + rect.width)
+  if (side === 'left') state.markerLeftXPixel = xPixel
+  else state.markerRightXPixel = xPixel
+  refreshMarkerSummary()
+}
+
+function renderMarkerGraphics() {
+  const data = state.lastWaveData
+  if (!state.chart || !data || !data.rows || data.rows.length === 0) {
+    state.chart && state.chart.setOption({ graphic: [] }, false)
+    setMarkerFooterVisible(false)
+    return
+  }
+
+  initMarkersIfNeeded()
+  if (state.markerLeftXPixel === null || state.markerRightXPixel === null) return
+
+  const rect = getGridRect()
+  const minX = rect ? rect.x : 0
+  const maxX = rect ? rect.x + rect.width : state.chart.getWidth()
+  const yr = getAllGridYRange()
+  const y1 = yr.minY
+  const y2 = yr.maxY
+
+  const lx = clamp(Number(state.markerLeftXPixel), minX, maxX)
+  const rx = clamp(Number(state.markerRightXPixel), minX, maxX)
+
+  state.chart.setOption(
+    {
+      graphic: [
+        {
+          id: 'markerLeftLine',
+          type: 'line',
+          draggable: true,
+          cursor: 'ew-resize',
+          shape: { x1: lx, y1, x2: lx, y2 },
+          style: { stroke: '#E6A23C', lineWidth: 1 },
+          ondrag: function () {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : (state.chart ? state.chart.getWidth() : 0)
+            const baseX = Number(this.shape && this.shape.x1) || 0
+            const posX = Number(this.position && this.position[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            if (this.position) {
+              this.position[0] = currentX - baseX
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('left', currentX)
+          },
+          ondragend: function () {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : (state.chart ? state.chart.getWidth() : 0)
+            const baseX = Number(this.shape && this.shape.x1) || 0
+            const posX = Number(this.position && this.position[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            this.shape.x1 = currentX
+            this.shape.x2 = currentX
+            if (this.position) {
+              this.position[0] = 0
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('left', currentX)
+            renderMarkerGraphics()
+          }
+        },
+        {
+          id: 'markerRightLine',
+          type: 'line',
+          draggable: true,
+          cursor: 'ew-resize',
+          shape: { x1: rx, y1, x2: rx, y2 },
+          style: { stroke: '#409EFF', lineWidth: 1 },
+          ondrag: function () {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : (state.chart ? state.chart.getWidth() : 0)
+            const baseX = Number(this.shape && this.shape.x1) || 0
+            const posX = Number(this.position && this.position[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            if (this.position) {
+              this.position[0] = currentX - baseX
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('right', currentX)
+          },
+          ondragend: function () {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : (state.chart ? state.chart.getWidth() : 0)
+            const baseX = Number(this.shape && this.shape.x1) || 0
+            const posX = Number(this.position && this.position[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            this.shape.x1 = currentX
+            this.shape.x2 = currentX
+            if (this.position) {
+              this.position[0] = 0
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('right', currentX)
+            renderMarkerGraphics()
+          }
+        }
+      ]
+    },
+    false
+  )
+}
+
+function resetMarkers() {
+  state.markerLeftXPixel = null
+  state.markerRightXPixel = null
+  initMarkersIfNeeded()
+  refreshMarkerSummary()
+  renderMarkerGraphics()
 }
 
 async function fetchWaveData() {
@@ -677,6 +915,9 @@ function updateChart(data) {
     },
     true
   )
+
+  refreshMarkerSummary()
+  renderMarkerGraphics()
 }
 
 function openAxisModal() {
@@ -998,6 +1239,7 @@ function bindEvents() {
   on('btnExport', 'click', handleExport)
   on('btnSequence', 'click', openSequenceModal)
   on('btnFullScreen', 'click', toggleFullScreen)
+  on('btnMarkerReset', 'click', resetMarkers)
 
   on('btnSeqAdd', 'click', openFilePicker)
   on('btnPickSearch', 'click', () => {
