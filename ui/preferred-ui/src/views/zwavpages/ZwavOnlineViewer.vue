@@ -37,6 +37,21 @@
             <div class="chart-scroll-container">
               <div ref="chartRef" class="chart-content"></div>
             </div>
+            <div class="marker-footer" v-if="markerSummary.visible">
+              <el-tooltip placement="top" effect="dark">
+                <template #content>
+                  <div v-for="line in markerDetailLines" :key="line">{{ line }}</div>
+                </template>
+                <span class="marker-footer-text">
+                  LeftLine：[{{ markerSummary.leftXText }}][第{{ markerSummary.leftPointNo }}个点]
+                  |
+                  RightLine：[{{ markerSummary.rightXText }}][第{{ markerSummary.rightPointNo }}个点]
+                  |
+                  RightLine - LeftLine：{{ markerSummary.deltaXText }}
+                </span>
+              </el-tooltip>
+              <el-button size="small" link @click="resetMarkers">重置</el-button>
+            </div>
           </div>
         </div>
 
@@ -118,6 +133,266 @@ const searchLimit = ref(50000)
 const searchDownSample = ref(1)
 
 const lastWaveData = ref<WaveDataPageDto | null>(null)
+
+const markerLeftXPixel = ref<number | null>(null)
+const markerRightXPixel = ref<number | null>(null)
+const markerDetailLines = ref<string[]>([])
+const markerSummary = ref({
+  visible: false,
+  leftXText: '-',
+  rightXText: '-',
+  leftPointNo: 0,
+  rightPointNo: 0,
+  deltaXText: '-'
+})
+
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+
+const getGridRect = () => {
+  if (!myChart) return null
+  const model: any = (myChart as any).getModel?.()
+  const grid0 = model?.getComponent?.('grid', 0)
+  const rect = grid0?.coordinateSystem?.getRect?.()
+  return rect || null
+}
+
+const getAllGridYRange = () => {
+  if (!myChart) return { minY: 0, maxY: 0 }
+  const model: any = (myChart as any).getModel?.()
+  const grids: any[] = model?.getComponents?.('grid') || []
+  let minY = Infinity
+  let maxY = -Infinity
+  for (let i = 0; i < grids.length; i++) {
+    const rect = grids[i]?.coordinateSystem?.getRect?.()
+    if (!rect) continue
+    minY = Math.min(minY, rect.y)
+    maxY = Math.max(maxY, rect.y + rect.height)
+  }
+  if (!Number.isFinite(minY) || !Number.isFinite(maxY)) return { minY: 0, maxY: myChart.getHeight() }
+  return { minY, maxY }
+}
+
+const initMarkersIfNeeded = () => {
+  if (!myChart) return
+  const rect = getGridRect()
+  if (!rect) return
+  if (markerLeftXPixel.value === null) markerLeftXPixel.value = rect.x + rect.width * 0.25
+  if (markerRightXPixel.value === null) markerRightXPixel.value = rect.x + rect.width * 0.75
+}
+
+const getWaveAtXPixel = (xPixel: number) => {
+  const data = lastWaveData.value
+  if (!myChart || !data || !data.rows || data.rows.length === 0) return null
+  const rect = getGridRect()
+  if (rect) xPixel = clamp(xPixel, rect.x, rect.x + rect.width)
+
+  const times = data.rows.map((r) => Number(r.timeMs))
+  const n = times.length
+  const opt: any = myChart.getOption()
+  const dz = Array.isArray(opt?.dataZoom) ? opt.dataZoom[0] : null
+  const startPct = Number(dz?.start ?? 0)
+  const endPct = Number(dz?.end ?? 100)
+  const startIdx = (clamp(startPct, 0, 100) / 100) * (n - 1)
+  const endIdx = (clamp(endPct, 0, 100) / 100) * (n - 1)
+  const width = rect && rect.width > 0 ? rect.width : 1
+  const ratio = rect ? clamp((xPixel - rect.x) / width, 0, 1) : 0
+  const idxFloat = startIdx + ratio * (endIdx - startIdx)
+
+  const i0 = clamp(Math.floor(idxFloat), 0, data.rows.length - 1)
+  const i1 = clamp(i0 + 1, 0, data.rows.length - 1)
+  const frac = i1 === i0 ? 0 : clamp(idxFloat - i0, 0, 1)
+
+  const t0 = times[i0]
+  const t1 = times[i1]
+  const timeMs = t0 + (t1 - t0) * frac
+
+  return { i0, i1, frac, timeMs }
+}
+
+const computeMarkerDetails = (data: WaveDataPageDto, leftIdx: number, rightIdx: number) => {
+  const leftRow = data.rows[leftIdx]
+  const rightRow = data.rows[rightIdx]
+  const lines: string[] = []
+
+  selectedChannels.value.forEach((chIdx) => {
+    const chInfo = analogChannels.value.find((c) => c.channelIndex === chIdx)
+    const name = chInfo ? `${chInfo.channelIndex}. ${chInfo.channelName}` : `${chIdx}. CH${chIdx}`
+    const dataIndex = data.channels ? data.channels.indexOf(chIdx) : -1
+    if (dataIndex === -1) return
+    const lv = leftRow.analog?.[dataIndex]
+    const rv = rightRow.analog?.[dataIndex]
+    const ltxt = typeof lv === 'number' && Number.isFinite(lv) ? Number(lv).toFixed(6) : '-'
+    const rtxt = typeof rv === 'number' && Number.isFinite(rv) ? Number(rv).toFixed(6) : '-'
+    lines.push(`${name}: L=${ltxt}, R=${rtxt}`)
+  })
+
+  selectedDigitalChannels.value.forEach((chIdx) => {
+    const chInfo = digitalChannels.value.find((c) => c.channelIndex === chIdx)
+    const name = chInfo ? `${chInfo.channelIndex}. ${chInfo.channelName}` : `D${chIdx}`
+    const dataIndex = data.digitals ? data.digitals.indexOf(chIdx) : -1
+    if (dataIndex === -1) return
+    const lv = leftRow.digital?.[dataIndex] === 1 ? '1' : '0'
+    const rv = rightRow.digital?.[dataIndex] === 1 ? '1' : '0'
+    lines.push(`${name}: L=${lv}, R=${rv}`)
+  })
+
+  return lines
+}
+
+const refreshMarkerSummary = () => {
+  const data = lastWaveData.value
+  if (!data || !data.rows || data.rows.length === 0) {
+    markerSummary.value.visible = false
+    markerDetailLines.value = []
+    return
+  }
+
+  initMarkersIfNeeded()
+  if (markerLeftXPixel.value === null || markerRightXPixel.value === null) return
+
+  const leftWave = getWaveAtXPixel(markerLeftXPixel.value)
+  const rightWave = getWaveAtXPixel(markerRightXPixel.value)
+  if (!leftWave || !rightWave) return
+
+  const leftMs = leftWave.timeMs
+  const rightMs = rightWave.timeMs
+  const leftNearestIdx = leftWave.frac >= 0.5 ? leftWave.i1 : leftWave.i0
+  const rightNearestIdx = rightWave.frac >= 0.5 ? rightWave.i1 : rightWave.i0
+
+  const leftXText = `${Number(leftMs).toFixed(3)}ms`
+  const rightXText = `${Number(rightMs).toFixed(3)}ms`
+  const deltaXText = `${Math.abs(Number(rightMs) - Number(leftMs)).toFixed(3)}ms`
+
+  markerDetailLines.value = computeMarkerDetails(data, leftWave.i0, rightWave.i0)
+  markerSummary.value = {
+    visible: true,
+    leftXText,
+    rightXText,
+    leftPointNo: leftNearestIdx + 1,
+    rightPointNo: rightNearestIdx + 1,
+    deltaXText
+  }
+}
+
+const updateMarkerByPixelX = (side: 'left' | 'right', xPixel: number) => {
+  if (!myChart) return
+  const rect = getGridRect()
+  if (rect) xPixel = clamp(xPixel, rect.x, rect.x + rect.width)
+  if (side === 'left') markerLeftXPixel.value = xPixel
+  else markerRightXPixel.value = xPixel
+  refreshMarkerSummary()
+}
+
+const renderMarkerGraphics = () => {
+  const data = lastWaveData.value
+  if (!myChart || !data || !data.rows || data.rows.length === 0) return
+  initMarkersIfNeeded()
+  if (markerLeftXPixel.value === null || markerRightXPixel.value === null) return
+
+  const rect = getGridRect()
+  const minX = rect ? rect.x : 0
+  const maxX = rect ? rect.x + rect.width : myChart.getWidth()
+  const yr = getAllGridYRange()
+  const y1 = yr.minY
+  const y2 = yr.maxY
+
+  const lx = clamp(Number(markerLeftXPixel.value), minX, maxX)
+  const rx = clamp(Number(markerRightXPixel.value), minX, maxX)
+
+  myChart.setOption(
+    {
+      graphic: [
+        {
+          id: 'markerLeftLine',
+          type: 'line',
+          draggable: true,
+          cursor: 'ew-resize',
+          shape: { x1: lx, y1, x2: lx, y2 },
+          style: { stroke: '#E6A23C', lineWidth: 1 },
+          ondrag: function (this: any) {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : myChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            if (this.position) {
+              this.position[0] = currentX - baseX
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('left', currentX)
+          },
+          ondragend: function (this: any) {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : myChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            this.shape.x1 = currentX
+            this.shape.x2 = currentX
+            if (this.position) {
+              this.position[0] = 0
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('left', currentX)
+            renderMarkerGraphics()
+          }
+        },
+        {
+          id: 'markerRightLine',
+          type: 'line',
+          draggable: true,
+          cursor: 'ew-resize',
+          shape: { x1: rx, y1, x2: rx, y2 },
+          style: { stroke: '#409EFF', lineWidth: 1 },
+          ondrag: function (this: any) {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : myChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            if (this.position) {
+              this.position[0] = currentX - baseX
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('right', currentX)
+          },
+          ondragend: function (this: any) {
+            const rect2 = getGridRect()
+            const minX2 = rect2 ? rect2.x : 0
+            const maxX2 = rect2 ? rect2.x + rect2.width : myChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            this.shape.x1 = currentX
+            this.shape.x2 = currentX
+            if (this.position) {
+              this.position[0] = 0
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('right', currentX)
+            renderMarkerGraphics()
+          }
+        }
+      ]
+    },
+    false
+  )
+}
+
+const resetMarkers = () => {
+  markerLeftXPixel.value = null
+  markerRightXPixel.value = null
+  initMarkersIfNeeded()
+  refreshMarkerSummary()
+  renderMarkerGraphics()
+}
 
 /** Trip Info Parsing */
 const tripInfoArray = computed<any[]>(() => {
@@ -213,6 +488,8 @@ onUnmounted(() => {
 
 const handleResize = () => {
   myChart?.resize()
+  refreshMarkerSummary()
+  renderMarkerGraphics()
 }
 
 const initChart = () => {
@@ -221,6 +498,7 @@ const initChart = () => {
   myChart.setOption({
     tooltip: {
       trigger: 'axis',
+      confine: true,
       axisPointer: { type: 'cross' }
     },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
@@ -309,10 +587,10 @@ const handleExport = () => {
 
 const updateChart = (data: WaveDataPageDto) => {
   if (!myChart || !chartRef.value) return
+  lastWaveData.value = data
 
   const xAxisData = data.rows.map((r) => r.timeMs)
   const stats: { name: string; max: number; min: number }[] = []
-  const digitalRawMap = new Map<string, number[]>()
 
   type SeriesItem = {
     name: string
@@ -360,8 +638,6 @@ const updateChart = (data: WaveDataPageDto) => {
       return v === 1 ? 1 : 0
     })
 
-    digitalRawMap.set(name, raw)
-
     const line0 = raw.map((v) => (v === 0 ? 0 : null))
     const area1 = raw.map((v) => (v === 1 ? 1 : null))
 
@@ -401,9 +677,10 @@ const updateChart = (data: WaveDataPageDto) => {
     if (!params || params.length === 0) return ''
 
     const xVal = params[0].axisValue
-    const dataIndex = params[0].dataIndex
+    const xText =
+      typeof xVal === 'number' && Number.isFinite(xVal) ? `${Number(xVal).toFixed(3)}ms` : `${xVal}`
 
-    let html = `<div>时间(ms): ${xVal}</div>`
+    let html = `<div>时间(ms): ${xText}</div>`
     const seen = new Set<string>()
 
     for (const p of params) {
@@ -411,22 +688,24 @@ const updateChart = (data: WaveDataPageDto) => {
       const baseName = sName.endsWith('-0') || sName.endsWith('-1') ? sName.slice(0, -2) : sName
 
       if (seen.has(baseName)) continue
-      seen.add(baseName)
 
       if (sName.endsWith('-0') || sName.endsWith('-1')) {
-        const rawArr = digitalRawMap.get(baseName)
-        if (rawArr && dataIndex >= 0 && dataIndex < rawArr.length) {
-          const state = rawArr[dataIndex] === 1 ? 1 : 0
-          html += `<div>${baseName}: ${state === 1 ? '1(投入)' : '0(复归)'}</div>`
-        } else {
-          html += `<div>${baseName}: -</div>`
-        }
+        const related = params.filter((x) => (x.seriesName || '').startsWith(baseName))
+        const hasOne = related.some((x) => Number(x.value) === 1)
+        html += `<div>${baseName}: ${hasOne ? '1(投入)' : '0(复归)'}</div>`
+        seen.add(baseName)
         continue
       }
 
       const val = p.value
-      if (val === null || val === undefined) continue
-      html += `<div style="color:${p.color}">${baseName}: ${Number(val).toFixed(4)}</div>`
+      if (val === null || val === undefined) {
+        seen.add(baseName)
+        continue
+      }
+      const num = Number(val)
+      const vText = Number.isFinite(num) ? num.toFixed(4) : `${val}`
+      html += `<div style="color:${p.color}">${baseName}: ${vText}</div>`
+      seen.add(baseName)
     }
 
     return html
@@ -509,7 +788,6 @@ const updateChart = (data: WaveDataPageDto) => {
       step: 'start',
       symbol: 'none',
       lineStyle: { color: DIGITAL_GREEN, width: 2 },
-      tooltip: { show: true },
       emphasis: { disabled: true }
     })
 
@@ -523,7 +801,6 @@ const updateChart = (data: WaveDataPageDto) => {
       symbol: 'none',
       lineStyle: { width: 0 },
       areaStyle: { color: DIGITAL_RED_AREA },
-      tooltip: { show: false },
       emphasis: { disabled: true }
     })
   })
@@ -531,6 +808,7 @@ const updateChart = (data: WaveDataPageDto) => {
   const option: any = {
     tooltip: {
       trigger: 'axis',
+      confine: true,
       axisPointer: {
         type: 'cross',
         link: { xAxisIndex: 'all' }
@@ -553,6 +831,8 @@ const updateChart = (data: WaveDataPageDto) => {
   }
 
   myChart.setOption(option, true)
+  refreshMarkerSummary()
+  renderMarkerGraphics()
 }
 </script>
 
@@ -641,5 +921,28 @@ const updateChart = (data: WaveDataPageDto) => {
 
 .chart-content {
   width: 100%;
+}
+
+.marker-footer {
+  margin-top: 8px;
+  padding: 2px 8px;
+  background: #f5f7fa;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.marker-footer-text {
+  font-size: 12px;
+  line-height: 16px;
+  color: #606266;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 </style>
