@@ -127,7 +127,13 @@
 
               <div class="raw-legend">
                 <div class="raw-legend-channels">
-                  <span v-for="c in rawLegendChannels" :key="c.key" class="raw-legend-item">
+                  <span
+                    v-for="c in rawLegendChannels"
+                    :key="c.key"
+                    class="raw-legend-item"
+                    :class="{ 'is-hidden': c.hidden }"
+                    @click.stop.prevent="toggleLegendChannel(c.key)"
+                  >
                     <span class="legend-line" :style="{ background: c.color }"></span>
                     <span class="legend-text">{{ c.label }}</span>
                   </span>
@@ -185,7 +191,7 @@
             <template #header>
               <div class="card-header">
                 <span>容忍度曲线</span>
-                <span class="card-sub">按“持续时间(ms) - 暂降幅值(%)”打点</span>
+                <span class="card-sub">按“持续时间(s) - 残余电压(%)”打点</span>
               </div>
             </template>
 
@@ -211,7 +217,16 @@
             </div>
           </template>
 
-          <el-table :data="sagListRows" border stripe size="small" height="100%">
+          <el-table
+            :data="sagListRows"
+            border
+            stripe
+            size="small"
+            :height="sagListTableHeight"
+            :row-key="getSagRowKey"
+            @selection-change="handleSagSelectionChange"
+          >
+            <el-table-column type="selection" width="50" align="center" reserve-selection />
             <el-table-column type="index" label="序号" width="70" align="center" />
             <el-table-column prop="phase" label="相别" width="80" align="center" />
             <el-table-column prop="eventTypeText" label="事件类型" width="110" align="center" />
@@ -489,6 +504,10 @@ const getRefVoltageText = () => {
 
 const RAW_LINE_COLORS = ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC']
 
+const windowHeight = ref<number>(window.innerHeight)
+const hiddenChannelIndices = ref<number[]>([])
+const selectedSagRows = ref<any[]>([])
+
 const rawLegendChannels = computed(() => {
   const wave: any = lastWaveData.value
   const selected = selectedChannels.value
@@ -501,10 +520,48 @@ const rawLegendChannels = computed(() => {
     return {
       key: channelIndex,
       label,
-      color: RAW_LINE_COLORS[idx % RAW_LINE_COLORS.length]
+      color: RAW_LINE_COLORS[idx % RAW_LINE_COLORS.length],
+      hidden: hiddenChannelIndices.value.includes(channelIndex)
     }
   })
 })
+
+const toggleLegendChannel = (channelIndex: number) => {
+  const list = hiddenChannelIndices.value.slice()
+  const i = list.indexOf(channelIndex)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(channelIndex)
+  hiddenChannelIndices.value = list
+  updateRawChart()
+}
+
+const getSagRowKey = (row: any) => {
+  const phase = String(row?.phase || '')
+  const startMs = Number(row?.startMs ?? row?.startTimeMs ?? 0)
+  const endMs = Number(row?.endMs ?? row?.endTimeMs ?? 0)
+  const kind = String(row?.eventType || '')
+  return `${phase}-${kind}-${startMs}-${endMs}`
+}
+
+const handleSagSelectionChange = (val: any[]) => {
+  selectedSagRows.value = val || []
+  updateToleranceChart()
+}
+
+const formatUtcMs = (s?: string | null) => {
+  if (!s) return '-'
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
+  const yyyy = d.getFullYear()
+  const mm = pad(d.getMonth() + 1)
+  const dd = pad(d.getDate())
+  const hh = pad(d.getHours())
+  const mi = pad(d.getMinutes())
+  const ss = pad(d.getSeconds())
+  const ms = pad(d.getMilliseconds(), 3)
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
+}
 
 const enhancedComputedEvents = computed(() => {
   const refV = getRefVoltage()
@@ -535,11 +592,29 @@ const enhancedComputedEvents = computed(() => {
 })
 
 const sagListRows = computed(() => {
-  return enhancedComputedEvents.value.map((row: any) => ({
-    ...row,
-    occurTimeText: formatUtc(row?.occurTimeUtc || row?.startTimeUtc || null)
-  }))
+  const phaseOrder = (p: string) => {
+    const u = String(p || '').toUpperCase()
+    if (u === 'A') return 0
+    if (u === 'B') return 1
+    if (u === 'C') return 2
+    return 99
+  }
+
+  return enhancedComputedEvents.value
+    .slice()
+    .sort((a: any, b: any) => {
+      const pa = phaseOrder(a?.phase)
+      const pb = phaseOrder(b?.phase)
+      if (pa !== pb) return pa - pb
+      return Number(a?.startMs ?? 0) - Number(b?.startMs ?? 0)
+    })
+    .map((row: any) => ({
+      ...row,
+      occurTimeText: formatUtcMs(row?.occurTimeUtc || row?.startTimeUtc || null)
+    }))
 })
+
+const sagListTableHeight = computed(() => Math.max(200, Math.floor(windowHeight.value * 0.25)))
 
 const getGridRect = () => {
   if (!rawChart) return null
@@ -820,9 +895,11 @@ const updateRawChart = () => {
   const xTimes = rows.map((r: any) => Number(r.timeMs))
   const xData = xTimes.map((t: number) => Number(t).toFixed(3))
 
-  const selected = selectedChannels.value
+  const selectedAll = selectedChannels.value
     .filter((x) => (wave.channels || []).includes(x))
     .slice(0, 12)
+
+  const selected = selectedAll.filter((x) => !hiddenChannelIndices.value.includes(x))
 
   const grids: any[] = []
   const xAxis: any[] = []
@@ -850,6 +927,7 @@ const updateRawChart = () => {
     })
 
     const channelIndex = selected[i]
+    const colorIndex = Math.max(0, selectedAll.indexOf(channelIndex))
     const info = analogChannels.value.find((c) => c.channelIndex === channelIndex)
     const phase = info?.phase ? String(info.phase).toUpperCase() : ''
 
@@ -877,7 +955,7 @@ const updateRawChart = () => {
 
     const dataIndex = wave.channels.indexOf(channelIndex)
     const data = dataIndex >= 0 ? rows.map((r: any) => r.analog?.[dataIndex] ?? null) : rows.map(() => null)
-    const lineColor = RAW_LINE_COLORS[i % RAW_LINE_COLORS.length]
+    const lineColor = RAW_LINE_COLORS[colorIndex % RAW_LINE_COLORS.length]
 
     series.push({
       name: info ? `${info.channelIndex}. ${info.channelName}` : `CH${channelIndex}`,
@@ -1037,30 +1115,33 @@ const updateRawChart = () => {
 
 /**
  * 容忍度曲线
- * 横轴：持续时间(ms)
- * 纵轴：暂降幅值(%)
+ * 横轴：持续时间(s)
+ * 纵轴：残余电压(%)
  *
  * 当前给一条前端内置的“标准容忍度折线”
  * 后续你有明确标准时，只需要替换 toleranceStandardLine 即可
  */
 const toleranceStandardLine = [
-  [1, 10],
-  [10, 10],
-  [10, 20],
-  [100, 20],
-  [100, 40],
-  [1000, 40],
-  [1000, 70],
-  [10000, 70]
+  [0.01, 0],
+  [0.02, 0],
+  [0.02, 50],
+  [0.15, 50],
+  [0.15, 70],
+  [0.18, 70],
+  [0.18, 80],
+  [10, 80],
+  [10, 90],
+  [100, 90]
 ]
 
 const updateToleranceChart = () => {
   if (!toleranceChart) return
 
-  const points = sagListRows.value
+  const points = selectedSagRows.value
     .map((evt: any) => {
-      const x = Number(evt?.durationMs)
-      const y = Number(evt?.sagMagnitudePct)
+      const durationMs = Number(evt?.durationMs)
+      const x = durationMs / 1000
+      const y = Number(evt?.residualVoltagePct)
       if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0) return null
 
       return {
@@ -1081,10 +1162,12 @@ const updateToleranceChart = () => {
         formatter: (p: any) => {
           const d = p?.data || {}
           const value = d?.value || []
+          const x = Number(value[0])
+          const y = Number(value[1])
           return [
             `<div><b>${d.name || '事件点'}</b></div>`,
-            `<div>持续时间：${formatMs(value[0])} ms</div>`,
-            `<div>暂降幅值：${formatPercent(value[1])} %</div>`,
+            `<div>持续时间：${Number.isFinite(x) ? x.toFixed(3) : '-'} s</div>`,
+            `<div>残余电压：${Number.isFinite(y) ? y.toFixed(3) : '-'} %</div>`,
             `<div>发生时间：${d.occurTimeText || '-'}</div>`,
             `<div>残余电压：${formatV(d.residualVoltage)}</div>`
           ].join('')
@@ -1098,23 +1181,26 @@ const updateToleranceChart = () => {
       },
       xAxis: {
         type: 'log',
-        name: '持续时间 (ms)',
-        min: 1,
-        max: 10000,
-        minorSplitLine: { show: true },
+        name: '持续时间 (s)',
+        min: 0.01,
+        max: 100,
+        minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
+        minorTick: { show: true },
         splitLine: {
           show: true,
-          lineStyle: { type: 'dashed', opacity: 0.4 }
+          lineStyle: { type: 'solid', opacity: 0.25 }
         }
       },
       yAxis: {
         type: 'value',
-        name: '暂降幅值 (%)',
+        name: '残余电压 (%)',
         min: 0,
         max: 100,
+        minorTick: { show: true },
+        minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
         splitLine: {
           show: true,
-          lineStyle: { type: 'dashed', opacity: 0.4 }
+          lineStyle: { type: 'solid', opacity: 0.25 }
         }
       },
       series: [
@@ -1122,8 +1208,7 @@ const updateToleranceChart = () => {
           name: '标准容忍度折线',
           type: 'line',
           data: toleranceStandardLine,
-          showSymbol: true,
-          symbolSize: 6,
+          showSymbol: false,
           lineStyle: {
             width: 2,
             color: '#1677ff'
@@ -1313,6 +1398,7 @@ watch(selectedChannels, async () => {
 })
 
 const handleResize = () => {
+  windowHeight.value = window.innerHeight
   rawChart?.resize()
   toleranceChart?.resize()
   refreshMarkerSummary()
@@ -1586,6 +1672,7 @@ onUnmounted(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .list-card :deep(.el-table) {
@@ -1710,6 +1797,16 @@ onUnmounted(() => {
   gap: 6px;
   font-size: 12px;
   color: #606266;
+  cursor: pointer;
+  user-select: none;
+}
+
+.raw-legend-item.is-hidden {
+  opacity: 0.45;
+}
+
+.raw-legend-item.is-hidden .legend-text {
+  text-decoration: line-through;
 }
 
 .legend-text {
