@@ -86,7 +86,26 @@ namespace Preferred.Api.Services
                     TriggerPhase = x.TriggerPhase,
                     EndPhase = x.EndPhase,
                     WorstPhase = x.WorstPhase,
-                    ResidualVoltagePct = x.ResidualVoltagePct,
+                    DurationMs = x.DurationMs ?? _context.ZwavSagEventPhases
+                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
+                        .Select(p => (decimal?)p.DurationMs)
+                        .FirstOrDefault(),
+                    SagPercent = x.SagPercent ?? _context.ZwavSagEventPhases
+                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
+                        .Select(p => (decimal?)p.SagPercent)
+                        .FirstOrDefault(),
+                    ResidualVoltage = x.ResidualVoltage ?? _context.ZwavSagEventPhases
+                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
+                        .Select(p => (decimal?)p.ResidualVoltage)
+                        .FirstOrDefault(),
+                    ResidualVoltagePct = x.ResidualVoltagePct ?? _context.ZwavSagEventPhases
+                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
+                        .Select(p => (decimal?)p.ResidualVoltagePct)
+                        .FirstOrDefault(),
+                    OccurTimeUtc = x.StartTimeUtc ?? _context.ZwavSagEventPhases
+                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
+                        .Select(p => (DateTime?)p.StartTimeUtc)
+                        .FirstOrDefault(),
                     CrtTime = x.CrtTime
                 })
                 .ToListAsync();

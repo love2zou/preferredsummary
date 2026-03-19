@@ -13,10 +13,14 @@ export type ZwavSagListItemDto = {
   hasSag: boolean
   eventType: string
   eventCount: number
+  occurTimeUtc?: string | null
   startTime?: string | null
   finishTime?: string | null
   costMs?: number | null
   worstPhase?: string
+  durationMs?: number | null
+  sagPercent?: number | null
+  residualVoltage?: number | null
   residualVoltagePct?: number
   triggerPhase?: string
   endPhase?: string

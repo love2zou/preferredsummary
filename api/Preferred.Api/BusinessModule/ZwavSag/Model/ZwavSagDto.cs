@@ -48,6 +48,18 @@ namespace Zwav.Application.Sag
         /// <summary>残余电压占比（%）</summary>
         public decimal? ResidualVoltagePct { get; set; }
 
+        /// <summary>持续时间（毫秒）</summary>
+        public decimal? DurationMs { get; set; }
+
+        /// <summary>暂降幅值（%）</summary>
+        public decimal? SagPercent { get; set; }
+
+        /// <summary>残余电压（单位同通道单位）</summary>
+        public decimal? ResidualVoltage { get; set; }
+
+        /// <summary>事件发生时间（UTC）</summary>
+        public DateTime? OccurTimeUtc { get; set; }
+
         /// <summary>创建时间（UTC）</summary>
         public DateTime CrtTime { get; set; }
     }

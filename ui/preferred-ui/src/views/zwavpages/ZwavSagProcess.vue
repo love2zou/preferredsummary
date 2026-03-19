@@ -111,6 +111,11 @@
                     </span>
                   </div>
                   <div class="card-header-right">
+                    <el-tooltip content="事件详情" placement="top">
+                      <el-button link class="icon-btn" @click="showEventDetailDialog = true">
+                        <el-icon><Tickets /></el-icon>
+                      </el-button>
+                    </el-tooltip>
                     <el-tooltip :content="isRawFullScreen ? '退出全屏' : '全屏'" placement="top">
                       <el-button link class="icon-btn" @click="toggleRawFullScreen">
                         <el-icon><FullScreen /></el-icon>
@@ -254,6 +259,79 @@
         <el-button type="primary" :loading="waveLoading" @click="applyWaveSettings">应用并刷新</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="showEventDetailDialog" title="事件详情" width="980px">
+      <div v-loading="loading">
+        <el-descriptions title="基本信息" :column="2" border>
+          <el-descriptions-item label="事件ID">{{ process?.event?.id ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="录波文件ID">{{ process?.event?.fileId ?? '-' }}</el-descriptions-item>
+
+          <el-descriptions-item label="录波文件名">{{ process?.event?.originalName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ getAnalyzeStatusText(process?.event?.status) }}</el-descriptions-item>
+
+          <el-descriptions-item label="是否暂降">{{ process?.event?.hasSag ? '有' : '无' }}</el-descriptions-item>
+          <el-descriptions-item label="事件类型">{{ formatEventType(process?.event?.eventType) }}</el-descriptions-item>
+
+          <el-descriptions-item label="事件数">{{ process?.event?.eventCount ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="耗时(ms)">{{ process?.event?.costMs ?? '-' }}</el-descriptions-item>
+
+          <el-descriptions-item label="错误信息">{{ process?.event?.errorMessage || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="最严重相">{{ process?.event?.worstPhase || '-' }}</el-descriptions-item>
+
+          <el-descriptions-item label="触发相">{{ process?.event?.triggerPhase || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="终止相">{{ process?.event?.endPhase || '-' }}</el-descriptions-item>
+
+          <el-descriptions-item label="开始时间">{{ formatUtc(process?.event?.startTimeUtc) }}</el-descriptions-item>
+          <el-descriptions-item label="结束时间">{{ formatUtc(process?.event?.endTimeUtc) }}</el-descriptions-item>
+
+          <el-descriptions-item label="发生时间">{{ formatUtc(process?.event?.occurTimeUtc) }}</el-descriptions-item>
+          <el-descriptions-item label="持续时间(ms)">{{ formatMs(process?.event?.durationMs as any) }}</el-descriptions-item>
+
+          <el-descriptions-item label="参考电压">{{ formatV(process?.event?.referenceVoltage as any) }}</el-descriptions-item>
+          <el-descriptions-item label="残余电压(V)">{{ formatV(process?.event?.residualVoltage as any) }}</el-descriptions-item>
+
+          <el-descriptions-item label="残余电压(%)">{{ formatPercent(process?.event?.residualVoltagePct as any) }}</el-descriptions-item>
+          <el-descriptions-item label="暂降幅值(%)">{{ formatPercent(process?.event?.sagPercent as any) }}</el-descriptions-item>
+        </el-descriptions>
+
+        <div class="phase-section">
+          <h3>各相明细</h3>
+          <el-table :data="process?.phases || []" border stripe style="width: 100%">
+            <el-table-column prop="phase" label="相别" width="80" />
+            <el-table-column prop="startTimeUtc" label="开始时间" width="180">
+              <template #default="{ row }">{{ formatUtc(row.startTimeUtc) }}</template>
+            </el-table-column>
+            <el-table-column prop="endTimeUtc" label="结束时间" width="180">
+              <template #default="{ row }">{{ formatUtc(row.endTimeUtc) }}</template>
+            </el-table-column>
+            <el-table-column prop="durationMs" label="持续时间(ms)" width="130" align="right">
+              <template #default="{ row }">{{ formatMs(row.durationMs) }}</template>
+            </el-table-column>
+            <el-table-column prop="residualVoltage" label="残余电压(V)" width="120" align="right">
+              <template #default="{ row }">{{ formatV(row.residualVoltage) }}</template>
+            </el-table-column>
+            <el-table-column prop="residualVoltagePct" label="残余电压(%)" width="130" align="right">
+              <template #default="{ row }">{{ formatPercent(row.residualVoltagePct) }}</template>
+            </el-table-column>
+            <el-table-column prop="sagPercent" label="暂降幅值(%)" width="120" align="right">
+              <template #default="{ row }">{{ formatPercent(row.sagPercent) }}</template>
+            </el-table-column>
+            <el-table-column prop="isTriggerPhase" label="触发相" width="90" align="center">
+              <template #default="{ row }">{{ row.isTriggerPhase ? '是' : '否' }}</template>
+            </el-table-column>
+            <el-table-column prop="isEndPhase" label="终止相" width="90" align="center">
+              <template #default="{ row }">{{ row.isEndPhase ? '是' : '否' }}</template>
+            </el-table-column>
+            <el-table-column prop="isWorstPhase" label="最严重相" width="100" align="center">
+              <template #default="{ row }">{{ row.isWorstPhase ? '是' : '否' }}</template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="showEventDetailDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -265,7 +343,7 @@ import {
   type ZwavSagProcessDto
 } from '@/services/zwavSagService'
 import { zwavService, type ChannelDto, type WaveDataPageDto } from '@/services/zwavService'
-import { FullScreen, Refresh, Setting } from '@element-plus/icons-vue'
+import { FullScreen, Refresh, Setting, Tickets } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -300,6 +378,7 @@ const params = reactive({
 })
 
 const showWaveSettingDialog = ref(false)
+const showEventDetailDialog = ref(false)
 const gridHeightSetting = ref(150)
 const searchFromSample = ref(0)
 const searchToSample = ref(10000)
@@ -343,6 +422,22 @@ const formatUtc = (s?: string | null) => {
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return s
   return d.toISOString().replace('T', ' ').slice(0, 19)
+}
+
+const formatEventType = (type?: string | null) => {
+  if (!type) return '-'
+  if (type === 'Normal') return '正常 (Normal)'
+  if (type === 'Sag') return '暂降 (Sag)'
+  if (type === 'Interruption') return '中断 (Interruption)'
+  return type
+}
+
+const getAnalyzeStatusText = (status?: number) => {
+  if (status === 0) return '待处理'
+  if (status === 1) return '处理中'
+  if (status === 2) return '成功'
+  if (status === 3) return '失败'
+  return '-'
 }
 
 const formatV = (v?: number | null) => {
@@ -1433,7 +1528,8 @@ onUnmounted(() => {
 
 .tolerance-chart-content {
   width: 100%;
-  height: 360px;
+  flex: 1;
+  min-height: 260px;
 }
 
 .tolerance-legend {
@@ -1666,5 +1762,9 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   background: #ff4d4f;
+}
+
+.phase-section {
+  margin-top: 16px;
 }
 </style>

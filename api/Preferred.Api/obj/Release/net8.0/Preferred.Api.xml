@@ -3955,6 +3955,18 @@
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.ResidualVoltagePct">
             <summary>残余电压占比（%）</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.DurationMs">
+            <summary>持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.OccurTimeUtc">
+            <summary>事件发生时间（UTC）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.CrtTime">
             <summary>创建时间（UTC）</summary>
         </member>
