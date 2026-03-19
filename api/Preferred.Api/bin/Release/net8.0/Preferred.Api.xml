@@ -1047,6 +1047,264 @@
             数字量字（bitset），对应数据库 VARBINARY(100)
             </summary>
         </member>
+        <member name="T:Preferred.Api.Models.ZwavSagChannelRule">
+            <summary>
+            暂降通道词库
+            用于从录波通道名称/编码中识别电压通道（例如包含 U/V/Voltage 等关键词）。
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagChannelRule.Id">
+            <summary>主键</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagChannelRule.RuleName">
+            <summary>规则名称/关键词</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagChannelRule.SeqNo">
+            <summary>排序号（越小越靠前）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagChannelRule.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagChannelRule.UpdTime">
+            <summary>更新时间（UTC）</summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ZwavSagEvent">
+            <summary>
+            暂降分析结果（按录波文件维度）
+            一条记录对应一个录波文件的一次分析结果；若未检测到暂降/中断，仍会生成记录（HasSag=false，EventType=Normal）。
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.Id">
+            <summary>主键</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.FileId">
+            <summary>录波文件ID（关联 Tb_ZwavFile）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.OriginalName">
+            <summary>录波文件原始名称（冗余字段，便于列表展示/检索）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.Status">
+            <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.ErrorMessage">
+            <summary>失败原因/错误信息（失败时填写）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.HasSag">
+            <summary>是否检测到暂降/中断事件</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.EventType">
+            <summary>结果类型：Normal=正常，Sag=暂降，Interruption=中断</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.EventCount">
+            <summary>事件数量（若未检测到事件则为 0）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.StartTime">
+            <summary>分析开始时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.FinishTime">
+            <summary>分析结束时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.CostMs">
+            <summary>分析耗时（毫秒）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.StartTimeUtc">
+            <summary>事件开始时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.EndTimeUtc">
+            <summary>事件结束时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.OccurTimeUtc">
+            <summary>事件发生时间（UTC，一般取事件开始时间）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.DurationMs">
+            <summary>事件持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.TriggerPhase">
+            <summary>触发相别</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.EndPhase">
+            <summary>恢复/结束相别</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.WorstPhase">
+            <summary>最严重相别（按最小残余电压或最大暂降幅值确定）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.ReferenceType">
+            <summary>参考电压类型（Declared=公称，Sliding=滑动参考）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.SagDepth">
+            <summary>暂降深度（参考电压-残余电压）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.PhaseJumpDeg">
+            <summary>相角跳变（度，可选）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.StartAngleDeg">
+            <summary>起始相角（度，可选）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.IsMergedStatEvent">
+            <summary>是否为合并统计事件（保留字段）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.MergeGroupId">
+            <summary>合并分组ID（保留字段）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.RawEventCount">
+            <summary>原始事件数量（保留字段）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.SeqNo">
+            <summary>序号（用于排序）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.Remark">
+            <summary>备注</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.UpdTime">
+            <summary>更新时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.Phases">
+            <summary>相别明细集合</summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ZwavSagEventPhase">
+            <summary>
+            暂降事件相别明细
+            记录事件在每个相别上的开始/结束/持续时间，以及残余电压、暂降幅值等指标。
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.Id">
+            <summary>主键</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SagEventId">
+            <summary>所属事件ID（关联 Tb_ZwavSagEvent）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.StartTimeUtc">
+            <summary>相别事件开始时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.EndTimeUtc">
+            <summary>相别事件结束时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.DurationMs">
+            <summary>相别事件持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.ReferenceType">
+            <summary>参考电压类型（Declared/Sliding）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SagDepth">
+            <summary>暂降深度（参考电压-残余电压）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.StartAngleDeg">
+            <summary>起始相角（度，可选）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.PhaseJumpDeg">
+            <summary>相角跳变（度，可选）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.IsTriggerPhase">
+            <summary>是否为触发相</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.IsEndPhase">
+            <summary>是否为结束相</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.IsWorstPhase">
+            <summary>是否为最严重相</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SeqNo">
+            <summary>序号（用于排序）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.Remark">
+            <summary>备注</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.UpdTime">
+            <summary>更新时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SagEvent">
+            <summary>事件导航属性</summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ZwavSagRmsPoint">
+            <summary>
+            RMS 结果点（用于可视化/诊断）
+            由固定算法（1周波窗口 + 半周波更新）生成的 RMS 序列点。
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.Id">
+            <summary>主键</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.ChannelIndex">
+            <summary>通道索引</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.SampleNo">
+            <summary>采样点序号</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.TimeMs">
+            <summary>时间（毫秒，相对波形起点）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.Rms">
+            <summary>RMS 值（单位同通道单位）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.RmsPct">
+            <summary>RMS 占参考电压百分比（%）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.SeqNo">
+            <summary>序号（用于排序）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.UpdTime">
+            <summary>更新时间（UTC）</summary>
+        </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
             API响应基础模型
@@ -3332,6 +3590,90 @@
         <member name="M:Preferred.Api.Controllers.ZwavAnalysesController.ExportAsync(System.String,System.Boolean)">
             <summary>导出波形数据（CSV）</summary>
         </member>
+        <member name="T:Preferred.Api.Controllers.ZwavSagEventsController">
+            <summary>
+            电压暂降事件控制器
+            与录波解析控制器解耦，专注于暂降分析结果的生成、查询与维护。
+            
+            当前暂降算法固定采用：
+            1）1周波 RMS 窗口
+            2）半周波更新
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetListAsync(System.String,System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>
+            分页查询暂降事件列表
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetDetailAsync(System.Int32)">
+            <summary>
+            获取暂降事件详情
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetPhasesAsync(System.Int32)">
+            <summary>
+            获取暂降事件相别明细
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetByFileAsync(System.Int32)">
+            <summary>
+            根据录波文件ID查询暂降结果
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.AnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            发起电压暂降分析
+            当前算法固定采用：1周波 RMS 窗口 + 半周波更新。
+            控制器层不再暴露 RMS 模式切换。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.ReAnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            重新分析指定录波文件的暂降结果
+            当前算法固定采用：1周波 RMS 窗口 + 半周波更新。
+            一般由前端显式传 ForceRebuild = true。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.UpdateAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagEventRequest)">
+            <summary>
+            更新暂降事件（仅建议用于备注等有限字段修正）
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteAsync(System.Int32)">
+            <summary>
+            删除单个暂降事件
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteByFileAsync(System.Int32)">
+            <summary>
+            按录波文件删除全部暂降结果
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetChannelRuleListAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            分页查询暂降通道词库
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetChannelRuleDetailAsync(System.Int32)">
+            <summary>
+            获取暂降通道词库详情
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.CreateChannelRuleAsync(Zwav.Application.Sag.CreateZwavSagChannelRuleRequest)">
+            <summary>
+            新增暂降通道词库
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.UpdateChannelRuleAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest)">
+            <summary>
+            修改暂降通道词库
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteChannelRuleAsync(System.Int32)">
+            <summary>
+            删除暂降通道词库
+            </summary>
+        </member>
         <member name="T:Zwav.Application.Processing.AnalysisQueue">
             <summary>
             进程内解析队列：基于 Channel，单消费者（Worker）读取，多生产者（Controller/AppService）写入。
@@ -3413,7 +3755,9 @@
         <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingRead">
             <summary>进度状态：解析读取录波文件</summary>
         </member>
-        <!-- Badly formed XML comment ignored for member "F:Zwav.Application.Parsing.ZwavConstants.ParsingExtract" -->
+        <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingExtract">
+            <summary>进度状态：解析提取文件</summary>
+        </member>
         <member name="F:Zwav.Application.Parsing.ZwavConstants.ParsingCfg">
             <summary>进度状态：解析CFG文件</summary>
         </member>
@@ -3469,6 +3813,620 @@
             idx=1 表示第1路数字量，映射到 DigitalWords 的 bit0；
             idx=16 映射到 word0 的 bit15；
             idx=17 映射到 word1 的 bit0。
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzeContext">
+            <summary>
+            暂降分析上下文
+            包含采样点、通道信息、频率、阈值等，用于分析器进行纯计算。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.AnalysisId">
+            <summary>解析任务ID（用于追溯波形来源）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.FrequencyHz">
+            <summary>系统频率（Hz）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.TimeMul">
+            <summary>时间倍率（来自 CFG，TimeRaw * TimeMul -> ms 等换算用）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.WaveStartTimeUtc">
+            <summary>波形起始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.TriggerTimeUtc">
+            <summary>触发时间（UTC，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.ReferenceType">
+            <summary>参考电压类型（Declared=公称，Sliding=滑动参考）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.ReferenceVoltage">
+            <summary>参考电压（可选；不传则由算法估算）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.MinDurationMs">
+            <summary>最小持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.RmsMode">
+            <summary>RMS 模式（历史字段：当前后端固定为 1周波窗口 + 半周波更新）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.VoltageChannels">
+            <summary>电压通道集合（用于参与暂降/中断判定）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.Samples">
+            <summary>采样点序列（按时间排序）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavVoltageChannelContext">
+            <summary>电压通道上下文</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavVoltageChannelContext.ChannelIndex">
+            <summary>通道索引</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavVoltageChannelContext.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavVoltageChannelContext.ChannelCode">
+            <summary>通道编码</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavVoltageChannelContext.ChannelName">
+            <summary>通道名称</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavVoltageChannelContext.Unit">
+            <summary>单位（如 V/kV 等）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagSamplePoint">
+            <summary>采样点（包含多通道模拟量）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagSamplePoint.SampleNo">
+            <summary>采样点序号</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagSamplePoint.TimeRaw">
+            <summary>原始时间戳（来自 DAT/HDR）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagSamplePoint.TimeMs">
+            <summary>时间（毫秒，相对波形起点）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagSamplePoint.ChannelValues">
+            <summary>
+            模拟量值字典：key=ChannelIndex，value=通道值
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzeResult">
+            <summary>
+            暂降分析计算结果（纯内存结果）
+            包含事件结果与 RMS 序列点，供上层落库或返回 API。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeResult.Events">
+            <summary>事件集合（可能为空）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeResult.RmsPoints">
+            <summary>RMS 点集合（可能为空）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagListItemDto">
+            <summary>暂降结果列表项（用于列表分页展示）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.Id">
+            <summary>事件ID</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.FileId">
+            <summary>录波文件ID</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.OriginalName">
+            <summary>录波文件名</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.Status">
+            <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.HasSag">
+            <summary>是否检测到暂降/中断事件</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.EventType">
+            <summary>结果类型：Normal/Sag/Interruption</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.EventCount">
+            <summary>事件数量</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.StartTime">
+            <summary>分析开始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.FinishTime">
+            <summary>分析结束时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.CostMs">
+            <summary>分析耗时（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.TriggerPhase">
+            <summary>触发相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.EndPhase">
+            <summary>终止相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.WorstPhase">
+            <summary>最严重相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagDetailDto">
+            <summary>暂降结果详情（用于详情弹窗）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.Id">
+            <summary>事件ID</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.FileId">
+            <summary>录波文件ID</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.OriginalName">
+            <summary>录波文件名</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.Status">
+            <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ErrorMessage">
+            <summary>失败原因/错误信息（失败时填写）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.HasSag">
+            <summary>是否检测到暂降/中断事件</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.EventType">
+            <summary>结果类型：Normal/Sag/Interruption</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.EventCount">
+            <summary>事件数量</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.StartTime">
+            <summary>分析开始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.FinishTime">
+            <summary>分析结束时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.CostMs">
+            <summary>分析耗时（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.StartTimeUtc">
+            <summary>事件开始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.EndTimeUtc">
+            <summary>事件结束时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.OccurTimeUtc">
+            <summary>事件发生时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.DurationMs">
+            <summary>事件持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.TriggerPhase">
+            <summary>触发相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.EndPhase">
+            <summary>终止相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.WorstPhase">
+            <summary>最严重相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ReferenceType">
+            <summary>参考电压类型（Declared/Sliding）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.SagDepth">
+            <summary>暂降深度（参考电压-残余电压）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.PhaseJumpDeg">
+            <summary>相角跳变（度，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.StartAngleDeg">
+            <summary>起始相角（度，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.IsMergedStatEvent">
+            <summary>是否为合并统计事件（保留字段）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.MergeGroupId">
+            <summary>合并分组ID（保留字段）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.RawEventCount">
+            <summary>原始事件数量（保留字段）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.Remark">
+            <summary>备注</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagPhaseDto">
+            <summary>暂降事件相别明细（用于详情展示）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.StartTimeUtc">
+            <summary>开始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.EndTimeUtc">
+            <summary>结束时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.DurationMs">
+            <summary>持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.SagDepth">
+            <summary>暂降深度（参考电压-残余电压）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.IsTriggerPhase">
+            <summary>是否为触发相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.IsEndPhase">
+            <summary>是否为结束相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.IsWorstPhase">
+            <summary>是否为最严重相</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.UpdateZwavSagEventRequest">
+            <summary>更新暂降结果请求（当前仅支持少量字段，如备注）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.UpdateZwavSagEventRequest.Remark">
+            <summary>备注</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.AnalyzeZwavSagRequest">
+            <summary>发起暂降分析请求</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.FileIds">
+            <summary>录波文件ID集合（推荐）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.AnalysisGuids">
+            <summary>解析任务 GUID 集合（兼容输入，会反查 FileId）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ForceRebuild">
+            <summary>是否强制重建（会先删除该文件旧结果再生成新结果）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ReferenceType">
+            <summary>参考电压类型（Declared/Sliding）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ReferenceVoltage">
+            <summary>参考电压（可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.MinDurationMs">
+            <summary>最小持续时间（毫秒）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.AnalyzeZwavSagResponse">
+            <summary>暂降分析响应</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagResponse.AnalyzedCount">
+            <summary>参与分析的文件数量</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagResponse.CreatedEventCount">
+            <summary>创建的结果记录数量</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagResponse.CreatedPhaseCount">
+            <summary>创建的相别明细数量</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagResponse.CreatedRmsPointCount">
+            <summary>创建的 RMS 点数量</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagChannelRuleDto">
+            <summary>
+            暂降通道词库返回 DTO
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.Id">
+            <summary>主键</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.RuleName">
+            <summary>规则名称/关键词</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.SeqNo">
+            <summary>排序号</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.CrtTime">
+            <summary>创建时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.UpdTime">
+            <summary>更新时间（UTC）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest">
+            <summary>
+            新增暂降通道词库请求
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest.RuleName">
+            <summary>规则名称/关键词</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest.SeqNo">
+            <summary>排序号</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest">
+            <summary>
+            修改暂降通道词库请求
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest.RuleName">
+            <summary>规则名称/关键词</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest.SeqNo">
+            <summary>排序号</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagEventPhaseResult">
+            <summary>
+            暂降事件相别计算结果（纯内存）
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.StartTimeUtc">
+            <summary>开始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.EndTimeUtc">
+            <summary>结束时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.DurationMs">
+            <summary>持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.ReferenceType">
+            <summary>参考电压类型（Declared/Sliding）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.SagDepth">
+            <summary>暂降深度（参考电压-残余电压）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.StartAngleDeg">
+            <summary>起始相角（度，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.PhaseJumpDeg">
+            <summary>相角跳变（度，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.IsTriggerPhase">
+            <summary>是否为触发相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.IsEndPhase">
+            <summary>是否为结束相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.IsWorstPhase">
+            <summary>是否为最严重相</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagEventResult">
+            <summary>
+            暂降事件计算结果（纯内存）
+            用于分析器输出，后续可落库到 Tb_ZwavSagEvent / Tb_ZwavSagEventPhase。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.EventType">
+            <summary>事件类型：Sag/Interruption</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.StartTimeUtc">
+            <summary>事件开始时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.EndTimeUtc">
+            <summary>事件结束时间（UTC）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.OccurTimeUtc">
+            <summary>事件发生时间（UTC，一般取开始时间）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.DurationMs">
+            <summary>事件持续时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.TriggerPhase">
+            <summary>触发相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.EndPhase">
+            <summary>终止相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.WorstPhase">
+            <summary>最严重相</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.ReferenceType">
+            <summary>参考电压类型（Declared/Sliding）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.ResidualVoltage">
+            <summary>残余电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.ResidualVoltagePct">
+            <summary>残余电压占比（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.SagDepth">
+            <summary>暂降深度（参考电压-残余电压）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.SagPercent">
+            <summary>暂降幅值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.PhaseJumpDeg">
+            <summary>相角跳变（度，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.StartAngleDeg">
+            <summary>起始相角（度，可选）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.SagThresholdPct">
+            <summary>暂降阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.InterruptThresholdPct">
+            <summary>中断阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.HysteresisPct">
+            <summary>迟滞（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.IsMergedStatEvent">
+            <summary>是否为合并统计事件（保留字段）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.MergeGroupId">
+            <summary>合并分组ID（保留字段）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.RawEventCount">
+            <summary>原始事件数量（保留字段）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.Phases">
+            <summary>相别明细集合</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagRmsPointResult">
+            <summary>
+            RMS 点计算结果（纯内存）
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.ChannelIndex">
+            <summary>通道索引</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.SampleNo">
+            <summary>采样点序号</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.TimeMs">
+            <summary>时间（毫秒，相对波形起点）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.Rms">
+            <summary>RMS 值（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.RmsPct">
+            <summary>RMS 占参考电压百分比（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.ReferenceVoltage">
+            <summary>参考电压（单位同通道单位）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.SeqNo">
+            <summary>序号（用于排序）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.RmsPoint">
+            <summary>内部 RMS 点（用于算法计算）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.RmsPoint.SampleNo">
+            <summary>采样点序号</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.RmsPoint.TimeMs">
+            <summary>时间（毫秒）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.RmsPoint.Rms">
+            <summary>RMS 值</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.RmsPoint.RmsPct">
+            <summary>RMS 占参考电压百分比（%）</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.PhaseEventWindow">
+            <summary>内部相别事件窗口（用于事件检测）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.Phase">
+            <summary>相别（A/B/C 等）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.StartIndex">
+            <summary>事件起始索引（对齐后的 RMS 序列索引）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.EndIndex">
+            <summary>事件结束索引（对齐后的 RMS 序列索引）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.ReferenceVoltage">
+            <summary>参考电压</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.MinRms">
+            <summary>窗口内最小 RMS（用于计算最严重相）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.Triggered">
+            <summary>是否已触发</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.PhaseEventWindow.Ended">
+            <summary>是否已恢复/结束</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ChannelRmsSeries">
+            <summary>内部通道 RMS 序列</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ChannelRmsSeries.ChannelIndex">
+            <summary>通道索引</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ChannelRmsSeries.Phase">
+            <summary>相别</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ChannelRmsSeries.ReferenceVoltage">
+            <summary>参考电压</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ChannelRmsSeries.Points">
+            <summary>RMS 点序列</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.IZwavSagAnalyzer">
+            <summary>
+            电压暂降分析器
+            只负责纯计算，不负责读取波形数据
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer">
+            <summary>
+            电压暂降分析器（稳定版）
+            方案：
+            1）RMS窗口：1周波
+            2）更新步长：半周波
+            3）参考电压：优先传入，其次采用稳态高分位估算
+            4）事件判定：进入阈值 / 恢复阈值（含迟滞）
+            5）时长计算：按窗口覆盖区间
             </summary>
         </member>
         <member name="T:Video.Application.Dto.AlgoParams">
@@ -3534,6 +4492,33 @@
             <summary>
             基于 Channel 的内存队列：存放 fileId
             </summary>
+        </member>
+        <member name="T:ZwavReferenceType">
+            <summary>参考电压类型</summary>
+        </member>
+        <member name="F:ZwavReferenceType.Declared">
+            <summary>公称参考电压</summary>
+        </member>
+        <member name="F:ZwavReferenceType.Sliding">
+            <summary>滑动参考电压（稳态估算）</summary>
+        </member>
+        <member name="T:ZwavRmsMode">
+            <summary>RMS 计算模式（历史枚举：当前后端固定为 1周波窗口 + 半周波更新）</summary>
+        </member>
+        <member name="F:ZwavRmsMode.OneCycle">
+            <summary>1周波</summary>
+        </member>
+        <member name="F:ZwavRmsMode.HalfCycle">
+            <summary>半周波</summary>
+        </member>
+        <member name="T:ZwavSagEventType">
+            <summary>暂降事件类型</summary>
+        </member>
+        <member name="F:ZwavSagEventType.Sag">
+            <summary>电压暂降</summary>
+        </member>
+        <member name="F:ZwavSagEventType.Interruption">
+            <summary>短时中断</summary>
         </member>
     </members>
 </doc>

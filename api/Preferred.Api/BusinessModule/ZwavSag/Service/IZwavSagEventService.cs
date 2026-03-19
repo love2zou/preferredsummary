@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using Zwav.Application.Parsing;
 using System.Collections.Generic;
 using Zwav.Application.Sag;
-using Zwav.Application.Parsing;
 
 namespace Preferred.Api.Services
 {
@@ -22,10 +21,10 @@ namespace Preferred.Api.Services
 
         Task<ZwavSagDetailDto> GetDetailAsync(int id);
         Task<ZwavSagPhaseDto[]> GetPhasesAsync(int id);
-        Task<ZwavSagDetailDto[]> GetByAnalysisIdAsync(int analysisId);
+        Task<ZwavSagDetailDto[]> GetByFileIdAsync(int fileId);
 
         Task<bool> UpdateAsync(int id, UpdateZwavSagEventRequest req);
         Task<bool> DeleteAsync(int id);
-        Task<int> DeleteByAnalysisIdAsync(int analysisId);
+        Task<int> DeleteByFileIdAsync(int fileId);
     }
 }

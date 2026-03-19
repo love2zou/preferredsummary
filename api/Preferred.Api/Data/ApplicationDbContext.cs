@@ -387,8 +387,6 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
 
-                entity.HasIndex(e => new { e.AnalysisId, e.ChannelType, e.ChannelIndex }).IsUnique();
-                entity.HasIndex(e => new { e.AnalysisId, e.ChannelType });
             });
 
             modelBuilder.Entity<ZwavData>(entity =>
@@ -521,20 +519,44 @@ namespace Preferred.Api.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
 
-                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.FileId).IsRequired();
+
+                entity.Property(e => e.OriginalName)
+                    .HasMaxLength(255)
+                    .HasComment("录波文件名");
+
+                entity.Property(e => e.Status)
+                    .IsRequired()
+                    .HasComment("分析状态：0=待处理，1=处理中，2=成功，3=失败");
+
+                entity.Property(e => e.ErrorMessage).HasColumnType("TEXT");
+
+                entity.Property(e => e.HasSag)
+                    .IsRequired()
+                    .HasDefaultValue(false)
+                    .HasComment("是否存在暂降/中断事件");
 
                 entity.Property(e => e.EventType)
                     .IsRequired()
                     .HasMaxLength(32)
-                    .HasComment("事件类型（Sag=电压暂降，Interruption=短时中断）");
+                    .HasComment("结果类型：Normal=正常，Sag=电压暂降，Interruption=短时中断");
 
-                entity.Property(e => e.StartTimeUtc).IsRequired();
-                entity.Property(e => e.EndTimeUtc).IsRequired();
-                entity.Property(e => e.OccurTimeUtc).IsRequired();
+                entity.Property(e => e.EventCount)
+                    .IsRequired()
+                    .HasDefaultValue(0);
+
+                entity.Property(e => e.StartTime);
+                entity.Property(e => e.FinishTime);
+
+                entity.Property(e => e.CostMs).HasColumnType("bigint");
+
+                entity.Property(e => e.StartTimeUtc);
+                entity.Property(e => e.EndTimeUtc);
+                entity.Property(e => e.OccurTimeUtc);
 
                 entity.Property(e => e.DurationMs)
                     .HasColumnType("decimal(12,3)")
-                    .IsRequired();
+                    ;
 
                 entity.Property(e => e.TriggerPhase)
                     .HasMaxLength(16)
@@ -549,29 +571,28 @@ namespace Preferred.Api.Data
                     .HasComment("最严重相别（按最小残余电压或最大暂降百分比确定）");
 
                 entity.Property(e => e.ReferenceType)
-                    .IsRequired()
                     .HasMaxLength(32)
                     .HasComment("参考电压类型（Declared=公称输入电压，Sliding=滑动参考电压）");
 
                 entity.Property(e => e.ReferenceVoltage)
                     .HasColumnType("decimal(18,6)")
-                    .IsRequired();
+                    ;
 
                 entity.Property(e => e.ResidualVoltage)
                     .HasColumnType("decimal(18,6)")
-                    .IsRequired();
+                    ;
 
                 entity.Property(e => e.ResidualVoltagePct)
                     .HasColumnType("decimal(10,3)")
-                    .IsRequired();
+                    ;
 
                 entity.Property(e => e.SagDepth)
                     .HasColumnType("decimal(18,6)")
-                    .IsRequired();
+                    ;
 
                 entity.Property(e => e.SagPercent)
                     .HasColumnType("decimal(10,3)")
-                    .IsRequired();
+                    ;
 
                 entity.Property(e => e.PhaseJumpDeg)
                     .HasColumnType("decimal(12,6)");
@@ -617,11 +638,8 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
 
                 entity.Property(e => e.SagEventId).IsRequired();
-                entity.Property(e => e.AnalysisId).IsRequired();
 
                 entity.Property(e => e.Phase)
-                    .IsRequired()
-                    .HasColumnName("PHASE")
                     .HasMaxLength(16)
                     .HasComment("相别（A/B/C/AB/BC/CA）");
 
@@ -700,11 +718,10 @@ namespace Preferred.Api.Data
                 entity.HasKey(e => e.Id);
                 entity.Property(e => e.Id).ValueGeneratedOnAdd();
 
-                entity.Property(e => e.AnalysisId).IsRequired();
+                entity.Property(e => e.SagEventId).IsRequired();
                 entity.Property(e => e.ChannelIndex).IsRequired();
 
                 entity.Property(e => e.Phase)
-                    .HasColumnName("PHASE")
                     .HasMaxLength(16)
                     .HasComment("相别");
 

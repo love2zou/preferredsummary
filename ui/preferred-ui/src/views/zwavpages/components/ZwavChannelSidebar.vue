@@ -39,7 +39,7 @@
       </div>
     </div>
 
-    <div class="channel-section">
+    <div class="channel-section" v-if="showDigital">
       <div class="section-title">数字通道信号</div>
       <div class="channel-group">
         <div class="group-header group-header-row">
@@ -85,6 +85,7 @@ const props = defineProps<{
   digitalChannels: ChannelDto[]
   selectedChannels: number[]
   selectedDigitalChannels: number[]
+  showDigital?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -103,6 +104,8 @@ const selectedDigitalChannels = computed({
   get: () => props.selectedDigitalChannels,
   set: (val) => emit('update:selectedDigitalChannels', val)
 })
+
+const showDigital = computed(() => props.showDigital !== false)
 
 const channelSearchKeyword = ref('')
 const checkAllAnalog = ref(false)

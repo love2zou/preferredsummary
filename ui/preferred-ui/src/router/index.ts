@@ -25,6 +25,11 @@ const router = createRouter({
       component: () => import('@/views/zwavpages/ZwavSagEvents.vue')
     },
     {
+      path: '/zwav-sag-events/process/:id',
+      name: 'ZwavSagProcess',
+      component: () => import('@/views/zwavpages/ZwavSagProcess.vue')
+    },
+    {
       path: '/video-analytics',
       name: 'VideoAnalytics',
       component: () => import('@/views/videopages/VideoAnalytics.vue')

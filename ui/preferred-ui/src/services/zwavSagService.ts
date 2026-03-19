@@ -7,32 +7,19 @@ import type { ApiResponse, PagedResult } from './zwavService'
  */
 export type ZwavSagListItemDto = {
   id: number
-  analysisId: number
-  analysisGuid?: string
+  fileId: number
   originalName?: string
-  stationName?: string
-  deviceId?: string
-
+  status: number
+  hasSag: boolean
   eventType: string
-
-  occurTimeUtc: string
-  startTimeUtc: string
-  endTimeUtc: string
-
-  durationMs: number
-
+  eventCount: number
+  startTime?: string | null
+  finishTime?: string | null
+  costMs?: number | null
   worstPhase?: string
-  residualVoltage?: number
   residualVoltagePct?: number
-  sagDepth?: number
-  sagPercent: number
-
   triggerPhase?: string
   endPhase?: string
-
-  rawEventCount?: number
-  isMergedStatEvent?: boolean
-
   crtTime?: string
 }
 
@@ -41,36 +28,18 @@ export type ZwavSagListItemDto = {
  * 对齐后端 ZwavSagPhaseDto
  */
 export type ZwavSagPhaseDto = {
-  id: number
-  sagEventId: number
-  analysisId: number
-
   phase: string
-
   startTimeUtc: string
   endTimeUtc: string
   durationMs: number
-
-  referenceType?: string
-  referenceVoltage?: number
-
-  residualVoltage?: number
-  residualVoltagePct?: number
-  sagDepth?: number
-  sagPercent?: number
-
-  startAngleDeg?: number
-  phaseJumpDeg?: number
-
-  sagThresholdPct?: number
-  interruptThresholdPct?: number
-  hysteresisPct?: number
-
-  isTriggerPhase?: boolean
-  isEndPhase?: boolean
-  isWorstPhase?: boolean
-
-  remark?: string
+  referenceVoltage: number
+  residualVoltage: number
+  residualVoltagePct: number
+  sagDepth: number
+  sagPercent: number
+  isTriggerPhase: boolean
+  isEndPhase: boolean
+  isWorstPhase: boolean
 }
 
 /**
@@ -79,49 +48,39 @@ export type ZwavSagPhaseDto = {
  */
 export type ZwavSagDetailDto = {
   id: number
-  analysisId: number
-
-  analysisGuid?: string
-  fileName?: string
-
-  stationName?: string
-  deviceId?: string
-  frequencyHz?: number
-
+  fileId: number
+  originalName?: string | null
+  status: number
+  errorMessage?: string | null
+  hasSag: boolean
   eventType: string
-
-  occurTimeUtc: string
-  startTimeUtc: string
-  endTimeUtc: string
-
-  durationMs: number
-
+  eventCount: number
+  startTime?: string | null
+  finishTime?: string | null
+  costMs?: number | null
+  startTimeUtc?: string | null
+  endTimeUtc?: string | null
+  occurTimeUtc?: string | null
+  durationMs?: number | null
   triggerPhase?: string
   endPhase?: string
   worstPhase?: string
-
   referenceType?: string
   referenceVoltage?: number
-
   residualVoltage?: number
   residualVoltagePct?: number
   sagDepth?: number
   sagPercent?: number
-
   startAngleDeg?: number
   phaseJumpDeg?: number
-
   sagThresholdPct?: number
   interruptThresholdPct?: number
   hysteresisPct?: number
-
   isMergedStatEvent?: boolean
-  mergeGroupId?: string
+  mergeGroupId?: string | null
   rawEventCount?: number
-
   remark?: string
-
-  phases?: ZwavSagPhaseDto[]
+  crtTime?: string
 }
 
 /**
@@ -129,7 +88,8 @@ export type ZwavSagDetailDto = {
  * 对齐后端 AnalyzeZwavSagRequest
  */
 export type AnalyzeZwavSagRequest = {
-  analysisGuids: string[]
+  fileIds?: number[]
+  analysisGuids?: string[]
   forceRebuild?: boolean
   referenceType?: 'Declared' | 'Sliding' | string
   referenceVoltage?: number
@@ -137,8 +97,6 @@ export type AnalyzeZwavSagRequest = {
   interruptThresholdPct?: number
   hysteresisPct?: number
   minDurationMs?: number
-  rmsMode?: 'HalfCycle' | 'OneCycle' | string
-  channelIndexes?: number[]
 }
 
 /**
@@ -153,6 +111,177 @@ export type AnalyzeZwavSagResponse = {
 }
 
 /**
+ * 暂降过程页使用的电压通道 DTO
+ */
+export type ZwavSagVoltageChannelDto = {
+  channelIndex: number
+  phase: string
+  channelCode?: string
+  channelName?: string
+  unit?: string
+}
+
+/**
+ * RMS点 DTO
+ */
+export type ZwavSagRmsPointDto = {
+  channelIndex: number
+  phase: string
+  sampleNo: number
+  timeMs: number
+  rms: number
+  rmsPct: number
+  referenceVoltage: number
+  seqNo: number
+}
+
+/**
+ * 过程图关键标记 DTO
+ *
+ * kind 建议规范为：
+ * - event-start
+ * - event-end
+ * - phase-start
+ * - phase-end
+ * - min-rms
+ * - recover
+ */
+export type ZwavSagMarkerDto = {
+  kind: string
+  phase?: string
+  timeMs: number
+  label?: string
+  value?: number | null
+}
+
+/**
+ * 过程页事件 DTO
+ * 这部分建议后端尽量补齐，便于过程页直接展示，不再靠前端猜字段。
+ */
+export type ZwavSagComputedEventDto = {
+  eventType: string
+  phase: string
+
+  /**
+   * 可选：所属通道信息
+   */
+  channelIndex?: number
+  channelName?: string
+
+  /**
+   * 时间信息
+   */
+  occurTimeUtc?: string
+  startTimeUtc?: string
+  endTimeUtc?: string
+  startMs: number
+  endMs: number
+  durationMs: number
+
+  /**
+   * 参考与结果
+   */
+  referenceVoltage?: number
+  residualVoltage?: number
+  residualVoltagePct: number
+
+  /**
+   * 暂降幅值(%) = 100 - residualVoltagePct
+   */
+  sagMagnitudePct: number
+
+  /**
+   * 最低点时间（相对波形起点，ms）
+   * 用于在过程图中定位“最小点”
+   */
+  minTimeMs?: number
+
+  /**
+   * 相别角色标识
+   */
+  isTriggerPhase?: boolean
+  isEndPhase?: boolean
+  isWorstPhase?: boolean
+}
+
+/**
+ * 暂降分析过程 DTO
+ */
+export type ZwavSagProcessDto = {
+  /**
+   * 当前主事件
+   */
+  event: ZwavSagDetailDto
+
+  /**
+   * 相别明细
+   */
+  phases: ZwavSagPhaseDto[]
+
+  /**
+   * 关联的解析任务
+   */
+  analysisId: number
+  analysisGuid: string
+
+  /**
+   * 波形基础信息
+   */
+  waveStartTimeUtc: string
+  frequencyHz: number
+  timeMul: number
+
+  /**
+   * 识别出的电压通道
+   */
+  voltageChannels: ZwavSagVoltageChannelDto[]
+
+  /**
+   * RMS点序列
+   */
+  rmsPoints: ZwavSagRmsPointDto[]
+
+  /**
+   * 关键标记线/点
+   */
+  markers: ZwavSagMarkerDto[]
+
+  /**
+   * 过程页事件结果
+   */
+  computedEvents: ZwavSagComputedEventDto[]
+
+  /**
+   * 推荐展示区间
+   */
+  suggestedFromSample?: number | null
+  suggestedToSample?: number | null
+}
+
+/**
+ * 过程页预览请求
+ */
+export type ZwavSagProcessPreviewRequest = {
+  referenceType?: string
+  referenceVoltage?: number
+  sagThresholdPct?: number
+  interruptThresholdPct?: number
+  hysteresisPct?: number
+  minDurationMs?: number
+}
+
+/**
+ * 过程页预览响应
+ */
+export type ZwavSagProcessPreviewResponse = {
+  rmsPoints: ZwavSagRmsPointDto[]
+  markers: ZwavSagMarkerDto[]
+  computedEvents: ZwavSagComputedEventDto[]
+  suggestedFromSample?: number | null
+  suggestedToSample?: number | null
+}
+
+/**
  * 更新 DTO
  * 当前后端只建议更新备注等有限字段
  */
@@ -160,6 +289,9 @@ export type UpdateZwavSagEventRequest = {
   remark?: string
 }
 
+/**
+ * 通道识别词库 DTO
+ */
 export type ZwavSagChannelRuleDto = {
   id: number
   ruleName: string
@@ -197,14 +329,19 @@ export const zwavSagService = {
    * 获取暂降通道词库详情
    */
   async getChannelRuleDetail(id: number) {
-    return api.get<any, ApiResponse<ZwavSagChannelRuleDto>>(`/api/ZwavSagEvents/channel-rules/${id}`)
+    return api.get<any, ApiResponse<ZwavSagChannelRuleDto>>(
+      `/api/ZwavSagEvents/channel-rules/${id}`
+    )
   },
 
   /**
    * 新增暂降通道词库
    */
   async createChannelRule(body: CreateZwavSagChannelRuleRequest) {
-    return api.post<any, ApiResponse<ZwavSagChannelRuleDto>>('/api/ZwavSagEvents/channel-rules', body)
+    return api.post<any, ApiResponse<ZwavSagChannelRuleDto>>(
+      '/api/ZwavSagEvents/channel-rules',
+      body
+    )
   },
 
   /**
@@ -250,43 +387,28 @@ export const zwavSagService = {
    * 获取相别明细
    */
   async getPhases(id: number) {
-    return api.get<any, ApiResponse<ZwavSagPhaseDto[]>>(`/api/ZwavSagEvents/${id}/phases`)
-  },
-
-  /**
-   * 按 AnalysisId 查询暂降结果
-   */
-  async getByAnalysis(analysisId: number) {
-    return api.get<any, ApiResponse<ZwavSagDetailDto[]>>(
-      `/api/ZwavSagEvents/by-analysis/${analysisId}`
+    return api.get<any, ApiResponse<ZwavSagPhaseDto[]>>(
+      `/api/ZwavSagEvents/${id}/phases`
     )
   },
 
-  async analyze(body: {
-    analysisGuids: string[]
-    referenceType?: string
-    referenceVoltage?: number
-    thresholdPercent?: number // 对应后端 SagThresholdPct
-    sagThresholdPct?: number // 兼容
-    interruptThresholdPct?: number
-    hysteresisPct?: number
-    minDurationMs?: number
-    rmsMode?: string
-    forceRebuild?: boolean
-  }) {
-    // 映射前端参数到后端 DTO
-    const req = {
-      analysisGuids: body.analysisGuids,
-      forceRebuild: body.forceRebuild,
-      referenceType: body.referenceType,
-      referenceVoltage: body.referenceVoltage,
-      sagThresholdPct: body.sagThresholdPct ?? body.thresholdPercent,
-      interruptThresholdPct: body.interruptThresholdPct,
-      hysteresisPct: body.hysteresisPct,
-      minDurationMs: body.minDurationMs,
-      rmsMode: body.rmsMode
-    }
-    return api.post<any, ApiResponse<AnalyzeZwavSagResponse>>('/api/ZwavSagEvents/analyze', req)
+  /**
+   * 按 FileId 查询暂降结果
+   */
+  async getByFile(fileId: number) {
+    return api.get<any, ApiResponse<ZwavSagDetailDto[]>>(
+      `/api/ZwavSagEvents/by-file/${fileId}`
+    )
+  },
+
+  /**
+   * 发起分析
+   */
+  async analyze(body: AnalyzeZwavSagRequest) {
+    return api.post<any, ApiResponse<AnalyzeZwavSagResponse>>(
+      '/api/ZwavSagEvents/analyze',
+      body
+    )
   },
 
   /**
@@ -315,9 +437,28 @@ export const zwavSagService = {
   },
 
   /**
-   * 按解析任务删除全部暂降结果
+   * 按录波文件删除全部暂降结果
    */
-  async deleteByAnalysis(analysisId: number) {
-    return api.delete<any, ApiResponse<any>>(`/api/ZwavSagEvents/by-analysis/${analysisId}`)
+  async deleteByFile(fileId: number) {
+    return api.delete<any, ApiResponse<any>>(`/api/ZwavSagEvents/by-file/${fileId}`)
+  },
+
+  /**
+   * 获取暂降分析过程
+   */
+  async getProcess(id: number) {
+    return api.get<any, ApiResponse<ZwavSagProcessDto>>(
+      `/api/ZwavSagEvents/${id}/process`
+    )
+  },
+
+  /**
+   * 预览过程计算
+   */
+  async previewProcess(id: number, body: ZwavSagProcessPreviewRequest) {
+    return api.post<any, ApiResponse<ZwavSagProcessPreviewResponse>>(
+      `/api/ZwavSagEvents/${id}/process/preview`,
+      body
+    )
   }
 }

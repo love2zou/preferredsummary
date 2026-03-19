@@ -407,42 +407,55 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavData (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='ZWAV波形数据表';
 
 /*==============================================================*/
-/* ZWAV: Tb_ZwavSagEvent  电压暂降事件表（事件汇总）            */
+/* ZWAV: Tb_ZwavSagEvent  电压暂降分析结果表（文件级主表）      */
+/* 一条记录 = 一个录波文件的一次分析结果                        */
 /*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_ZwavSagEvent (
    Id                        INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-   AnalysisId                INT                 NOT NULL COMMENT '解析任务ID',
 
-   EventType                 VARCHAR(32)         NOT NULL COMMENT '事件类型（Sag=电压暂降，Interruption=短时中断）',
+   FileId                    INT                 NOT NULL COMMENT '录波文件ID',
 
-   StartTimeUtc              DATETIME(3)         NOT NULL COMMENT '事件开始时间(UTC)',
-   EndTimeUtc                DATETIME(3)         NOT NULL COMMENT '事件结束时间(UTC)',
-   OccurTimeUtc              DATETIME(3)         NOT NULL COMMENT '事件发生时间(UTC)，通常等于开始时间',
-   DurationMs                DECIMAL(12,3)       NOT NULL COMMENT '事件持续时间(ms)',
+   OriginalName              VARCHAR(255)        NULL COMMENT '录波文件名',
 
-   TriggerPhase              VARCHAR(16)         NULL COMMENT '触发事件相别（首个越过阈值的相，如A/B/C/AB/BC/CA）',
-   EndPhase                  VARCHAR(16)         NULL COMMENT '事件终止相别（最后恢复的相，如A/B/C/AB/BC/CA）',
-   WorstPhase                VARCHAR(16)         NULL COMMENT '最严重相别（按最小残余电压或最大暂降百分比确定）',
+   Status                    TINYINT             NOT NULL COMMENT '分析状态：0=待处理，1=处理中，2=成功，3=失败',
+   ErrorMessage              TEXT                NULL COMMENT '分析失败原因',
 
-   ReferenceType             VARCHAR(32)         NOT NULL COMMENT '参考电压类型（Declared=公称输入电压，Sliding=滑动参考电压）',
-   ReferenceVoltage          DECIMAL(18,6)       NOT NULL COMMENT '事件主判据参考电压',
+   HasSag                    TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否存在暂降/中断事件（1是 0否）',
+   EventType                 VARCHAR(32)         NOT NULL COMMENT '结果类型：Normal=正常，Sag=电压暂降，Interruption=短时中断',
+   EventCount                INT DEFAULT 0       NOT NULL COMMENT '识别出的事件数量',
 
-   ResidualVoltage           DECIMAL(18,6)       NOT NULL COMMENT '事件残余电压，取最严重相或全事件最低Urms',
-   ResidualVoltagePct        DECIMAL(10,3)       NOT NULL COMMENT '事件残余电压百分比(%)=ResidualVoltage/ReferenceVoltage*100',
+   StartTime                 DATETIME            NULL COMMENT '分析开始时间',
+   FinishTime                DATETIME            NULL COMMENT '分析结束时间',
+   CostMs                    BIGINT              NULL COMMENT '分析耗时(ms)',
 
-   SagDepth                  DECIMAL(18,6)       NOT NULL COMMENT '事件暂降深度=ReferenceVoltage-ResidualVoltage',
-   SagPercent                DECIMAL(10,3)       NOT NULL COMMENT '事件暂降百分比(%)=(ReferenceVoltage-ResidualVoltage)/ReferenceVoltage*100',
+   StartTimeUtc              DATETIME(3)         NULL COMMENT '事件开始时间(UTC)，无事件时为空',
+   EndTimeUtc                DATETIME(3)         NULL COMMENT '事件结束时间(UTC)，无事件时为空',
+   OccurTimeUtc              DATETIME(3)         NULL COMMENT '事件发生时间(UTC)，通常等于开始时间',
+   DurationMs                DECIMAL(12,3)       NULL COMMENT '事件持续时间(ms)',
 
-   PhaseJumpDeg              DECIMAL(12,6)       NULL COMMENT '事件相位跳变(度)，通常取最严重相',
-   StartAngleDeg             DECIMAL(12,6)       NULL COMMENT '事件起始角(度)，通常取最严重相',
+   TriggerPhase              VARCHAR(16)         NULL COMMENT '触发相（A/B/C/AB/BC/CA）',
+   EndPhase                  VARCHAR(16)         NULL COMMENT '终止相（A/B/C/AB/BC/CA）',
+   WorstPhase                VARCHAR(16)         NULL COMMENT '最严重相（A/B/C/AB/BC/CA）',
 
-   SagThresholdPct           DECIMAL(10,3)       NULL COMMENT '暂降阈值(%)，如90',
-   InterruptThresholdPct     DECIMAL(10,3)       NULL COMMENT '短时中断阈值(%)，如10',
-   HysteresisPct             DECIMAL(10,3)       NULL COMMENT '迟滞电压(%)，通常约为Udin的2%',
+   ReferenceType             VARCHAR(32)         NULL COMMENT '参考电压类型（Declared=公称输入电压，Sliding=滑动参考电压）',
+   ReferenceVoltage          DECIMAL(18,6)       NULL COMMENT '参考电压',
 
-   IsMergedStatEvent         TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为统计归并事件（1是 0否）',
-   MergeGroupId              VARCHAR(64)         NULL COMMENT '1分钟归并统计分组号',
-   RawEventCount             INT DEFAULT 1       NOT NULL COMMENT '归并后包含的原始事件数，原始事件默认为1',
+   ResidualVoltage           DECIMAL(18,6)       NULL COMMENT '残余电压',
+   ResidualVoltagePct        DECIMAL(10,3)       NULL COMMENT '残余电压百分比(%)',
+
+   SagDepth                  DECIMAL(18,6)       NULL COMMENT '暂降深度=ReferenceVoltage-ResidualVoltage',
+   SagPercent                DECIMAL(10,3)       NULL COMMENT '暂降百分比(%)',
+
+   PhaseJumpDeg              DECIMAL(12,6)       NULL COMMENT '相位跳变(度)',
+   StartAngleDeg             DECIMAL(12,6)       NULL COMMENT '事件起始角(度)',
+
+   SagThresholdPct           DECIMAL(10,3)       NULL COMMENT '暂降阈值(%)',
+   InterruptThresholdPct     DECIMAL(10,3)       NULL COMMENT '短时中断阈值(%)',
+   HysteresisPct             DECIMAL(10,3)       NULL COMMENT '迟滞电压(%)',
+
+   IsMergedStatEvent         TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为统计归并结果（1是 0否）',
+   MergeGroupId              VARCHAR(64)         NULL COMMENT '统计归并分组号',
+   RawEventCount             INT DEFAULT 0       NOT NULL COMMENT '原始事件数',
 
    SeqNo                     INT DEFAULT 0       NOT NULL COMMENT '排序号',
    Remark                    VARCHAR(500)        NULL COMMENT '备注',
@@ -450,15 +463,13 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagEvent (
    CrtTime                   DATETIME            NOT NULL COMMENT '创建时间',
    UpdTime                   DATETIME            NOT NULL COMMENT '最后修改时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-COMMENT='电压暂降事件表（事件汇总）';
+COMMENT='电压暂降分析结果表（文件级主表）';
 /*==============================================================*/
 /* ZWAV: Tb_ZwavSagEventPhase  电压暂降事件相别明细表           */
 /*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_ZwavSagEventPhase (
    Id                        INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
    SagEventId                INT                 NOT NULL COMMENT '所属暂降事件ID，对应 Tb_ZwavSagEvent.Id',
-   AnalysisId                INT                 NOT NULL COMMENT '解析任务ID，冗余便于查询',
-
    Phase                     VARCHAR(16)         NOT NULL COMMENT '相别（A/B/C/AB/BC/CA）',
 
    StartTimeUtc              DATETIME(3)         NOT NULL COMMENT '该相暂降开始时间(UTC)',
@@ -495,7 +506,7 @@ COMMENT='电压暂降事件相别明细表';
 
 CREATE TABLE IF NOT EXISTS Tb_ZwavSagRmsPoint (
    Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
-   AnalysisId           INT NOT NULL COMMENT '解析任务ID',
+   SagEventId           INT NOT NULL COMMENT '所属暂降事件ID，对应 Tb_ZwavSagEvent.Id',
    ChannelIndex         INT NOT NULL COMMENT '通道序号',
    Phase                VARCHAR(16) NULL COMMENT '相别',
    SampleNo             INT NOT NULL COMMENT '对应窗口末尾样本号',

@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using Preferred.Api.Data;
 using Preferred.Api.Models;
-using Zwav.Application.Sag;
 using Zwav.Application.Parsing;
+using Zwav.Application.Sag;
+
 namespace Preferred.Api.Services
 {
     public class ZwavSagEventService : IZwavSagEventService
@@ -34,68 +33,61 @@ namespace Preferred.Api.Services
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
-            var query =
-                from evt in _context.ZwavSagEvents.AsNoTracking()
-                join analysis in _context.ZwavAnalyses.AsNoTracking() on evt.AnalysisId equals analysis.Id
-                join file in _context.ZwavFiles.AsNoTracking() on analysis.FileId equals file.Id
-                select new
-                {
-                    Event = evt,
-                    FileName = file.OriginalName
-                };
+            var query = _context.ZwavSagEvents.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(keyword))
             {
                 query = query.Where(x =>
-                    x.FileName.Contains(keyword) ||
-                    x.Event.EventType.Contains(keyword) ||
-                    (x.Event.TriggerPhase != null && x.Event.TriggerPhase.Contains(keyword)) ||
-                    (x.Event.EndPhase != null && x.Event.EndPhase.Contains(keyword)) ||
-                    (x.Event.WorstPhase != null && x.Event.WorstPhase.Contains(keyword)));
+                    x.OriginalName.Contains(keyword) ||
+                    x.EventType.Contains(keyword) ||
+                    (x.ErrorMessage != null && x.ErrorMessage.Contains(keyword)));
             }
 
             if (!string.IsNullOrWhiteSpace(eventType))
             {
-                query = query.Where(x => x.Event.EventType == eventType);
+                query = query.Where(x => x.EventType == eventType);
             }
 
             if (!string.IsNullOrWhiteSpace(phase))
             {
                 query = query.Where(x =>
-                    _context.ZwavSagEventPhases.Any(p =>
-                        p.SagEventId == x.Event.Id && p.Phase == phase));
+                    _context.ZwavSagEventPhases.Any(p => p.SagEventId == x.Id && p.Phase == phase));
             }
 
             if (fromUtc.HasValue)
             {
-                query = query.Where(x => x.Event.OccurTimeUtc >= fromUtc.Value);
+                query = query.Where(x => (x.OccurTimeUtc.HasValue ? x.OccurTimeUtc.Value : x.CrtTime) >= fromUtc.Value);
             }
 
             if (toUtc.HasValue)
             {
-                query = query.Where(x => x.Event.OccurTimeUtc <= toUtc.Value);
+                query = query.Where(x => (x.OccurTimeUtc.HasValue ? x.OccurTimeUtc.Value : x.CrtTime) <= toUtc.Value);
             }
 
             var total = await query.CountAsync();
 
             var items = await query
-                .OrderByDescending(x => x.Event.OccurTimeUtc)
-                .ThenByDescending(x => x.Event.Id)
+                .OrderByDescending(x => x.CrtTime)
+                .ThenByDescending(x => x.Id)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .Select(x => new ZwavSagListItemDto
                 {
-                    Id = x.Event.Id,
-                    AnalysisId = x.Event.AnalysisId,
-                    OriginalName = x.FileName,
-                    EventType = x.Event.EventType,
-                    OccurTimeUtc = x.Event.OccurTimeUtc,
-                    SagPercent = x.Event.SagPercent,
-                    DurationMs = x.Event.DurationMs,
-                    TriggerPhase = x.Event.TriggerPhase,
-                    EndPhase = x.Event.EndPhase,
-                    WorstPhase = x.Event.WorstPhase,
-                    ResidualVoltagePct = x.Event.ResidualVoltagePct
+                    Id = x.Id,
+                    FileId = x.FileId,
+                    OriginalName = x.OriginalName,
+                    Status = x.Status,
+                    HasSag = x.HasSag,
+                    EventType = x.EventType,
+                    EventCount = x.EventCount,
+                    StartTime = x.StartTime,
+                    FinishTime = x.FinishTime,
+                    CostMs = x.CostMs,
+                    TriggerPhase = x.TriggerPhase,
+                    EndPhase = x.EndPhase,
+                    WorstPhase = x.WorstPhase,
+                    ResidualVoltagePct = x.ResidualVoltagePct,
+                    CrtTime = x.CrtTime
                 })
                 .ToListAsync();
 
@@ -114,262 +106,573 @@ namespace Preferred.Api.Services
             if (req == null)
                 throw new ArgumentNullException(nameof(req));
 
-            var result = new AnalyzeZwavSagResponse();
+            var fileIds = await ResolveFileIdsAsync(req);
+            if (fileIds.Count == 0)
+                throw new InvalidOperationException("未选择录波文件");
 
-            foreach (var guid in req.AnalysisGuids)
+            int analyzedCount = 0;
+            int createdEventCount = 0;
+            int createdPhaseCount = 0;
+            int createdRmsPointCount = 0;
+
+            foreach (var fileId in fileIds)
             {
-                if (string.IsNullOrWhiteSpace(guid)) continue;
+                var file = await _context.ZwavFiles
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.Id == fileId);
+
+                if (file == null)
+                    continue;
 
                 var analysis = await _context.ZwavAnalyses
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.AnalysisGuid == guid);
+                    .Where(x => x.FileId == fileId)
+                    .OrderByDescending(x => x.Id)
+                    .FirstOrDefaultAsync();
 
-                if (analysis == null) continue; // Skip if not found
+                if (analysis == null)
+                    continue;
 
-                await AnalyzeSingleAsync(analysis.Id, req, result);
+                if (req.ForceRebuild)
+                {
+                    await DeleteByFileIdAsync(fileId);
+                }
+
+                var startAt = DateTime.UtcNow;
+
+                try
+                {
+                    var context = await BuildAnalyzeContextAsync(analysis, req);
+                    var analyzeResult = await _analyzer.AnalyzeAsync(context);
+
+                    var finishAt = DateTime.UtcNow;
+                    var costMs = (long)Math.Round((finishAt - startAt).TotalMilliseconds);
+                    int? rmsEventId = null;
+
+                    if (analyzeResult.Events == null || analyzeResult.Events.Count == 0)
+                    {
+                        var normal = new ZwavSagEvent
+                        {
+                            FileId = fileId,
+                            OriginalName = file.OriginalName,
+                            Status = 2,
+                            ErrorMessage = null,
+                            HasSag = false,
+                            EventType = "Normal",
+                            EventCount = 0,
+                            StartTime = startAt,
+                            FinishTime = finishAt,
+                            CostMs = costMs,
+                            IsMergedStatEvent = false,
+                            MergeGroupId = null,
+                            RawEventCount = 0,
+                            SeqNo = 0,
+                            Remark = null,
+                            CrtTime = finishAt,
+                            UpdTime = finishAt
+                        };
+
+                        _context.ZwavSagEvents.Add(normal);
+                        await _context.SaveChangesAsync();
+
+                        createdEventCount++;
+                        rmsEventId = normal.Id;
+                    }
+                    else
+                    {
+                        int seqNo = 1;
+                        foreach (var evt in analyzeResult.Events)
+                        {
+                            var entity = new ZwavSagEvent
+                            {
+                                FileId = fileId,
+                                OriginalName = file.OriginalName,
+                                Status = 2,
+                                ErrorMessage = null,
+                                HasSag = true,
+                                EventType = evt.EventType,
+                                EventCount = analyzeResult.Events.Count,
+                                StartTime = startAt,
+                                FinishTime = finishAt,
+                                CostMs = costMs,
+                                StartTimeUtc = evt.StartTimeUtc,
+                                EndTimeUtc = evt.EndTimeUtc,
+                                OccurTimeUtc = evt.OccurTimeUtc,
+                                DurationMs = evt.DurationMs,
+                                TriggerPhase = evt.TriggerPhase,
+                                EndPhase = evt.EndPhase,
+                                WorstPhase = evt.WorstPhase,
+                                ReferenceType = evt.ReferenceType,
+                                ReferenceVoltage = evt.ReferenceVoltage,
+                                ResidualVoltage = evt.ResidualVoltage,
+                                ResidualVoltagePct = evt.ResidualVoltagePct,
+                                SagDepth = evt.SagDepth,
+                                SagPercent = evt.SagPercent,
+                                StartAngleDeg = evt.StartAngleDeg,
+                                PhaseJumpDeg = evt.PhaseJumpDeg,
+                                SagThresholdPct = evt.SagThresholdPct,
+                                InterruptThresholdPct = evt.InterruptThresholdPct,
+                                HysteresisPct = evt.HysteresisPct,
+                                IsMergedStatEvent = evt.IsMergedStatEvent,
+                                MergeGroupId = evt.MergeGroupId,
+                                RawEventCount = evt.RawEventCount,
+                                SeqNo = seqNo++,
+                                Remark = null,
+                                CrtTime = finishAt,
+                                UpdTime = finishAt
+                            };
+
+                            _context.ZwavSagEvents.Add(entity);
+                            await _context.SaveChangesAsync();
+
+                            createdEventCount++;
+                            if (!rmsEventId.HasValue) rmsEventId = entity.Id;
+
+                            if (evt.Phases != null && evt.Phases.Count > 0)
+                            {
+                                int phaseSeq = 1;
+                                foreach (var phase in evt.Phases)
+                                {
+                                    _context.ZwavSagEventPhases.Add(new ZwavSagEventPhase
+                                    {
+                                        SagEventId = entity.Id,
+                                        SeqNo = phaseSeq++,
+                                        Phase = phase.Phase,
+                                        StartTimeUtc = phase.StartTimeUtc,
+                                        EndTimeUtc = phase.EndTimeUtc,
+                                        DurationMs = phase.DurationMs,
+                                        ReferenceType = phase.ReferenceType,
+                                        ReferenceVoltage = phase.ReferenceVoltage,
+                                        ResidualVoltage = phase.ResidualVoltage,
+                                        ResidualVoltagePct = phase.ResidualVoltagePct,
+                                        SagDepth = phase.SagDepth,
+                                        SagPercent = phase.SagPercent,
+                                        StartAngleDeg = phase.StartAngleDeg,
+                                        PhaseJumpDeg = phase.PhaseJumpDeg,
+                                        SagThresholdPct = phase.SagThresholdPct,
+                                        InterruptThresholdPct = phase.InterruptThresholdPct,
+                                        HysteresisPct = phase.HysteresisPct,
+                                        IsTriggerPhase = phase.IsTriggerPhase,
+                                        IsEndPhase = phase.IsEndPhase,
+                                        IsWorstPhase = phase.IsWorstPhase,
+                                        CrtTime = finishAt,
+                                        UpdTime = finishAt
+                                    });
+                                    createdPhaseCount++;
+                                }
+                            }
+
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+
+                    if (rmsEventId.HasValue && analyzeResult.RmsPoints != null && analyzeResult.RmsPoints.Count > 0)
+                    {
+                        foreach (var p in analyzeResult.RmsPoints)
+                        {
+                            _context.ZwavSagRmsPoints.Add(new ZwavSagRmsPoint
+                            {
+                                SagEventId = rmsEventId.Value,
+                                ChannelIndex = p.ChannelIndex,
+                                Phase = p.Phase,
+                                SampleNo = p.SampleNo,
+                                TimeMs = p.TimeMs,
+                                Rms = p.Rms,
+                                RmsPct = p.RmsPct,
+                                ReferenceVoltage = p.ReferenceVoltage,
+                                SeqNo = p.SeqNo,
+                                CrtTime = finishAt,
+                                UpdTime = finishAt
+                            });
+                            createdRmsPointCount++;
+                        }
+
+                        await _context.SaveChangesAsync();
+                    }
+
+                    analyzedCount++;
+                }
+                catch (Exception ex)
+                {
+                    var failAt = DateTime.UtcNow;
+
+                    _context.ZwavSagEvents.Add(new ZwavSagEvent
+                    {
+                        FileId = fileId,
+                        OriginalName = file.OriginalName,
+                        Status = 3,
+                        ErrorMessage = ex.Message,
+                        HasSag = false,
+                        EventType = "Failed",
+                        EventCount = 0,
+                        StartTime = startAt,
+                        FinishTime = failAt,
+                        CostMs = (long)Math.Round((failAt - startAt).TotalMilliseconds),
+                        IsMergedStatEvent = false,
+                        MergeGroupId = null,
+                        RawEventCount = 0,
+                        SeqNo = 0,
+                        Remark = null,
+                        CrtTime = failAt,
+                        UpdTime = failAt
+                    });
+
+                    await _context.SaveChangesAsync();
+                }
             }
 
-            return result;
+            return new AnalyzeZwavSagResponse
+            {
+                AnalyzedCount = analyzedCount,
+                CreatedEventCount = createdEventCount,
+                CreatedPhaseCount = createdPhaseCount,
+                CreatedRmsPointCount = createdRmsPointCount
+            };
         }
 
-        private async Task AnalyzeSingleAsync(int analysisId, AnalyzeZwavSagRequest req, AnalyzeZwavSagResponse totalResult)
+        private async Task<List<int>> ResolveFileIdsAsync(AnalyzeZwavSagRequest req)
         {
-            var analysis = await _context.ZwavAnalyses
-                .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == analysisId);
+            var fileIds = new HashSet<int>();
 
-            if (analysis == null) return;
+            if (req.FileIds != null && req.FileIds.Length > 0)
+            {
+                foreach (var id in req.FileIds)
+                {
+                    if (id > 0) fileIds.Add(id);
+                }
+            }
 
+            if (req.AnalysisGuids != null && req.AnalysisGuids.Length > 0)
+            {
+                var guids = req.AnalysisGuids
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+
+                if (guids.Length > 0)
+                {
+                    var analysisFileIds = await _context.ZwavAnalyses
+                        .AsNoTracking()
+                        .Where(x => guids.Contains(x.AnalysisGuid))
+                        .Select(x => x.FileId)
+                        .Distinct()
+                        .ToListAsync();
+
+                    foreach (var id in analysisFileIds)
+                    {
+                        if (id > 0) fileIds.Add(id);
+                    }
+                }
+            }
+
+            return fileIds.ToList();
+        }
+
+        private async Task<ZwavSagAnalyzeContext> BuildAnalyzeContextAsync(
+            ZwavAnalysis analysis,
+            AnalyzeZwavSagRequest req)
+        {
+            if (analysis == null)
+                throw new ArgumentNullException(nameof(analysis));
+
+            int analysisId = analysis.Id;
             var cfg = await _context.ZwavCfgs
                 .AsNoTracking()
                 .FirstOrDefaultAsync(x => x.AnalysisId == analysisId);
 
-            if (cfg == null) return;
+            var voltageChannels = await BuildVoltageChannelsAsync(analysisId);
+            if (voltageChannels.Length == 0)
+                throw new InvalidOperationException("未识别到电压通道，无法进行暂降分析");
 
+            var rawRows = await LoadWaveRowsAsync(analysisId);
+            if (rawRows.Count == 0)
+                throw new InvalidOperationException("未读取到波形采样数据");
+
+            var samples = BuildSamples(rawRows, voltageChannels);
+            if (samples.Count == 0)
+                throw new InvalidOperationException("采样点构建失败");
+
+            decimal frequencyHz = 50m;
+            if (cfg?.FrequencyHz.HasValue == true && cfg.FrequencyHz.Value > 0)
+                frequencyHz = cfg.FrequencyHz.Value;
+
+            decimal timeMul = 0.001m;
+            if (cfg?.TimeMul.HasValue == true && cfg.TimeMul.Value > 0)
+                timeMul = cfg.TimeMul.Value;
+
+            var ctx = new ZwavSagAnalyzeContext
+            {
+                AnalysisId = analysisId,
+                FrequencyHz = frequencyHz,
+                TimeMul = timeMul,
+                WaveStartTimeUtc = analysis.StartTime ?? analysis.CrtTime,
+                TriggerTimeUtc = analysis.StartTime,
+                ReferenceType = string.IsNullOrWhiteSpace(req.ReferenceType) ? "Sliding" : req.ReferenceType,
+                ReferenceVoltage = req.ReferenceVoltage,
+                SagThresholdPct = req.SagThresholdPct > 0 ? req.SagThresholdPct : 90m,
+                InterruptThresholdPct = req.InterruptThresholdPct > 0 ? req.InterruptThresholdPct : 10m,
+                HysteresisPct = req.HysteresisPct >= 0 ? req.HysteresisPct : 2m,
+                MinDurationMs = req.MinDurationMs >= 0 ? req.MinDurationMs : 10m,
+                RmsMode = "Fixed-OneCycle-HalfCycleStep",
+                VoltageChannels = voltageChannels,
+                Samples = samples
+            };
+
+            LogAnalyzeContext(ctx);
+            return ctx;
+        }
+
+        private async Task<ZwavVoltageChannelContext[]> BuildVoltageChannelsAsync(int analysisId)
+        {
             var channels = await _context.ZwavChannels
                 .AsNoTracking()
                 .Where(x => x.AnalysisId == analysisId)
                 .Where(x => x.IsEnable == 1)
                 .Where(x => x.ChannelType == "Analog")
-                .ToListAsync();
-
-            var channelRules = await _context.ZwavSagChannelRules
-                .AsNoTracking()
-                .OrderBy(x => x.SeqNo)
-                .Select(x => x.RuleName)
-                .ToListAsync();
-
-            channelRules = channelRules
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Select(x => x.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            var voltageChannels = channels
-                .Where(x => IsVoltageChannel(x, channelRules))
-                .Select(x => new ZwavVoltageChannelContext
-                {
-                    ChannelIndex = x.ChannelIndex,
-                    ChannelCode = x.ChannelCode,
-                    ChannelName = x.ChannelName,
-                    Phase = x.Phase
-                })
                 .OrderBy(x => x.ChannelIndex)
-                .ToArray();
+                .ToListAsync();
 
-            if (voltageChannels.Length == 0) return;
+            var result = new List<ZwavVoltageChannelContext>();
 
-            var rawSamples = await _context.ZwavDatas
+            foreach (var ch in channels)
+            {
+                var channelName = (ch.ChannelName ?? string.Empty).Trim();
+                var channelCode = (ch.ChannelCode ?? string.Empty).Trim();
+                var unit = (ch.Unit ?? string.Empty).Trim();
+
+                if (!IsVoltageChannel(channelName, channelCode, unit))
+                    continue;
+
+                var phase = ResolvePhase(channelName, channelCode);
+                if (string.IsNullOrWhiteSpace(phase))
+                    continue;
+
+                result.Add(new ZwavVoltageChannelContext
+                {
+                    ChannelIndex = ch.ChannelIndex,
+                    Phase = phase,
+                    ChannelCode = channelCode,
+                    ChannelName = channelName,
+                    Unit = unit
+                });
+            }
+
+            return result.ToArray();
+        }
+
+        private static bool IsVoltageChannel(string channelName, string channelCode, string unit)
+        {
+            var text = $"{channelName} {channelCode}".ToUpperInvariant();
+
+            if (text.Contains("电压")) return true;
+            if (text.Contains("保护电压")) return true;
+            if (text.Contains("UA")) return true;
+            if (text.Contains("UB")) return true;
+            if (text.Contains("UC")) return true;
+
+            var u = (unit ?? string.Empty).Trim().ToUpperInvariant();
+            if ((u == "V" || u == "KV") &&
+                (text.Contains("A相") || text.Contains("B相") || text.Contains("C相")))
+                return true;
+
+            return false;
+        }
+
+        private static string ResolvePhase(string channelName, string channelCode)
+        {
+            var text = $"{channelName} {channelCode}".ToUpperInvariant();
+
+            if (text.Contains("A相") || text.Contains("(UA)") || text.EndsWith("UA") || text.Contains(" UA"))
+                return "A";
+            if (text.Contains("B相") || text.Contains("(UB)") || text.EndsWith("UB") || text.Contains(" UB"))
+                return "B";
+            if (text.Contains("C相") || text.Contains("(UC)") || text.EndsWith("UC") || text.Contains(" UC"))
+                return "C";
+
+            if (text.Contains("AB")) return "AB";
+            if (text.Contains("BC")) return "BC";
+            if (text.Contains("CA")) return "CA";
+
+            return string.Empty;
+        }
+
+        private async Task<List<WaveRowRaw>> LoadWaveRowsAsync(int analysisId)
+        {
+            // 这里请按你的真实波形表实体替换
+            // 假设 _context.ZwavDatas 可映射到 WaveRowRaw
+            return await _context.ZwavDatas
                 .AsNoTracking()
                 .Where(x => x.AnalysisId == analysisId)
                 .OrderBy(x => x.SampleNo)
+                .Select(x => new WaveRowRaw
+                {
+                    SampleNo = x.SampleNo,
+                    TimeRaw = x.TimeRaw,
+                    TimeMs = x.TimeMs,
+                    Channel1 = x.Channel1,
+                    Channel2 = x.Channel2,
+                    Channel3 = x.Channel3,
+                    Channel4 = x.Channel4,
+                    Channel5 = x.Channel5,
+                    Channel6 = x.Channel6,
+                    Channel7 = x.Channel7,
+                    Channel8 = x.Channel8,
+                    Channel9 = x.Channel9,
+                    Channel10 = x.Channel10,
+                    Channel11 = x.Channel11,
+                    Channel12 = x.Channel12,
+                    Channel13 = x.Channel13,
+                    Channel14 = x.Channel14,
+                    Channel15 = x.Channel15,
+                    Channel16 = x.Channel16,
+                    Channel17 = x.Channel17,
+                    Channel18 = x.Channel18,
+                    Channel19 = x.Channel19,
+                    Channel20 = x.Channel20,
+                    Channel21 = x.Channel21,
+                    Channel22 = x.Channel22,
+                    Channel23 = x.Channel23,
+                    Channel24 = x.Channel24,
+                    Channel25 = x.Channel25,
+                    Channel26 = x.Channel26,
+                    Channel27 = x.Channel27,
+                    Channel28 = x.Channel28,
+                    Channel29 = x.Channel29,
+                    Channel30 = x.Channel30,
+                    Channel31 = x.Channel31,
+                    Channel32 = x.Channel32,
+                    Channel33 = x.Channel33,
+                    Channel34 = x.Channel34,
+                    Channel35 = x.Channel35,
+                    Channel36 = x.Channel36,
+                    Channel37 = x.Channel37,
+                    Channel38 = x.Channel38,
+                    Channel39 = x.Channel39,
+                    Channel40 = x.Channel40,
+                    Channel41 = x.Channel41,
+                    Channel42 = x.Channel42,
+                    Channel43 = x.Channel43,
+                    Channel44 = x.Channel44,
+                    Channel45 = x.Channel45,
+                    Channel46 = x.Channel46,
+                    Channel47 = x.Channel47,
+                    Channel48 = x.Channel48,
+                    Channel49 = x.Channel49,
+                    Channel50 = x.Channel50,
+                    Channel51 = x.Channel51,
+                    Channel52 = x.Channel52,
+                    Channel53 = x.Channel53,
+                    Channel54 = x.Channel54,
+                    Channel55 = x.Channel55,
+                    Channel56 = x.Channel56,
+                    Channel57 = x.Channel57,
+                    Channel58 = x.Channel58,
+                    Channel59 = x.Channel59,
+                    Channel60 = x.Channel60,
+                    Channel61 = x.Channel61,
+                    Channel62 = x.Channel62,
+                    Channel63 = x.Channel63,
+                    Channel64 = x.Channel64,
+                    Channel65 = x.Channel65,
+                    Channel66 = x.Channel66,
+                    Channel67 = x.Channel67,
+                    Channel68 = x.Channel68,
+                    Channel69 = x.Channel69,
+                    Channel70 = x.Channel70,
+                    Channel71 = x.Channel71,
+                    Channel72 = x.Channel72,
+                    Channel73 = x.Channel73,
+                    Channel74 = x.Channel74,
+                    Channel75 = x.Channel75,
+                    Channel76 = x.Channel76,
+                    Channel77 = x.Channel77,
+                    Channel78 = x.Channel78,
+                    Channel79 = x.Channel79,
+                    Channel80 = x.Channel80,
+                    Channel81 = x.Channel81,
+                    Channel82 = x.Channel82,
+                    Channel83 = x.Channel83,
+                    Channel84 = x.Channel84,
+                    Channel85 = x.Channel85,
+                    Channel86 = x.Channel86,
+                    Channel87 = x.Channel87,
+                    Channel88 = x.Channel88,
+                    Channel89 = x.Channel89,
+                    Channel90 = x.Channel90,
+                    Channel91 = x.Channel91,
+                    Channel92 = x.Channel92,
+                    Channel93 = x.Channel93,
+                    Channel94 = x.Channel94,
+                    Channel95 = x.Channel95,
+                    Channel96 = x.Channel96,
+                    Channel97 = x.Channel97,
+                    Channel98 = x.Channel98,
+                    Channel99 = x.Channel99,
+                    Channel100 = x.Channel100,
+                    DigitalWords = x.DigitalWords
+                })
                 .ToListAsync();
+        }
 
-            if (rawSamples.Count == 0) return;
+        private List<ZwavSagSamplePoint> BuildSamples(
+            List<WaveRowRaw> rawRows,
+            ZwavVoltageChannelContext[] voltageChannels)
+        {
+            if (rawRows == null || rawRows.Count == 0)
+                return new List<ZwavSagSamplePoint>();
 
-            var samplePoints = new List<ZwavSagSamplePoint>(rawSamples.Count);
-            var channelIndexList = voltageChannels.Select(x => x.ChannelIndex).Distinct().ToArray();
+            if (voltageChannels == null || voltageChannels.Length == 0)
+                return new List<ZwavSagSamplePoint>();
 
-            foreach (var row in rawSamples)
+            var channelIndexes = voltageChannels
+                .Select(x => x.ChannelIndex)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToArray();
+
+            var result = new List<ZwavSagSamplePoint>(rawRows.Count);
+
+            foreach (var row in rawRows.OrderBy(x => x.SampleNo))
             {
                 var values = new Dictionary<int, double?>();
 
-                for (int i = 0; i < channelIndexList.Length; i++)
+                foreach (var idx in channelIndexes)
                 {
-                    int channelIndex = channelIndexList[i];
-                    values[channelIndex] = GetAnalogValue(row, channelIndex);
+                    values[idx] = row.GetAnalogNullable(idx);
                 }
 
-                samplePoints.Add(new ZwavSagSamplePoint
+                double timeMs = row.TimeMs;
+                if (timeMs <= 0 && row.TimeRaw > 0)
+                {
+                    // 兜底：假设 TimeRaw 单位为微秒
+                    timeMs = row.TimeRaw / 1000.0;
+                }
+
+                result.Add(new ZwavSagSamplePoint
                 {
                     SampleNo = row.SampleNo,
-                    TimeMs = row.TimeMs,
+                    TimeRaw = row.TimeRaw,
+                    TimeMs = timeMs,
                     ChannelValues = values
                 });
             }
 
-            var waveStartTimeUtc = ResolveWaveStartTimeUtc(analysis, cfg);
-            var frequencyHz = cfg.FrequencyHz.HasValue && cfg.FrequencyHz.Value > 0
-                ? cfg.FrequencyHz.Value
-                : 50m;
+            return result;
+        }
 
-            var context = new ZwavSagAnalyzeContext
+        private void LogAnalyzeContext(ZwavSagAnalyzeContext ctx)
+        {
+            Console.WriteLine($"[Sag] AnalysisId={ctx.AnalysisId}");
+            Console.WriteLine($"[Sag] FrequencyHz={ctx.FrequencyHz}, TimeMul={ctx.TimeMul}");
+            Console.WriteLine($"[Sag] VoltageChannels={string.Join(", ", ctx.VoltageChannels.Select(x => $"{x.ChannelIndex}:{x.ChannelName}:{x.Phase}"))}");
+            Console.WriteLine($"[Sag] Samples={ctx.Samples.Count}");
+
+            if (ctx.Samples.Count >= 2)
             {
-                AnalysisId = analysisId,
-                Samples = samplePoints,
-                VoltageChannels = voltageChannels,
-                FrequencyHz = frequencyHz,
-                WaveStartTimeUtc = waveStartTimeUtc,
-                ReferenceType = string.IsNullOrWhiteSpace(req.ReferenceType) ? "Declared" : req.ReferenceType,
-                ReferenceVoltage = req.ReferenceVoltage,
-                SagThresholdPct = req.SagThresholdPct <= 0 ? 90m : req.SagThresholdPct,
-                InterruptThresholdPct = req.InterruptThresholdPct < 0 ? 10m : req.InterruptThresholdPct,
-                HysteresisPct = req.HysteresisPct < 0 ? 2m : req.HysteresisPct,
-                MinDurationMs = req.MinDurationMs < 0 ? 0m : req.MinDurationMs,
-                RmsMode = string.IsNullOrWhiteSpace(req.RmsMode) ? "HalfCycle" : req.RmsMode
-            };
-
-            var analyzeResult = await _analyzer.AnalyzeAsync(context);
-
-            using (IDbContextTransaction tx = await _context.Database.BeginTransactionAsync())
-            {
-                await DeleteByAnalysisIdInternalAsync(analysisId);
-
-                var now = DateTime.UtcNow;
-                var eventEntities = new List<ZwavSagEvent>();
-                var phaseEntities = new List<ZwavSagEventPhase>();
-                var rmsEntities = new List<ZwavSagRmsPoint>();
-
-                for (int i = 0; i < analyzeResult.RmsPoints.Count; i++)
-                {
-                    var p = analyzeResult.RmsPoints[i];
-                    rmsEntities.Add(new ZwavSagRmsPoint
-                    {
-                        AnalysisId = analysisId,
-                        ChannelIndex = p.ChannelIndex,
-                        Phase = p.Phase,
-                        SampleNo = p.SampleNo,
-                        TimeMs = p.TimeMs,
-                        Rms = p.Rms,
-                        RmsPct = p.RmsPct,
-                        ReferenceVoltage = p.ReferenceVoltage,
-                        SeqNo = p.SeqNo <= 0 ? i + 1 : p.SeqNo,
-                        CrtTime = now,
-                        UpdTime = now
-                    });
-                }
-
-                if (rmsEntities.Count > 0)
-                    await _context.ZwavSagRmsPoints.AddRangeAsync(rmsEntities);
-
-                for (int i = 0; i < analyzeResult.Events.Count; i++)
-                {
-                    var e = analyzeResult.Events[i];
-                    var eventEntity = new ZwavSagEvent
-                    {
-                        AnalysisId = analysisId,
-                        EventType = e.EventType,
-                        StartTimeUtc = e.StartTimeUtc,
-                        EndTimeUtc = e.EndTimeUtc,
-                        OccurTimeUtc = e.OccurTimeUtc,
-                        DurationMs = e.DurationMs,
-                        TriggerPhase = e.TriggerPhase,
-                        EndPhase = e.EndPhase,
-                        WorstPhase = e.WorstPhase,
-                        ReferenceType = e.ReferenceType,
-                        ReferenceVoltage = e.ReferenceVoltage,
-                        ResidualVoltage = e.ResidualVoltage,
-                        ResidualVoltagePct = e.ResidualVoltagePct,
-                        SagDepth = e.SagDepth,
-                        SagPercent = e.SagPercent,
-                        PhaseJumpDeg = e.PhaseJumpDeg,
-                        StartAngleDeg = e.StartAngleDeg,
-                        SagThresholdPct = e.SagThresholdPct,
-                        InterruptThresholdPct = e.InterruptThresholdPct,
-                        HysteresisPct = e.HysteresisPct,
-                        IsMergedStatEvent = e.IsMergedStatEvent,
-                        MergeGroupId = e.MergeGroupId,
-                        RawEventCount = e.RawEventCount <= 0 ? 1 : e.RawEventCount,
-                        SeqNo = i + 1,
-                        Remark = null,
-                        CrtTime = now,
-                        UpdTime = now
-                    };
-
-                    eventEntities.Add(eventEntity);
-                }
-
-                if (eventEntities.Count > 0)
-                {
-                    await _context.ZwavSagEvents.AddRangeAsync(eventEntities);
-                    await _context.SaveChangesAsync();
-                }
-
-                // 必须在 eventEntities 保存并获得 ID 后再生成 phases
-                // 因为 phases 依赖 SagEventId (数据库自增主键)
-                // 而在 AddRangeAsync 后如果不 SaveChanges，Id 还是 0 (对于 Identity 列)
-                // 所以上面的 SaveChangesAsync 是必须的。
-                
-                // 但这里有个潜在问题：如果 ZwavSagEventPhase 的 SagEventId 是外键，
-                // 且 eventEntities[i].Id 在 SaveChanges 后已被回填，那么下面的逻辑是没问题的。
-                // 只要确保 SaveChanges 确实执行了，且数据库生成了 ID。
-                
-                // 检查一下是否有可能 phases 没有被正确关联。
-                // 之前的代码：
-                // var savedEvent = eventEntities[i];
-                // SagEventId = savedEvent.Id, 
-                
-                // 如果是 EF Core，通常 AddRange -> SaveChanges 后，对象上的 Id 会被自动更新。
-                // 让我们确认一下 phaseEntities 的生成逻辑。
-
-                for (int i = 0; i < analyzeResult.Events.Count; i++)
-                {
-                    var eventResult = analyzeResult.Events[i];
-                    var savedEvent = eventEntities[i];
-
-                    for (int j = 0; j < eventResult.Phases.Count; j++)
-                    {
-                        var p = eventResult.Phases[j];
-                        phaseEntities.Add(new ZwavSagEventPhase
-                        {
-                            SagEventId = savedEvent.Id,
-                            AnalysisId = analysisId,
-                            Phase = p.Phase,
-                            StartTimeUtc = p.StartTimeUtc,
-                            EndTimeUtc = p.EndTimeUtc,
-                            DurationMs = p.DurationMs,
-                            ReferenceType = p.ReferenceType,
-                            ReferenceVoltage = p.ReferenceVoltage,
-                            ResidualVoltage = p.ResidualVoltage,
-                            ResidualVoltagePct = p.ResidualVoltagePct,
-                            SagDepth = p.SagDepth,
-                            SagPercent = p.SagPercent,
-                            SagThresholdPct = p.SagThresholdPct,
-                            InterruptThresholdPct = p.InterruptThresholdPct,
-                            HysteresisPct = p.HysteresisPct,
-                            StartAngleDeg = p.StartAngleDeg,
-                            PhaseJumpDeg = p.PhaseJumpDeg,
-                            IsTriggerPhase = p.IsTriggerPhase,
-                            IsEndPhase = p.IsEndPhase,
-                            IsWorstPhase = p.IsWorstPhase,
-                            SeqNo = j + 1,
-                            Remark = null,
-                            CrtTime = now,
-                            UpdTime = now
-                        });
-                    }
-                }
-
-                if (phaseEntities.Count > 0)
-                    await _context.ZwavSagEventPhases.AddRangeAsync(phaseEntities);
-
-                await _context.SaveChangesAsync(); // 再次保存 phases
-                tx.Commit();
-
-                totalResult.AnalyzedCount++;
-                totalResult.CreatedEventCount += eventEntities.Count;
-                totalResult.CreatedPhaseCount += phaseEntities.Count;
-                totalResult.CreatedRmsPointCount += rmsEntities.Count;
+                Console.WriteLine($"[Sag] FirstSample TimeRaw={ctx.Samples[0].TimeRaw}, TimeMs={ctx.Samples[0].TimeMs}");
+                Console.WriteLine($"[Sag] SecondSample TimeRaw={ctx.Samples[1].TimeRaw}, TimeMs={ctx.Samples[1].TimeMs}");
+                Console.WriteLine($"[Sag] SampleIntervalMs={ctx.Samples[1].TimeMs - ctx.Samples[0].TimeMs}");
             }
         }
 
@@ -385,8 +688,16 @@ namespace Preferred.Api.Services
             return new ZwavSagDetailDto
             {
                 Id = x.Id,
-                AnalysisId = x.AnalysisId,
+                FileId = x.FileId,
+                OriginalName = x.OriginalName,
+                Status = x.Status,
+                ErrorMessage = x.ErrorMessage,
+                HasSag = x.HasSag,
                 EventType = x.EventType,
+                EventCount = x.EventCount,
+                StartTime = x.StartTime,
+                FinishTime = x.FinishTime,
+                CostMs = x.CostMs,
                 StartTimeUtc = x.StartTimeUtc,
                 EndTimeUtc = x.EndTimeUtc,
                 OccurTimeUtc = x.OccurTimeUtc,
@@ -438,18 +749,26 @@ namespace Preferred.Api.Services
                 .ToArrayAsync();
         }
 
-        public async Task<ZwavSagDetailDto[]> GetByAnalysisIdAsync(int analysisId)
+        public async Task<ZwavSagDetailDto[]> GetByFileIdAsync(int fileId)
         {
             return await _context.ZwavSagEvents
                 .AsNoTracking()
-                .Where(x => x.AnalysisId == analysisId)
-                .OrderBy(x => x.OccurTimeUtc)
-                .ThenBy(x => x.SeqNo)
+                .Where(x => x.FileId == fileId)
+                .OrderByDescending(x => x.CrtTime)
+                .ThenByDescending(x => x.Id)
                 .Select(x => new ZwavSagDetailDto
                 {
                     Id = x.Id,
-                    AnalysisId = x.AnalysisId,
+                    FileId = x.FileId,
+                    OriginalName = x.OriginalName,
+                    Status = x.Status,
+                    ErrorMessage = x.ErrorMessage,
+                    HasSag = x.HasSag,
                     EventType = x.EventType,
+                    EventCount = x.EventCount,
+                    StartTime = x.StartTime,
+                    FinishTime = x.FinishTime,
+                    CostMs = x.CostMs,
                     StartTimeUtc = x.StartTimeUtc,
                     EndTimeUtc = x.EndTimeUtc,
                     OccurTimeUtc = x.OccurTimeUtc,
@@ -506,189 +825,48 @@ namespace Preferred.Api.Services
             if (phases.Count > 0)
                 _context.ZwavSagEventPhases.RemoveRange(phases);
 
-            _context.ZwavSagEvents.Remove(entity);
-
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<int> DeleteByAnalysisIdAsync(int analysisId)
-        {
-            return await DeleteByAnalysisIdInternalAsync(analysisId);
-        }
-
-        private async Task<int> DeleteByAnalysisIdInternalAsync(int analysisId)
-        {
             var rmsPoints = await _context.ZwavSagRmsPoints
-                .Where(x => x.AnalysisId == analysisId)
-                .ToListAsync();
-
-            var phaseItems = await _context.ZwavSagEventPhases
-                .Where(x => x.AnalysisId == analysisId)
-                .ToListAsync();
-
-            var eventItems = await _context.ZwavSagEvents
-                .Where(x => x.AnalysisId == analysisId)
+                .Where(x => x.SagEventId == id)
                 .ToListAsync();
 
             if (rmsPoints.Count > 0)
                 _context.ZwavSagRmsPoints.RemoveRange(rmsPoints);
 
-            if (phaseItems.Count > 0)
-                _context.ZwavSagEventPhases.RemoveRange(phaseItems);
-
-            if (eventItems.Count > 0)
-                _context.ZwavSagEvents.RemoveRange(eventItems);
-
-            if (rmsPoints.Count > 0 || phaseItems.Count > 0 || eventItems.Count > 0)
-                await _context.SaveChangesAsync();
-
-            return eventItems.Count;
+            _context.ZwavSagEvents.Remove(entity);
+            await _context.SaveChangesAsync();
+            return true;
         }
 
-        private bool IsVoltageChannel(ZwavChannel channel, List<string> rules)
+        public async Task<int> DeleteByFileIdAsync(int fileId)
         {
-            if (channel == null)
-                return false;
+            var events = await _context.ZwavSagEvents
+                .Where(x => x.FileId == fileId)
+                .ToListAsync();
 
-            if (rules == null || rules.Count == 0)
-                return false;
+            if (events.Count == 0)
+                return 0;
 
-            var channelCode = (channel.ChannelCode ?? string.Empty).ToUpperInvariant();
-            var channelName = (channel.ChannelName ?? string.Empty).ToUpperInvariant();
+            var eventIds = events.Select(x => x.Id).ToList();
 
-            foreach (var rule in rules)
-            {
-                if (string.IsNullOrWhiteSpace(rule))
-                    continue;
+            var phases = await _context.ZwavSagEventPhases
+                .Where(x => eventIds.Contains(x.SagEventId))
+                .ToListAsync();
 
-                var keyword = rule.Trim().ToUpperInvariant();
 
-                if (channelCode.Contains(keyword) || channelName.Contains(keyword))
-                    return true;
-            }
+            if (phases.Count > 0)
+                _context.ZwavSagEventPhases.RemoveRange(phases);
 
-            return false;
-        }
+            var rmsPoints = await _context.ZwavSagRmsPoints
+                .Where(x => eventIds.Contains(x.SagEventId))
+                .ToListAsync();
 
-        private static DateTime ResolveWaveStartTimeUtc(ZwavAnalysis analysis, ZwavCfg cfg)
-        {
-            if (analysis != null && analysis.CrtTime != default)
-            {
-                return analysis.CrtTime.Kind == DateTimeKind.Utc
-                    ? analysis.CrtTime
-                    : DateTime.SpecifyKind(analysis.CrtTime, DateTimeKind.Utc);
-            }
+            if (rmsPoints.Count > 0)
+                _context.ZwavSagRmsPoints.RemoveRange(rmsPoints);
 
-            return DateTime.UtcNow;
-        }
+            _context.ZwavSagEvents.RemoveRange(events);
+            await _context.SaveChangesAsync();
 
-        private static double? GetAnalogValue(ZwavData row, int channelIndex)
-        {
-            switch (channelIndex)
-            {
-                case 1: return row.Channel1;
-                case 2: return row.Channel2;
-                case 3: return row.Channel3;
-                case 4: return row.Channel4;
-                case 5: return row.Channel5;
-                case 6: return row.Channel6;
-                case 7: return row.Channel7;
-                case 8: return row.Channel8;
-                case 9: return row.Channel9;
-                case 10: return row.Channel10;
-                case 11: return row.Channel11;
-                case 12: return row.Channel12;
-                case 13: return row.Channel13;
-                case 14: return row.Channel14;
-                case 15: return row.Channel15;
-                case 16: return row.Channel16;
-                case 17: return row.Channel17;
-                case 18: return row.Channel18;
-                case 19: return row.Channel19;
-                case 20: return row.Channel20;
-                case 21: return row.Channel21;
-                case 22: return row.Channel22;
-                case 23: return row.Channel23;
-                case 24: return row.Channel24;
-                case 25: return row.Channel25;
-                case 26: return row.Channel26;
-                case 27: return row.Channel27;
-                case 28: return row.Channel28;
-                case 29: return row.Channel29;
-                case 30: return row.Channel30;
-                case 31: return row.Channel31;
-                case 32: return row.Channel32;
-                case 33: return row.Channel33;
-                case 34: return row.Channel34;
-                case 35: return row.Channel35;
-                case 36: return row.Channel36;
-                case 37: return row.Channel37;
-                case 38: return row.Channel38;
-                case 39: return row.Channel39;
-                case 40: return row.Channel40;
-                case 41: return row.Channel41;
-                case 42: return row.Channel42;
-                case 43: return row.Channel43;
-                case 44: return row.Channel44;
-                case 45: return row.Channel45;
-                case 46: return row.Channel46;
-                case 47: return row.Channel47;
-                case 48: return row.Channel48;
-                case 49: return row.Channel49;
-                case 50: return row.Channel50;
-                case 51: return row.Channel51;
-                case 52: return row.Channel52;
-                case 53: return row.Channel53;
-                case 54: return row.Channel54;
-                case 55: return row.Channel55;
-                case 56: return row.Channel56;
-                case 57: return row.Channel57;
-                case 58: return row.Channel58;
-                case 59: return row.Channel59;
-                case 60: return row.Channel60;
-                case 61: return row.Channel61;
-                case 62: return row.Channel62;
-                case 63: return row.Channel63;
-                case 64: return row.Channel64;
-                case 65: return row.Channel65;
-                case 66: return row.Channel66;
-                case 67: return row.Channel67;
-                case 68: return row.Channel68;
-                case 69: return row.Channel69;
-                case 70: return row.Channel70;
-                case 71: return row.Channel71;
-                case 72: return row.Channel72;
-                case 73: return row.Channel73;
-                case 74: return row.Channel74;
-                case 75: return row.Channel75;
-                case 76: return row.Channel76;
-                case 77: return row.Channel77;
-                case 78: return row.Channel78;
-                case 79: return row.Channel79;
-                case 80: return row.Channel80;
-                case 81: return row.Channel81;
-                case 82: return row.Channel82;
-                case 83: return row.Channel83;
-                case 84: return row.Channel84;
-                case 85: return row.Channel85;
-                case 86: return row.Channel86;
-                case 87: return row.Channel87;
-                case 88: return row.Channel88;
-                case 89: return row.Channel89;
-                case 90: return row.Channel90;
-                case 91: return row.Channel91;
-                case 92: return row.Channel92;
-                case 93: return row.Channel93;
-                case 94: return row.Channel94;
-                case 95: return row.Channel95;
-                case 96: return row.Channel96;
-                case 97: return row.Channel97;
-                case 98: return row.Channel98;
-                case 99: return row.Channel99;
-                case 100: return row.Channel100;
-                default: return null;
-            }
+            return events.Count;
         }
     }
 }

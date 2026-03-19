@@ -18,6 +18,7 @@
 
           <el-form-item label="事件类型">
             <el-select v-model="searchForm.eventType" placeholder="全部" clearable style="width: 140px">
+              <el-option label="正常 (Normal)" value="Normal" />
               <el-option label="暂降 (Sag)" value="Sag" />
               <el-option label="中断 (Interruption)" value="Interruption" />
             </el-select>
@@ -66,29 +67,49 @@
       <el-table :data="rows" v-loading="loading" border stripe style="width: 100%">
         <el-table-column type="index" label="序号" width="60" align="center" />
         <el-table-column prop="originalName" label="录波文件名" min-width="240" show-overflow-tooltip />
-        <!-- <el-table-column prop="analysisGuid" label="AnalysisGuid" min-width="220" show-overflow-tooltip /> -->
-        <el-table-column prop="eventType" label="事件类型" width="120">
+
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="getAnalyzeStatusType(row.status)">
+              {{ getAnalyzeStatusText(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="hasSag" label="是否暂降" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.hasSag ? 'danger' : 'success'">
+              {{ row.hasSag ? '有' : '无' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="eventType" label="结果类型" width="140">
           <template #default="{ row }">{{ formatEventType(row.eventType) }}</template>
         </el-table-column>
-        <el-table-column prop="occurTimeUtc" label="发生时间(UTC)" width="180">
-          <template #default="{ row }">{{ formatDateTime(row.occurTimeUtc) }}</template>
+
+        <el-table-column prop="eventCount" label="事件数" width="90" align="right" />
+        <el-table-column prop="costMs" label="耗时(ms)" width="120" align="right">
+          <template #default="{ row }">{{ row.costMs ?? '-' }}</template>
         </el-table-column>
-        <el-table-column prop="sagPercent" label="暂降幅值(%)" width="130">
-          <template #default="{ row }">{{ formatPercent(row.sagPercent) }}</template>
-        </el-table-column>
-        <el-table-column prop="residualVoltagePct" label="残余电压占比(%)" width="150">
-          <template #default="{ row }">{{ formatPercent(row.residualVoltagePct) }}</template>
-        </el-table-column>
-        <el-table-column prop="durationMs" label="持续时间(ms)" width="130">
-          <template #default="{ row }">{{ formatMs(row.durationMs) }}</template>
+        <el-table-column prop="crtTime" label="创建时间" width="180">
+          <template #default="{ row }">{{ formatDateTime(row.crtTime) }}</template>
         </el-table-column>
         <el-table-column prop="worstPhase" label="最严重相" width="100" />
-        <el-table-column prop="triggerPhase" label="触发相" width="100" />
-        <el-table-column prop="endPhase" label="终止相" width="100" />
 
-        <el-table-column label="操作" width="180" fixed="right" align="center">
+        <el-table-column label="操作" width="240" fixed="right" align="center">
           <template #default="{ row }">
+            <el-button link type="primary" @click="viewOnline(row)">在线浏览</el-button>
+
+            <el-popconfirm title="确定要重新分析该文件吗？" @confirm="reanalyzeRow(row)">
+              <template #reference>
+                <el-button link type="warning" :loading="reanalyzingIds.has(row.id)">重新分析</el-button>
+              </template>
+            </el-popconfirm>
+
+            <el-button link type="primary" @click="openProcess(row)">过程</el-button>
             <el-button link type="primary" @click="openDetailDialog(row)">详情</el-button>
+
             <el-popconfirm title="确定要删除该事件吗？" @confirm="handleDelete(row)">
               <template #reference>
                 <el-button link type="danger">删除</el-button>
@@ -115,6 +136,15 @@
     <el-dialog v-model="createDialogVisible" title="新增暂降分析" width="960px" :close-on-click-modal="false">
       <div class="dialog-body">
         <div class="analysis-params">
+          <div class="fixed-algorithm-tip">
+            <el-alert
+              title="分析算法已固定：1周波 RMS 窗口 + 半周波更新"
+              type="info"
+              :closable="false"
+              show-icon
+            />
+          </div>
+
           <el-form :inline="true" size="small">
             <el-form-item label="暂降阈值(%)">
               <el-input-number v-model="analysisParams.sagThresholdPct" :min="0" :max="100" :step="1" />
@@ -130,13 +160,6 @@
 
             <el-form-item label="迟滞(%)">
               <el-input-number v-model="analysisParams.hysteresisPct" :min="0" :max="20" :step="0.5" />
-            </el-form-item>
-
-            <el-form-item label="RMS模式">
-              <el-select v-model="analysisParams.rmsMode" style="width: 160px">
-                <el-option label="半周波刷新 (HalfCycle)" value="HalfCycle" />
-                <el-option label="全周波刷新 (OneCycle)" value="OneCycle" />
-              </el-select>
             </el-form-item>
 
             <el-form-item>
@@ -157,7 +180,6 @@
           <el-table-column type="selection" width="55" align="center" />
           <el-table-column type="index" label="序号" width="60" align="center" />
           <el-table-column prop="originalName" label="录波文件名" min-width="240" show-overflow-tooltip />
-          <!-- <el-table-column prop="analysisGuid" label="AnalysisGuid" min-width="220" show-overflow-tooltip /> -->
           <el-table-column prop="status" label="状态" width="120">
             <template #default="{ row }">
               <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
@@ -207,11 +229,11 @@
       :close-on-click-modal="false"
     >
       <div class="dialog-body">
-        <div class="search-bar" style="margin-bottom: 15px; padding: 10px;">
+        <div class="search-bar inner-search-bar">
           <el-input
             v-model="channelRuleKeyword"
             placeholder="请输入规则名称"
-            style="width: 200px; margin-right: 10px;"
+            style="width: 220px"
             clearable
             @keyup.enter="handleChannelRuleSearch"
           />
@@ -250,6 +272,7 @@
           />
         </div>
       </div>
+
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="channelRuleDialogVisible = false">关闭</el-button>
@@ -272,6 +295,7 @@
           <el-input-number v-model="channelRuleForm.seqNo" :min="0" :step="1" />
         </el-form-item>
       </el-form>
+
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="channelRuleEditDialogVisible = false">取消</el-button>
@@ -285,15 +309,20 @@
       <div v-loading="detailLoading">
         <el-descriptions title="基本信息" :column="2" border>
           <el-descriptions-item label="事件ID">{{ currentDetail?.id ?? '-' }}</el-descriptions-item>
-          <el-descriptions-item label="Analysis ID">{{ currentDetail?.analysisId ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="录波文件ID">{{ currentDetail?.fileId ?? '-' }}</el-descriptions-item>
 
-          <el-descriptions-item label="录波文件">{{ currentDetail?.fileName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="AnalysisGuid">{{ currentDetail?.analysisGuid || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="录波文件名">{{ currentDetail?.originalName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ getAnalyzeStatusText(currentDetail?.status) }}</el-descriptions-item>
 
-          <el-descriptions-item label="站点">{{ currentDetail?.stationName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="装置">{{ currentDetail?.deviceId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="是否暂降">
+            {{ currentDetail?.hasSag ? '有' : '无' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="结果类型">{{ formatEventType(currentDetail?.eventType) }}</el-descriptions-item>
 
-          <el-descriptions-item label="事件类型">{{ formatEventType(currentDetail?.eventType) }}</el-descriptions-item>
+          <el-descriptions-item label="事件数">{{ currentDetail?.eventCount ?? '-' }}</el-descriptions-item>
+          <el-descriptions-item label="耗时(ms)">{{ currentDetail?.costMs ?? '-' }}</el-descriptions-item>
+
+          <el-descriptions-item label="错误信息">{{ currentDetail?.errorMessage || '-' }}</el-descriptions-item>
           <el-descriptions-item label="最严重相">{{ currentDetail?.worstPhase || '-' }}</el-descriptions-item>
 
           <el-descriptions-item label="触发相">{{ currentDetail?.triggerPhase || '-' }}</el-descriptions-item>
@@ -304,31 +333,8 @@
 
           <el-descriptions-item label="发生时间">{{ formatDateTime(currentDetail?.occurTimeUtc) }}</el-descriptions-item>
           <el-descriptions-item label="持续时间(ms)">{{ formatMs(currentDetail?.durationMs) }}</el-descriptions-item>
-
-          <el-descriptions-item label="暂降幅值(%)">{{ formatPercent(currentDetail?.sagPercent) }}</el-descriptions-item>
-          <el-descriptions-item label="残余电压">{{ formatNumber(currentDetail?.residualVoltage) }}</el-descriptions-item>
-
-          <el-descriptions-item label="残余电压占比(%)">
-            {{ formatPercent(currentDetail?.residualVoltagePct) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="暂降深度">{{ formatNumber(currentDetail?.sagDepth) }}</el-descriptions-item>
-
-          <el-descriptions-item label="参考电压">{{ formatNumber(currentDetail?.referenceVoltage) }}</el-descriptions-item>
-          <el-descriptions-item label="参考类型">{{ currentDetail?.referenceType || '-' }}</el-descriptions-item>
-
-          <el-descriptions-item label="暂降阈值(%)">
-            {{ formatPercent(currentDetail?.sagThresholdPct) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="中断阈值(%)">
-            {{ formatPercent(currentDetail?.interruptThresholdPct) }}
-          </el-descriptions-item>
-
-          <el-descriptions-item label="迟滞(%)">
-            {{ formatPercent(currentDetail?.hysteresisPct) }}
-          </el-descriptions-item>
-          <el-descriptions-item label="备注">
-            {{ currentDetail?.remark || '-' }}
-          </el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{ formatDateTime(currentDetail?.crtTime) }}</el-descriptions-item>
+          <el-descriptions-item label="备注">{{ currentDetail?.remark || '-' }}</el-descriptions-item>
         </el-descriptions>
 
         <div class="phase-section">
@@ -387,6 +393,17 @@ import { zwavService, type ZwavFileAnalysis } from '@/services/zwavService'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
+
+const DEFAULT_ANALYSIS_PARAMS = {
+  sagThresholdPct: 90,
+  interruptThresholdPct: 10,
+  hysteresisPct: 2,
+  forceRebuild: false,
+  minDurationMs: 10
+}
 
 const loading = ref(false)
 const dateRange = ref<string[]>([])
@@ -415,6 +432,70 @@ const formatDateTime = (str?: string | null) => {
   if (!str) return '-'
   const d = new Date(str)
   return isNaN(d.getTime()) ? str : d.toLocaleString()
+}
+
+const formatFileSize = (bytes?: number | null) => {
+  if (bytes === undefined || bytes === null) return '-'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+const formatEventType = (type?: string | null) => {
+  if (!type) return '-'
+  if (type === 'Normal') return '正常 (Normal)'
+  if (type === 'Sag') return '暂降 (Sag)'
+  if (type === 'Interruption') return '中断 (Interruption)'
+  return type
+}
+
+const getAnalyzeStatusType = (status?: number) => {
+  if (status === 0) return 'warning'
+  if (status === 1) return 'primary'
+  if (status === 2) return 'success'
+  if (status === 3) return 'danger'
+  return 'info'
+}
+
+const getAnalyzeStatusText = (status?: number) => {
+  if (status === 0) return '待处理'
+  if (status === 1) return '处理中'
+  if (status === 2) return '成功'
+  if (status === 3) return '失败'
+  return '-'
+}
+
+const getStatusType = (status?: string) => {
+  const map: Record<string, string> = {
+    Queued: 'warning',
+    Canceled: 'info',
+    Completed: 'success',
+    Failed: 'danger',
+    ParsingRead: 'primary',
+    ParsingExtract: 'primary',
+    ParsingCfg: 'primary',
+    ParsingHdr: 'primary',
+    ParsingChannel: 'primary',
+    ParsingDat: 'primary'
+  }
+  return status ? map[status] || 'info' : 'info'
+}
+
+const getStatusText = (status?: string) => {
+  const map: Record<string, string> = {
+    Queued: '排队中',
+    Canceled: '已取消',
+    Completed: '已完成',
+    Failed: '失败',
+    ParsingRead: '读取录波',
+    ParsingExtract: '解压中',
+    ParsingCfg: '解析CFG',
+    ParsingHdr: '解析HDR',
+    ParsingChannel: '解析通道',
+    ParsingDat: '解析DAT数据'
+  }
+  return status ? map[status] || status : '-'
 }
 
 const reload = async () => {
@@ -450,6 +531,11 @@ const reload = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const openProcess = (row: ZwavSagListItemDto) => {
+  const href = router.resolve({ name: 'ZwavSagProcess', params: { id: row.id } }).href
+  window.open(href, '_blank')
 }
 
 const handleSearch = () => {
@@ -489,59 +575,15 @@ const analysisPagination = reactive({
 })
 
 const analysisParams = reactive({
-  sagThresholdPct: 90,
-  interruptThresholdPct: 10,
-  hysteresisPct: 2,
-  forceRebuild: false,
-  rmsMode: 'HalfCycle',
-  minDurationMs: 1000
+  ...DEFAULT_ANALYSIS_PARAMS
 })
 
-const formatFileSize = (bytes?: number | null) => {
-  if (bytes === undefined || bytes === null) return '-'
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`
-  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`
-}
-
-const formatEventType = (type?: string | null) => {
-  if (!type) return '-'
-  if (type === 'Sag') return '暂降 (Sag)'
-  if (type === 'Interruption') return '中断 (Interruption)'
-  return type
-}
-
-const getStatusType = (status?: string) => {
-  const map: Record<string, string> = {
-    Queued: 'warning',
-    Canceled: 'info',
-    Completed: 'success',
-    Failed: 'danger',
-    ParsingRead: 'primary',
-    ParsingExtract: 'primary',
-    ParsingCfg: 'primary',
-    ParsingHdr: 'primary',
-    ParsingChannel: 'primary',
-    ParsingDat: 'primary'
-  }
-  return status ? map[status] || 'info' : 'info'
-}
-
-const getStatusText = (status?: string) => {
-  const map: Record<string, string> = {
-    Queued: '排队中',
-    Canceled: '已取消',
-    Completed: '已完成',
-    Failed: '失败',
-    ParsingRead: '读取录波',
-    ParsingExtract: '解压中',
-    ParsingCfg: '解析CFG',
-    ParsingHdr: '解析HDR',
-    ParsingChannel: '解析通道',
-    ParsingDat: '解析DAT数据'
-  }
-  return status ? map[status] || status : '-'
+const resetAnalysisParams = () => {
+  analysisParams.sagThresholdPct = DEFAULT_ANALYSIS_PARAMS.sagThresholdPct
+  analysisParams.interruptThresholdPct = DEFAULT_ANALYSIS_PARAMS.interruptThresholdPct
+  analysisParams.hysteresisPct = DEFAULT_ANALYSIS_PARAMS.hysteresisPct
+  analysisParams.forceRebuild = DEFAULT_ANALYSIS_PARAMS.forceRebuild
+  analysisParams.minDurationMs = DEFAULT_ANALYSIS_PARAMS.minDurationMs
 }
 
 const fetchAnalysisList = async () => {
@@ -573,13 +615,7 @@ const openCreateDialog = async () => {
   createDialogVisible.value = true
   selectedAnalyses.value = []
   analysisPagination.page = 1
-
-  analysisParams.sagThresholdPct = 90
-  analysisParams.interruptThresholdPct = 10
-  analysisParams.hysteresisPct = 2
-  analysisParams.forceRebuild = false
-  analysisParams.rmsMode = 'HalfCycle'
-
+  resetAnalysisParams()
   await fetchAnalysisList()
 }
 
@@ -598,25 +634,37 @@ const handleAnalysisSizeChange = (s: number) => {
   fetchAnalysisList()
 }
 
+const buildAnalyzePayload = (options?: { fileIds?: number[]; analysisGuids?: string[]; forceRebuild?: boolean }) => {
+  return {
+    fileIds: options?.fileIds || [],
+    analysisGuids: options?.analysisGuids || [],
+    forceRebuild: options?.forceRebuild ?? analysisParams.forceRebuild,
+    sagThresholdPct: analysisParams.sagThresholdPct,
+    interruptThresholdPct: analysisParams.interruptThresholdPct,
+    hysteresisPct: analysisParams.hysteresisPct,
+    minDurationMs: analysisParams.minDurationMs
+  }
+}
+
 const startSagAnalysis = async () => {
   const analysisGuids = selectedAnalyses.value.map(x => x.analysisGuid).filter(Boolean)
-  
-  if (analysisGuids.length === 0) return
+
+  if (analysisGuids.length === 0) {
+    ElMessage.warning('请至少选择一个录波文件')
+    return
+  }
 
   analyzing.value = true
   try {
-    const res = await zwavSagService.analyze({
-      analysisGuids,
-      forceRebuild: analysisParams.forceRebuild,
-      sagThresholdPct: analysisParams.sagThresholdPct,
-      interruptThresholdPct: analysisParams.interruptThresholdPct,
-      hysteresisPct: analysisParams.hysteresisPct,
-      minDurationMs: analysisParams.minDurationMs,
-      rmsMode: analysisParams.rmsMode
-    })
+    const res = await zwavSagService.analyze(
+      buildAnalyzePayload({
+        analysisGuids,
+        forceRebuild: analysisParams.forceRebuild
+      })
+    )
 
     if (res.success) {
-      ElMessage.success(`分析完成：任务 ${res.data?.analyzedCount || 0} 个，事件 ${res.data?.createdEventCount || 0} 条`)
+      ElMessage.success(`已生成结果记录：${res.data?.createdEventCount || 0} 条`)
       createDialogVisible.value = false
       page.value = 1
       reload()
@@ -630,12 +678,57 @@ const startSagAnalysis = async () => {
   }
 }
 
-
 // 详情
 const detailDialogVisible = ref(false)
 const detailLoading = ref(false)
 const currentDetail = ref<ZwavSagDetailDto | null>(null)
 const currentPhases = ref<ZwavSagPhaseDto[]>([])
+const reanalyzingIds = ref(new Set<number>())
+
+const viewOnline = async (row: ZwavSagListItemDto) => {
+  try {
+    const r = await zwavService.createAnalysis(row.fileId, false)
+    const guid = r.data?.analysisGuid
+    if (!r.success || !guid) {
+      ElMessage.error(r.message || '获取解析任务失败')
+      return
+    }
+
+    const routeUrl = router.resolve({
+      name: 'ZwavOnlineViewer',
+      params: { guid }
+    })
+    window.open(routeUrl.href, '_blank')
+  } catch (e: any) {
+    ElMessage.error(e?.message ? `打开在线浏览失败（${e.message}）` : '打开在线浏览失败')
+  }
+}
+
+const reanalyzeRow = async (row: ZwavSagListItemDto) => {
+  if (reanalyzingIds.value.has(row.id)) return
+
+  reanalyzingIds.value.add(row.id)
+  try {
+    const res = await zwavSagService.reanalyze(
+      buildAnalyzePayload({
+        fileIds: [row.fileId],
+        analysisGuids: [],
+        forceRebuild: true
+      })
+    )
+
+    if (res.success) {
+      ElMessage.success(`已重新分析：生成 ${res.data?.createdEventCount || 0} 条`)
+      reload()
+    } else {
+      ElMessage.error(res.message || '重新分析失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(e?.message ? `重新分析失败（${e.message}）` : '重新分析失败')
+  } finally {
+    reanalyzingIds.value.delete(row.id)
+  }
+}
 
 const openDetailDialog = async (row: ZwavSagListItemDto) => {
   detailDialogVisible.value = true
@@ -690,7 +783,7 @@ const channelRuleLoading = ref(false)
 const channelRuleRows = ref<ZwavSagChannelRuleDto[]>([])
 const channelRulePagination = reactive({
   page: 1,
-  pageSize: 10,/*  */
+  pageSize: 10,
   total: 0
 })
 
@@ -818,18 +911,14 @@ const openChannelRuleEditDialog = async (row?: ZwavSagChannelRuleDto) => {
     const localNext = computeLocalNextChannelRuleSeqNo()
     channelRuleForm.seqNo = localNext
     const serverNext = await getNextChannelRuleSeqNo()
-    if (
-      channelRuleEditDialogVisible.value &&
-      !isEditRule.value &&
-      channelRuleForm.seqNo === localNext
-    ) {
+    if (channelRuleEditDialogVisible.value && !isEditRule.value && channelRuleForm.seqNo === localNext) {
       channelRuleForm.seqNo = serverNext
     }
   }
 }
 
 const saveChannelRule = async () => {
-  if (!channelRuleForm.ruleName) {
+  if (!channelRuleForm.ruleName?.trim()) {
     ElMessage.warning('规则名称不能为空')
     return
   }
@@ -839,12 +928,12 @@ const saveChannelRule = async () => {
     let res: any
     if (isEditRule.value) {
       res = await zwavSagService.updateChannelRule(currentRuleId.value, {
-        ruleName: channelRuleForm.ruleName,
+        ruleName: channelRuleForm.ruleName.trim(),
         seqNo: channelRuleForm.seqNo
       })
     } else {
       res = await zwavSagService.createChannelRule({
-        ruleName: channelRuleForm.ruleName,
+        ruleName: channelRuleForm.ruleName.trim(),
         seqNo: channelRuleForm.seqNo
       })
     }
@@ -901,6 +990,11 @@ const saveChannelRule = async () => {
   gap: 12px;
 }
 
+.inner-search-bar {
+  margin-bottom: 15px;
+  padding: 10px;
+}
+
 .search-left {
   flex: 1;
   min-width: 0;
@@ -934,6 +1028,10 @@ const saveChannelRule = async () => {
   background: #f8fafc;
   border: 1px solid #ebeef5;
   border-radius: 6px;
+}
+
+.fixed-algorithm-tip {
+  margin-bottom: 12px;
 }
 
 .dialog-pagination {
