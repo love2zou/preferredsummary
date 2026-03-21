@@ -121,7 +121,7 @@
 
         <el-table-column label="操作" width="240" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openSagWave(row)">暂降波形</el-button>
+            <el-button link type="primary" @click="openSagWave(row)">暂降分析</el-button>
             <el-button link type="primary" @click="viewOnline(row)">录波浏览</el-button>
 
             <el-popconfirm title="确定要删除该事件吗？" @confirm="handleDelete(row)">

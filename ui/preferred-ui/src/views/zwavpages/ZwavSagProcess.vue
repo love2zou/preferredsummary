@@ -11,6 +11,13 @@
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
+        <el-button size="small" @click="showWaveSettingDialog = true">
+          <el-icon><Setting /></el-icon>
+          波形设置
+        </el-button>
+        <el-button size="small" type="primary" :loading="previewing" @click="preview">
+          预览计算
+        </el-button>
       </div>
     </div>
 
@@ -28,78 +35,12 @@
 
       <!-- 右侧：波形 + 容忍度曲线 + 暂降清单 -->
       <div class="right-panel">
-        <!-- 参数工具条 -->
-        <el-card shadow="never" class="toolbar-card">
-          <div class="toolbar-row">
-            <div class="toolbar-left">
-              <el-form :inline="true" size="small">
-                <el-form-item label="参考电压">
-                  <el-input-number
-                    v-model="params.referenceVoltage"
-                    :min="0"
-                    :step="0.01"
-                    :precision="2"
-                    style="width: 120px"
-                  />
-                </el-form-item>
-
-                <el-form-item label="暂降阈值(%)">
-                  <el-input-number
-                    v-model="params.sagThresholdPct"
-                    :min="0"
-                    :max="100"
-                    :step="1"
-                    style="width: 110px"
-                  />
-                </el-form-item>
-
-                <el-form-item label="中断阈值(%)">
-                  <el-input-number
-                    v-model="params.interruptThresholdPct"
-                    :min="0"
-                    :max="100"
-                    :step="1"
-                    style="width: 110px"
-                  />
-                </el-form-item>
-
-                <el-form-item label="迟滞(%)">
-                  <el-input-number
-                    v-model="params.hysteresisPct"
-                    :min="0"
-                    :max="30"
-                    :step="0.5"
-                    style="width: 100px"
-                  />
-                </el-form-item>
-
-                <el-form-item label="最小持续(ms)">
-                  <el-input-number
-                    v-model="params.minDurationMs"
-                    :min="0"
-                    :step="1"
-                    style="width: 110px"
-                  />
-                </el-form-item>
-              </el-form>
-            </div>
-
-            <div class="toolbar-right">
-              <el-button @click="showWaveSettingDialog = true">
-                <el-icon><Setting /></el-icon>
-                波形设置
-              </el-button>
-              <el-button type="primary" :loading="previewing" @click="preview">
-                预览计算
-              </el-button>
-            </div>
-          </div>
-        </el-card>
-
-        <!-- 图表区域 -->
         <div class="charts-row">
-          <!-- 原始波形 -->
-          <div ref="rawCardWrapperRef" class="raw-card-wrapper">
+          <div
+            ref="rawCardWrapperRef"
+            class="raw-card-wrapper"
+            :class="{ 'is-window-fullscreen': isRawFullScreen }"
+          >
             <el-card shadow="never" class="chart-card raw-card">
               <template #header>
                 <div class="card-header">
@@ -107,7 +48,10 @@
                     <span>原始波形</span>
                     <span class="card-sub">
                       参考电压：{{ getRefVoltageText() }} V，
-                      暂降阈值：{{ formatPercent(params.sagThresholdPct) }}%
+                      暂降阈值：{{ formatPercent(params.sagThresholdPct) }}%，
+                      中断阈值：{{ formatPercent(params.interruptThresholdPct) }}%，
+                      迟滞：{{ formatPercent(params.hysteresisPct) }}%，
+                      最小持续：{{ formatMs(params.minDurationMs) }} ms
                     </span>
                   </div>
                   <div class="card-header-right">
@@ -185,88 +129,162 @@
               </div>
             </el-card>
           </div>
+        </div>
 
-          <!-- 容忍度曲线 -->
+        <div class="bottom-row" :style="{ height: `${bottomRowHeight}px` }">
           <el-card shadow="never" class="chart-card tolerance-card">
             <template #header>
               <div class="card-header">
                 <span>容忍度曲线</span>
-                <span class="card-sub">按“持续时间(s) - 残余电压(%)”打点</span>
+                <span class="card-sub">清单勾选后打点</span>
               </div>
             </template>
 
             <div class="tolerance-legend">
               <span class="legend-item curve">标准容忍度折线</span>
-              <span class="legend-item point">暂降事件点</span>
+              <span v-for="x in tolerancePointLegends" :key="x.key" class="legend-item dyn-point">
+                <span class="legend-dot" :style="{ background: x.color }"></span>
+                <span class="legend-text">{{ x.label }}</span>
+              </span>
             </div>
 
             <div ref="toleranceChartRef" class="tolerance-chart-content"></div>
+          </el-card>
 
-            <div class="tolerance-note">
-              说明：当前采用前端内置标准容忍度折线进行展示；若你后续有明确标准（如 ITIC / CBEMA / 自定义企业标准），可直接替换折线点集。
+          <el-card shadow="never" class="list-card">
+            <template #header>
+              <div class="card-header">
+                <span>电压暂降清单</span>
+                <span class="card-sub">共 {{ sagListRows.length }} 条</span>
+              </div>
+            </template>
+
+            <div class="list-table-wrap">
+              <el-table
+                ref="sagTableRef"
+                :data="sagListRows"
+                border
+                stripe
+                size="small"
+                height="100%"
+                :row-key="getSagRowKey"
+                @selection-change="handleSagSelectionChange"
+              >
+                <el-table-column type="selection" width="50" align="center" reserve-selection />
+                <el-table-column type="index" label="序号" width="50" align="center" />
+                <el-table-column prop="phase" label="相别" width="70" align="center" />
+                <el-table-column prop="eventTypeText" label="事件类型" width="100" align="center" />
+                <el-table-column prop="occurTimeText" label="发生时间" min-width="180" />
+                <el-table-column prop="durationMs" label="持续时间(ms)" width="120" align="left">
+                  <template #default="{ row }">{{ formatMs(row.durationMs) }}</template>
+                </el-table-column>
+                <el-table-column prop="sagMagnitudePct" label="暂降幅值（%）" width="100" align="left">
+                  <template #default="{ row }">{{ formatPercent(row.sagMagnitudePct) }}</template>
+                </el-table-column>
+                <el-table-column prop="residualVoltagePct" label="残余电压(%)" width="100" align="left">
+                  <template #default="{ row }">{{ formatPercent(row.residualVoltagePct) }}</template>
+                </el-table-column>
+              </el-table>
             </div>
           </el-card>
         </div>
-
-        <!-- 暂降清单 -->
-        <el-card shadow="never" class="list-card">
-          <template #header>
-            <div class="card-header">
-              <span>电压暂降清单</span>
-              <span class="card-sub">共 {{ sagListRows.length }} 条</span>
-            </div>
-          </template>
-
-          <el-table
-            :data="sagListRows"
-            border
-            stripe
-            size="small"
-            :height="sagListTableHeight"
-            :row-key="getSagRowKey"
-            @selection-change="handleSagSelectionChange"
-          >
-            <el-table-column type="selection" width="50" align="center" reserve-selection />
-            <el-table-column type="index" label="序号" width="70" align="center" />
-            <el-table-column prop="phase" label="相别" width="80" align="center" />
-            <el-table-column prop="eventTypeText" label="事件类型" width="110" align="center" />
-            <el-table-column prop="occurTimeText" label="发生时间" min-width="180" />
-            <el-table-column prop="durationMs" label="持续时间(ms)" width="120" align="right">
-              <template #default="{ row }">{{ formatMs(row.durationMs) }}</template>
-            </el-table-column>
-            <el-table-column prop="sagMagnitudePct" label="暂降幅值（%）" width="130" align="right">
-              <template #default="{ row }">{{ formatPercent(row.sagMagnitudePct) }}</template>
-            </el-table-column>
-            <el-table-column prop="residualVoltage" label="残余电压" width="120" align="right">
-              <template #default="{ row }">{{ formatV(row.residualVoltage) }}</template>
-            </el-table-column>
-          </el-table>
-        </el-card>
       </div>
     </div>
 
     <!-- 波形设置 -->
-    <el-dialog v-model="showWaveSettingDialog" title="波形设置" width="560px">
+    <el-dialog v-model="showWaveSettingDialog" title="波形设置" width="720px">
       <el-form label-width="120px" size="small">
-        <el-form-item label="波形高度(px)">
-          <el-input-number v-model="gridHeightSetting" :min="80" :max="260" :step="10" />
-        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="参考电压(V)">
+              <div class="param-field">
+                <el-input-number v-model="params.referenceVoltage" :min="0" :step="0.01" :precision="2" />
+                <div class="param-desc">用于将百分比阈值换算为电压；一般填写额定相电压/线电压对应值。</div>
+              </div>
+            </el-form-item>
+          </el-col>
 
-        <el-form-item label="FromSample">
-          <el-input-number v-model="searchFromSample" :min="0" :step="1" />
-        </el-form-item>
+          <el-col :span="12">
+            <el-form-item label="暂降阈值(%)">
+              <div class="param-field">
+                <el-input-number v-model="params.sagThresholdPct" :min="0" :max="100" :step="1" />
+                <div class="param-desc">当电压低于参考电压的该百分比时，判定进入暂降。</div>
+              </div>
+            </el-form-item>
+          </el-col>
 
-        <el-form-item label="ToSample">
-          <el-input-number v-model="searchToSample" :min="0" :step="1" />
-        </el-form-item>
+          <el-col :span="12">
+            <el-form-item label="中断阈值(%)">
+              <div class="param-field">
+                <el-input-number v-model="params.interruptThresholdPct" :min="0" :max="100" :step="1" />
+                <div class="param-desc">当电压低于该百分比时，判定为中断（更严重）。</div>
+              </div>
+            </el-form-item>
+          </el-col>
 
-        <el-form-item label="Limit">
-          <el-input-number v-model="searchLimit" :min="1000" :max="20000" :step="1000" />
-        </el-form-item>
+          <el-col :span="12">
+            <el-form-item label="迟滞(%)">
+              <div class="param-field">
+                <el-input-number v-model="params.hysteresisPct" :min="0" :max="30" :step="0.5" />
+                <div class="param-desc">用于抑制阈值附近抖动：恢复阈值 = 暂降阈值 + 迟滞。</div>
+              </div>
+            </el-form-item>
+          </el-col>
 
-        <el-form-item label="DownSample">
-          <el-input-number v-model="searchDownSample" :min="1" :step="1" />
-        </el-form-item>
+          <el-col :span="12">
+            <el-form-item label="最小持续(ms)">
+              <div class="param-field">
+                <el-input-number v-model="params.minDurationMs" :min="0" :step="1" />
+                <div class="param-desc">事件持续时间小于该值的暂降/中断将被忽略。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="波形高度(px)">
+              <div class="param-field">
+                <el-input-number v-model="gridHeightSetting" :min="80" :max="260" :step="10" />
+                <div class="param-desc">原始波形区域的显示高度，数值越大越“高”。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="FromSample(起始点)">
+              <div class="param-field">
+                <el-input-number v-model="searchFromSample" :min="0" :step="1" />
+                <div class="param-desc">波形拉取起始采样点（包含），用于快速定位局部区间。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="ToSample(结束点)">
+              <div class="param-field">
+                <el-input-number v-model="searchToSample" :min="0" :step="1" />
+                <div class="param-desc">波形拉取结束采样点（包含）；与起始点配合控制范围。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="Limit(最大点数)">
+              <div class="param-field">
+                <el-input-number v-model="searchLimit" :min="1000" :max="50000" :step="1000" />
+                <div class="param-desc">单次请求最多返回点数；范围越大加载越慢但细节更完整。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="DownSample(抽点)">
+              <div class="param-field">
+                <el-input-number v-model="searchDownSample" :min="1" :step="1" />
+                <div class="param-desc">下采样倍率：1 表示不抽点（取全部点）；2 表示每 2 点取 1 点。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
       </el-form>
 
       <template #footer>
@@ -398,7 +416,7 @@ const gridHeightSetting = ref(150)
 const searchFromSample = ref(0)
 const searchToSample = ref(10000)
 const searchLimit = ref(20000)
-const searchDownSample = ref(2)
+const searchDownSample = ref(1)
 
 const rawChartRef = ref<HTMLElement | null>(null)
 const toleranceChartRef = ref<HTMLElement | null>(null)
@@ -463,23 +481,15 @@ const formatV = (v?: number | null) => {
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 const toggleRawFullScreen = () => {
-  const el: any = rawCardWrapperRef.value
-  if (!el) return
-  if (!document.fullscreenElement) {
-    el.requestFullscreen?.().catch(() => {})
-    return
-  }
-  if (document.fullscreenElement === el) {
-    document.exitFullscreen?.().catch(() => {})
-    return
-  }
-  el.requestFullscreen?.().catch(() => {})
+  isRawFullScreen.value = !isRawFullScreen.value
+  nextTick(() => handleResize())
 }
 
-const onFullScreenChange = () => {
-  const el: any = rawCardWrapperRef.value
-  isRawFullScreen.value = !!document.fullscreenElement && !!el && document.fullscreenElement === el
-  handleResize()
+const onKeyDown = (e: KeyboardEvent) => {
+  if (e.key !== 'Escape') return
+  if (!isRawFullScreen.value) return
+  isRawFullScreen.value = false
+  nextTick(() => handleResize())
 }
 
 const getRefVoltage = () => {
@@ -507,6 +517,61 @@ const RAW_LINE_COLORS = ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', 
 const windowHeight = ref<number>(window.innerHeight)
 const hiddenChannelIndices = ref<number[]>([])
 const selectedSagRows = ref<any[]>([])
+const sagTableRef = ref<any>(null)
+const hasUserPickedSagRows = ref(false)
+const isApplyingDefaultSagSelection = ref(false)
+
+const defaultSagRowsForTolerance = computed(() => {
+  const list = (computedEvents.value || []).slice()
+  let maxMag = -Infinity
+  for (const evt of list) {
+    const mag = Number((evt as any)?.sagMagnitudePct ?? (evt as any)?.sagPercent)
+    if (!Number.isFinite(mag)) continue
+    if (mag > maxMag) maxMag = mag
+  }
+  if (!Number.isFinite(maxMag)) return []
+  return list.filter((evt: any) => {
+    const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
+    return Number.isFinite(mag) && Math.abs(mag - maxMag) < 1e-9
+  })
+})
+
+const tolerancePointLegends = computed(() => {
+  const picked = selectedSagRows.value || []
+  const list = hasUserPickedSagRows.value ? picked : picked.length > 0 ? picked : defaultSagRowsForTolerance.value
+  return list
+    .map((evt: any, idx: number) => {
+      const durationMs = Number(evt?.durationMs)
+      const x = durationMs / 1000
+      const y = Number(evt?.residualVoltagePct)
+      if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0) return null
+
+      const phase = String(evt?.phase || '-')
+      const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
+      if (!Number.isFinite(mag)) return null
+      const magText = formatPercent(mag)
+      const label = `${phase}-${magText}%`
+      const key = getSagRowKey(evt)
+      const color = RAW_LINE_COLORS[idx % RAW_LINE_COLORS.length]
+
+      return {
+        key,
+        label,
+        color,
+        point: {
+          name: label,
+          value: [x, y],
+          phase: evt.phase,
+          eventTypeText: evt.eventTypeText,
+          occurTimeText: evt.occurTimeText,
+          residualVoltage: evt.residualVoltage,
+          residualVoltagePct: evt.residualVoltagePct,
+          sagMagnitudePct: evt.sagMagnitudePct
+        }
+      }
+    })
+    .filter(Boolean) as any[]
+})
 
 const rawLegendChannels = computed(() => {
   const wave: any = lastWaveData.value
@@ -544,8 +609,45 @@ const getSagRowKey = (row: any) => {
 }
 
 const handleSagSelectionChange = (val: any[]) => {
+  if (!isApplyingDefaultSagSelection.value) hasUserPickedSagRows.value = true
   selectedSagRows.value = val || []
   updateToleranceChart()
+}
+
+const getDefaultSagRowsForTable = () => {
+  const list = (sagListRows.value || []).slice()
+  let maxMag = -Infinity
+  for (const evt of list) {
+    const mag = Number((evt as any)?.sagMagnitudePct ?? (evt as any)?.sagPercent)
+    if (!Number.isFinite(mag)) continue
+    if (mag > maxMag) maxMag = mag
+  }
+  if (!Number.isFinite(maxMag)) return []
+  return list.filter((evt: any) => {
+    const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
+    return Number.isFinite(mag) && Math.abs(mag - maxMag) < 1e-9
+  })
+}
+
+const applyDefaultSagSelectionIfNeeded = async () => {
+  if (hasUserPickedSagRows.value) return
+  const table = sagTableRef.value
+  if (!table) return
+  await nextTick()
+  if ((selectedSagRows.value || []).length > 0) return
+
+  const defaults = getDefaultSagRowsForTable()
+  if (defaults.length === 0) return
+
+  isApplyingDefaultSagSelection.value = true
+  try {
+    table.clearSelection?.()
+    for (const row of defaults) {
+      table.toggleRowSelection?.(row, true)
+    }
+  } finally {
+    isApplyingDefaultSagSelection.value = false
+  }
 }
 
 const formatUtcMs = (s?: string | null) => {
@@ -614,7 +716,15 @@ const sagListRows = computed(() => {
     }))
 })
 
-const sagListTableHeight = computed(() => Math.max(200, Math.floor(windowHeight.value * 0.25)))
+watch(
+  sagListRows,
+  async () => {
+    await applyDefaultSagSelectionIfNeeded()
+  },
+  { flush: 'post' }
+)
+
+const bottomRowHeight = computed(() => Math.max(260, Math.floor(windowHeight.value * 0.32)))
 
 const getGridRect = () => {
   if (!rawChart) return null
@@ -1122,85 +1232,126 @@ const updateRawChart = () => {
  * 后续你有明确标准时，只需要替换 toleranceStandardLine 即可
  */
 const toleranceStandardLine = [
-  [0.01, 0],
-  [0.02, 0],
-  [0.02, 50],
-  [0.15, 50],
-  [0.15, 70],
-  [0.18, 70],
-  [0.18, 80],
-  [10, 80],
-  [10, 90],
-  [100, 90]
+  [0, 0],
+  [0.05, 0],
+  [0.05, 50],
+  [0.2, 50],
+  [0.2, 70],
+  [0.5, 70],
+  [0.5, 80],
+  [1, 80],
+  [10, 80]
 ]
 
 const updateToleranceChart = () => {
   if (!toleranceChart) return
 
-  const points = selectedSagRows.value
-    .map((evt: any) => {
-      const durationMs = Number(evt?.durationMs)
-      const x = durationMs / 1000
-      const y = Number(evt?.residualVoltagePct)
-      if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0) return null
-
-      return {
-        name: `${evt.phase || '-'}相 ${evt.eventTypeText || ''}`,
-        value: [x, y],
-        phase: evt.phase,
-        eventTypeText: evt.eventTypeText,
-        occurTimeText: evt.occurTimeText,
-        residualVoltage: evt.residualVoltage
+  const pointSeries = tolerancePointLegends.value.map((x: any) => {
+    return {
+      name: x.label,
+      type: 'scatter',
+      symbolSize: 7,
+      data: [x.point],
+      itemStyle: { color: x.color },
+      label: {
+        show: true,
+        formatter: (p: any) => {
+          const d = p?.data || {}
+          return d.phase ? `${d.phase}相` : ''
+        },
+        position: 'top'
       }
-    })
-    .filter(Boolean) as any[]
+    }
+  })
 
   toleranceChart.setOption(
     {
       tooltip: {
         trigger: 'item',
         formatter: (p: any) => {
-          const d = p?.data || {}
-          const value = d?.value || []
+          const seriesName = String(p?.seriesName || '')
+          const d = p?.data
+
+          if (seriesName === '标准折点') {
+            const value = (Array.isArray(p?.value) ? p.value : Array.isArray(d) ? d : []) as any[]
+            const x = Number(value[0])
+            const y = Number(value[1])
+            return [
+              `<div><b>标准折点</b></div>`,
+              `<div>持续时间：${Number.isFinite(x) ? x.toFixed(3) : '-'} s</div>`,
+              `<div>残余电压：${Number.isFinite(y) ? y.toFixed(3) : '-'} %</div>`
+            ].join('')
+          }
+
+          const obj = (d && typeof d === 'object' && !Array.isArray(d) ? d : {}) as any
+          const value = (obj?.value || []) as any[]
           const x = Number(value[0])
           const y = Number(value[1])
           return [
-            `<div><b>${d.name || '事件点'}</b></div>`,
+            `<div><b>${obj.name || '事件点'}</b></div>`,
             `<div>持续时间：${Number.isFinite(x) ? x.toFixed(3) : '-'} s</div>`,
             `<div>残余电压：${Number.isFinite(y) ? y.toFixed(3) : '-'} %</div>`,
-            `<div>发生时间：${d.occurTimeText || '-'}</div>`,
-            `<div>残余电压：${formatV(d.residualVoltage)}</div>`
+            `<div>发生时间：${obj.occurTimeText || '-'}</div>`,
+            `<div>残余电压：${formatV(obj.residualVoltage)}</div>`
           ].join('')
         }
       },
       grid: {
-        left: 60,
-        right: 30,
-        top: 30,
-        bottom: 55
+        left: 32,
+        right: 80,
+        top: 12,
+        bottom: 0,
+        containLabel: true
       },
       xAxis: {
-        type: 'log',
+        type: 'value',
         name: '持续时间 (s)',
-        min: 0.01,
-        max: 100,
+        nameLocation: 'end',
+        nameGap: 80,
+        nameTextStyle: { align: 'right' },
+        min: 0,
+        max: 1,
+        splitNumber: 5,
+        axisLabel: {
+          fontSize: 10,
+          margin: 8,
+          formatter: (v: any) => {
+            const n = Number(v)
+            if (!Number.isFinite(n)) return String(v)
+            const s = n.toFixed(2)
+            return s.replace(/\.?0+$/, '')
+          }
+        },
         minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
-        minorTick: { show: true },
+        minorTick: { show: true, splitNumber: 4 },
         splitLine: {
           show: true,
-          lineStyle: { type: 'solid', opacity: 0.25 }
+          lineStyle: { type: 'solid', opacity: 0.35 }
         }
       },
       yAxis: {
         type: 'value',
         name: '残余电压 (%)',
+        nameLocation: 'middle',
+        nameRotate: 90,
+        nameGap: 32,
         min: 0,
         max: 100,
-        minorTick: { show: true },
+        splitNumber: 5,
+        axisLabel: {
+          fontSize: 10,
+          margin: 8,
+          formatter: (v: any) => {
+            const n = Number(v)
+            if (!Number.isFinite(n)) return String(v)
+            return String(Math.round(n))
+          }
+        },
+        minorTick: { show: true, splitNumber: 4 },
         minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
         splitLine: {
           show: true,
-          lineStyle: { type: 'solid', opacity: 0.25 }
+          lineStyle: { type: 'solid', opacity: 0.35 }
         }
       },
       series: [
@@ -1218,22 +1369,18 @@ const updateToleranceChart = () => {
           }
         },
         {
-          name: '暂降事件点',
+          name: '标准折点',
           type: 'scatter',
-          symbolSize: 10,
-          data: points,
-          itemStyle: {
-            color: '#ff4d4f'
+          data: toleranceStandardLine,
+          symbolSize: 12,
+          itemStyle: { color: '#1677ff', opacity: 0 },
+          emphasis: {
+            scale: true,
+            itemStyle: { opacity: 1 }
           },
-          label: {
-            show: true,
-            formatter: (p: any) => {
-              const d = p?.data || {}
-              return d.phase ? `${d.phase}相` : ''
-            },
-            position: 'top'
-          }
-        }
+          silent: false
+        },
+        ...pointSeries
       ]
     },
     true
@@ -1412,13 +1559,13 @@ onMounted(async () => {
   if (toleranceChartRef.value) toleranceChart = echarts.init(toleranceChartRef.value)
 
   window.addEventListener('resize', handleResize)
-  document.addEventListener('fullscreenchange', onFullScreenChange)
+  window.addEventListener('keydown', onKeyDown)
   await reload()
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  document.removeEventListener('fullscreenchange', onFullScreenChange)
+  window.removeEventListener('keydown', onKeyDown)
   rawChart?.dispose()
   toleranceChart?.dispose()
   rawChart = null
@@ -1511,7 +1658,7 @@ onUnmounted(() => {
 
 .toolbar-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   align-items: center;
 }
@@ -1528,6 +1675,23 @@ onUnmounted(() => {
   align-items: center;
 }
 
+.param-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.param-field :deep(.el-input-number) {
+  width: 100%;
+}
+
+.param-desc {
+  font-size: 12px;
+  color: #909399;
+  line-height: 1.3;
+}
+
 .charts-row {
   display: flex;
   gap: 12px;
@@ -1541,7 +1705,7 @@ onUnmounted(() => {
 }
 
 .raw-card-wrapper {
-  flex: 1.35;
+  flex: 1;
   display: flex;
   min-width: 0;
 }
@@ -1564,8 +1728,16 @@ onUnmounted(() => {
   min-height: 0;
 }
 
+.bottom-row {
+  display: flex;
+  gap: 12px;
+  min-height: 0;
+}
+
 .tolerance-card {
-  flex: 0.85;
+  flex: 0 0 40%;
+  max-width: 40%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1580,7 +1752,7 @@ onUnmounted(() => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .list-card :deep(.el-card__header) {
@@ -1615,7 +1787,7 @@ onUnmounted(() => {
 .tolerance-chart-content {
   width: 100%;
   flex: 1;
-  min-height: 260px;
+  min-height: 0;
 }
 
 .tolerance-legend {
@@ -1623,6 +1795,9 @@ onUnmounted(() => {
   gap: 12px;
   margin-bottom: 8px;
   flex-wrap: wrap;
+  max-height: 72px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .legend-item {
@@ -1652,6 +1827,18 @@ onUnmounted(() => {
   background: #ff4d4f;
 }
 
+.legend-item.dyn-point::before {
+  display: none;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 6px;
+}
+
 .tolerance-note {
   margin-top: 10px;
   font-size: 12px;
@@ -1661,10 +1848,12 @@ onUnmounted(() => {
 }
 
 .list-card {
-  flex: 0 0 25%;
-  height: 25%;
-  min-height: 240px;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   border-radius: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
 .list-card :deep(.el-card__body) {
@@ -1680,6 +1869,12 @@ onUnmounted(() => {
   min-height: 0;
 }
 
+.list-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .icon-btn {
   font-size: 18px;
   color: #909399;
@@ -1691,15 +1886,18 @@ onUnmounted(() => {
   color: #409eff;
 }
 
-.raw-card-wrapper:fullscreen {
+.raw-card-wrapper.is-window-fullscreen {
   background: #fff;
   padding: 12px;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  position: fixed;
+  inset: 10px;
+  z-index: 3000;
 }
 
-.raw-card-wrapper:fullscreen .raw-card {
+.raw-card-wrapper.is-window-fullscreen .raw-card {
   flex: 1;
   display: flex;
   flex-direction: column;
