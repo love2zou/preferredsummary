@@ -522,6 +522,7 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagRmsPoint (
 CREATE TABLE IF NOT EXISTS Tb_ZwavSagChannelRule (
    Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
    RuleName             VARCHAR(100) NOT NULL COMMENT '规则名称（通道关键词，如A相电压、UA等）',
+   PhaseName            VARCHAR(100) NOT NULL COMMENT '相别名称（A/B/C/AB/BC/CA）',
    SeqNo                INT DEFAULT 0 NOT NULL COMMENT '排序号',
    CrtTime              DATETIME NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME NOT NULL COMMENT '最后修改时间'

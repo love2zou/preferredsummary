@@ -55,6 +55,11 @@
                     </span>
                   </div>
                   <div class="card-header-right">
+                    <el-tooltip content="导出均方根值" placement="top">
+                      <el-button link class="icon-btn" @click="exportRms">
+                        <el-icon><Download /></el-icon>
+                      </el-button>
+                    </el-tooltip>
                     <el-tooltip content="事件详情" placement="top">
                       <el-button link class="icon-btn" @click="showEventDetailDialog = true">
                         <el-icon><Tickets /></el-icon>
@@ -70,7 +75,7 @@
               </template>
 
               <div class="raw-legend">
-                <div class="raw-legend-channels">
+                <div class="raw-legend-all">
                   <span
                     v-for="c in rawLegendChannels"
                     :key="c.key"
@@ -81,8 +86,16 @@
                     <span class="legend-line" :style="{ background: c.color }"></span>
                     <span class="legend-text">{{ c.label }}</span>
                   </span>
-                </div>
-                <div class="raw-legend-meta">
+                  <span
+                    v-for="c in rmsLegendChannels"
+                    :key="c.key"
+                    class="raw-legend-item"
+                    :class="{ 'is-hidden': c.hidden }"
+                    @click.stop.prevent="toggleRmsLegendChannel(c.key)"
+                  >
+                    <span class="legend-line rms" :style="{ background: c.color }"></span>
+                    <span class="legend-text">{{ c.label }}</span>
+                  </span>
                   <span class="raw-legend-item">
                     <span class="legend-dash dash-sag"></span>
                     <span class="legend-text">暂降阈值</span>
@@ -96,16 +109,16 @@
                     <span class="legend-text">中断阈值</span>
                   </span>
                   <span class="raw-legend-item">
+                    <span class="legend-solid solid-rms"></span>
+                    <span class="legend-text">均方根(RMS)</span>
+                  </span>
+                  <span class="raw-legend-item">
                     <span class="legend-area"></span>
                     <span class="legend-text">暂降区间</span>
                   </span>
                   <span class="raw-legend-item">
                     <span class="legend-vline"></span>
                     <span class="legend-text">开始/结束</span>
-                  </span>
-                  <span class="raw-legend-item">
-                    <span class="legend-point"></span>
-                    <span class="legend-text">关键点</span>
                   </span>
                 </div>
               </div>
@@ -129,28 +142,22 @@
               </div>
             </el-card>
           </div>
-        </div>
 
-        <div class="bottom-row" :style="{ height: `${bottomRowHeight}px` }">
-          <el-card shadow="never" class="chart-card tolerance-card">
+          <el-card v-if="!isRawFullScreen" shadow="never" class="chart-card report-card">
             <template #header>
               <div class="card-header">
-                <span>容忍度曲线</span>
-                <span class="card-sub">清单勾选后打点</span>
+                <span>分析报告</span>
+                <span class="card-sub">基于暂降事件与RMS曲线</span>
               </div>
             </template>
 
-            <div class="tolerance-legend">
-              <span class="legend-item curve">标准容忍度折线</span>
-              <span v-for="x in tolerancePointLegends" :key="x.key" class="legend-item dyn-point">
-                <span class="legend-dot" :style="{ background: x.color }"></span>
-                <span class="legend-text">{{ x.label }}</span>
-              </span>
+            <div class="report-body">
+              <div v-for="(line, idx) in reportLines" :key="idx" class="report-line">{{ line }}</div>
             </div>
-
-            <div ref="toleranceChartRef" class="tolerance-chart-content"></div>
           </el-card>
+        </div>
 
+        <div class="bottom-row" :style="{ height: `${bottomRowHeight}px` }">
           <el-card shadow="never" class="list-card">
             <template #header>
               <div class="card-header">
@@ -174,11 +181,11 @@
                 <el-table-column type="index" label="序号" width="50" align="center" />
                 <el-table-column prop="phase" label="相别" width="70" align="center" />
                 <el-table-column prop="eventTypeText" label="事件类型" width="100" align="center" />
-                <el-table-column prop="occurTimeText" label="发生时间" min-width="180" />
+                <el-table-column prop="occurTimeText" label="发生时间" min-width="160" />
                 <el-table-column prop="durationMs" label="持续时间(ms)" width="120" align="left">
                   <template #default="{ row }">{{ formatMs(row.durationMs) }}</template>
                 </el-table-column>
-                <el-table-column prop="sagMagnitudePct" label="暂降幅值（%）" width="100" align="left">
+                <el-table-column prop="sagMagnitudePct" label="暂降幅值（%）" width="120" align="left">
                   <template #default="{ row }">{{ formatPercent(row.sagMagnitudePct) }}</template>
                 </el-table-column>
                 <el-table-column prop="residualVoltagePct" label="残余电压(%)" width="100" align="left">
@@ -186,6 +193,25 @@
                 </el-table-column>
               </el-table>
             </div>
+          </el-card>
+
+          <el-card shadow="never" class="chart-card tolerance-card">
+            <template #header>
+              <div class="card-header">
+                <span>容忍度曲线</span>
+                <span class="card-sub">清单勾选后打点</span>
+              </div>
+            </template>
+
+            <div class="tolerance-legend">
+              <span class="legend-item curve">标准容忍度折线</span>
+              <span v-for="x in tolerancePointLegends" :key="x.key" class="legend-item dyn-point">
+                <span class="legend-dot" :style="{ background: x.color }"></span>
+                <span class="legend-text">{{ x.label }}</span>
+              </span>
+            </div>
+
+            <div ref="toleranceChartRef" class="tolerance-chart-content"></div>
           </el-card>
         </div>
       </div>
@@ -284,6 +310,24 @@
               </div>
             </el-form-item>
           </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="RMS窗口(周波)">
+              <div class="param-field">
+                <el-input-number v-model="rmsWindowCycles" :min="0.5" :max="10" :step="0.5" />
+                <div class="param-desc">均方根计算窗口长度；建议 1 周波。</div>
+              </div>
+            </el-form-item>
+          </el-col>
+
+          <el-col :span="12">
+            <el-form-item label="RMS更新(周波)">
+              <div class="param-field">
+                <el-input-number v-model="rmsHopCycles" :min="0.25" :max="10" :step="0.25" />
+                <div class="param-desc">RMS 更新步长；建议 0.5 周波更新一次。</div>
+              </div>
+            </el-form-item>
+          </el-col>
         </el-row>
       </el-form>
 
@@ -295,11 +339,15 @@
 
     <el-dialog v-model="showEventDetailDialog" title="事件详情" width="980px">
       <div v-loading="loading">
-        <el-descriptions title="基本信息" :column="2" border>
+        <el-descriptions title="基本信息" :column="2" border size="small" class="event-desc">
           <el-descriptions-item label="事件ID">{{ process?.event?.id ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="录波文件ID">{{ process?.event?.fileId ?? '-' }}</el-descriptions-item>
 
-          <el-descriptions-item label="录波文件名">{{ process?.event?.originalName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="录波文件名">
+            <el-tooltip :content="process?.event?.originalName || '-'" placement="top">
+              <span class="desc-ellipsis">{{ process?.event?.originalName || '-' }}</span>
+            </el-tooltip>
+          </el-descriptions-item>
           <el-descriptions-item label="状态">{{ getAnalyzeStatusText(process?.event?.status) }}</el-descriptions-item>
 
           <el-descriptions-item label="是否暂降">{{ process?.event?.hasSag ? '有' : '无' }}</el-descriptions-item>
@@ -308,7 +356,11 @@
           <el-descriptions-item label="事件数">{{ process?.event?.eventCount ?? '-' }}</el-descriptions-item>
           <el-descriptions-item label="耗时(ms)">{{ process?.event?.costMs ?? '-' }}</el-descriptions-item>
 
-          <el-descriptions-item label="错误信息">{{ process?.event?.errorMessage || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="错误信息">
+            <el-tooltip :content="process?.event?.errorMessage || '-'" placement="top">
+              <span class="desc-wrap">{{ process?.event?.errorMessage || '-' }}</span>
+            </el-tooltip>
+          </el-descriptions-item>
           <el-descriptions-item label="最严重相">{{ process?.event?.worstPhase || '-' }}</el-descriptions-item>
 
           <el-descriptions-item label="触发相">{{ process?.event?.triggerPhase || '-' }}</el-descriptions-item>
@@ -376,7 +428,7 @@ import {
   type ZwavSagProcessDto
 } from '@/services/zwavSagService'
 import { zwavService, type ChannelDto, type WaveDataPageDto } from '@/services/zwavService'
-import { FullScreen, Refresh, Setting, Tickets } from '@element-plus/icons-vue'
+import { Download, FullScreen, Refresh, Setting, Tickets } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -417,6 +469,8 @@ const searchFromSample = ref(0)
 const searchToSample = ref(10000)
 const searchLimit = ref(20000)
 const searchDownSample = ref(1)
+const rmsWindowCycles = ref(1)
+const rmsHopCycles = ref(0.5)
 
 const rawChartRef = ref<HTMLElement | null>(null)
 const toleranceChartRef = ref<HTMLElement | null>(null)
@@ -513,9 +567,11 @@ const getRefVoltageText = () => {
 }
 
 const RAW_LINE_COLORS = ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC']
+const RMS_LINE_COLORS = ['#722ed1', '#c41d7f', '#d48806', '#08979c', '#d4380d', '#237804', '#003a8c', '#ad4e00', '#597ef7']
 
 const windowHeight = ref<number>(window.innerHeight)
 const hiddenChannelIndices = ref<number[]>([])
+const rmsHiddenChannelIndices = ref<number[]>([])
 const selectedSagRows = ref<any[]>([])
 const sagTableRef = ref<any>(null)
 const hasUserPickedSagRows = ref(false)
@@ -591,12 +647,40 @@ const rawLegendChannels = computed(() => {
   })
 })
 
+const rmsLegendChannels = computed(() => {
+  const wave: any = lastWaveData.value
+  const selected = selectedChannels.value
+    .filter((x) => (wave?.channels || []).includes(x))
+    .slice(0, 12)
+
+  return selected.map((channelIndex, idx) => {
+    const ch = analogChannels.value.find((c) => c.channelIndex === channelIndex)
+    const phase = ch?.phase ? String(ch.phase).toUpperCase() : ''
+    const label = `${phase ? `${phase}相` : `CH${channelIndex}`} RMS`
+    return {
+      key: channelIndex,
+      label,
+      color: RMS_LINE_COLORS[idx % RMS_LINE_COLORS.length],
+      hidden: rmsHiddenChannelIndices.value.includes(channelIndex)
+    }
+  })
+})
+
 const toggleLegendChannel = (channelIndex: number) => {
   const list = hiddenChannelIndices.value.slice()
   const i = list.indexOf(channelIndex)
   if (i >= 0) list.splice(i, 1)
   else list.push(channelIndex)
   hiddenChannelIndices.value = list
+  updateRawChart()
+}
+
+const toggleRmsLegendChannel = (channelIndex: number) => {
+  const list = rmsHiddenChannelIndices.value.slice()
+  const i = list.indexOf(channelIndex)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(channelIndex)
+  rmsHiddenChannelIndices.value = list
   updateRawChart()
 }
 
@@ -664,6 +748,144 @@ const formatUtcMs = (s?: string | null) => {
   const ms = pad(d.getMilliseconds(), 3)
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
 }
+
+const reportLines = computed(() => {
+  const rows = enhancedComputedEvents.value || []
+  const refV = getRefVoltageText()
+  const windowText = `${Number(rmsWindowCycles.value).toFixed(2).replace(/\.?0+$/, '')}周波`
+  const hopText = `${Number(rmsHopCycles.value).toFixed(2).replace(/\.?0+$/, '')}周波`
+
+  const lines: string[] = []
+  lines.push(`本报告基于事件识别结果与RMS曲线（窗口：${windowText}，更新：${hopText}）。`)
+  lines.push(`参考电压：${refV} V；暂降阈值：${formatPercent(params.sagThresholdPct)}%；中断阈值：${formatPercent(params.interruptThresholdPct)}%；迟滞：${formatPercent(params.hysteresisPct)}%。`)
+
+  if (rows.length === 0) {
+    lines.push('当前未识别到暂降/中断事件。')
+    lines.push('建议：确认参考电压与阈值设置是否合理，或扩大波形检索区间后重新预览计算。')
+    return lines
+  }
+
+  const normPhase = (p: any) => String(p || '').toUpperCase()
+  const isSag = (e: any) => String(e?.eventType || '').toLowerCase() === 'sag'
+  const isInterrupt = (e: any) => String(e?.eventType || '').toLowerCase() === 'interruption'
+  const phaseOrder = (p: string) => (p === 'A' ? 0 : p === 'B' ? 1 : p === 'C' ? 2 : 99)
+
+  const total = rows.length
+  const sagCount = rows.filter(isSag).length
+  const interruptCount = rows.filter(isInterrupt).length
+
+  const firstOccur = rows
+    .map((x: any) => x?.occurTimeText || formatUtcMs(x?.occurTimeUtc || x?.startTimeUtc || null))
+    .filter(Boolean)
+    .slice()
+    .sort()[0]
+
+  const phaseSet = new Set(rows.map((x: any) => normPhase(x?.phase)).filter(Boolean))
+  const phases = Array.from(phaseSet).sort((a, b) => phaseOrder(a) - phaseOrder(b))
+  const isThreePhase = ['A', 'B', 'C'].every((p) => phaseSet.has(p))
+
+  const overallMaxMag = rows.reduce((m: number, x: any) => {
+    const v = Number(x?.sagMagnitudePct)
+    return Number.isFinite(v) ? Math.max(m, v) : m
+  }, -Infinity)
+  const overallMinResidualPct = rows.reduce((m: number, x: any) => {
+    const v = Number(x?.residualVoltagePct)
+    return Number.isFinite(v) ? Math.min(m, v) : m
+  }, Infinity)
+  const overallMaxDuration = rows.reduce((m: number, x: any) => {
+    const v = Number(x?.durationMs)
+    return Number.isFinite(v) ? Math.max(m, v) : m
+  }, -Infinity)
+
+  const worstRows = Number.isFinite(overallMaxMag)
+    ? rows.filter((x: any) => Number(x?.sagMagnitudePct) === overallMaxMag)
+    : []
+  const worstPhaseText = Array.from(new Set(worstRows.map((x: any) => normPhase(x?.phase)).filter(Boolean))).join('/') || '-'
+
+  lines.push(`识别事件：共 ${total} 条（暂降 ${sagCount} 条，中断 ${interruptCount} 条）。`)
+  if (firstOccur) lines.push(`最早发生时间：${firstOccur}。`)
+  if (Number.isFinite(overallMaxMag)) lines.push(`最大暂降幅值：${formatPercent(overallMaxMag)}%（相别：${worstPhaseText}）。`)
+  if (Number.isFinite(overallMinResidualPct)) lines.push(`最低残余电压：${formatPercent(overallMinResidualPct)}%。`)
+  if (Number.isFinite(overallMaxDuration)) lines.push(`最长持续时间：${formatMs(overallMaxDuration)} ms。`)
+
+  const perPhase = phases.map((p) => {
+    const list = rows.filter((x: any) => normPhase(x?.phase) === p)
+    const pTotal = list.length
+    const pSag = list.filter(isSag).length
+    const pInt = list.filter(isInterrupt).length
+    const pMaxMag = list.reduce((m: number, x: any) => {
+      const v = Number(x?.sagMagnitudePct)
+      return Number.isFinite(v) ? Math.max(m, v) : m
+    }, -Infinity)
+    const pMinResidual = list.reduce((m: number, x: any) => {
+      const v = Number(x?.residualVoltagePct)
+      return Number.isFinite(v) ? Math.min(m, v) : m
+    }, Infinity)
+    const pMaxDur = list.reduce((m: number, x: any) => {
+      const v = Number(x?.durationMs)
+      return Number.isFinite(v) ? Math.max(m, v) : m
+    }, -Infinity)
+    const worstEvt = Number.isFinite(pMaxMag)
+      ? list
+          .filter((x: any) => Number(x?.sagMagnitudePct) === pMaxMag)
+          .slice()
+          .sort((a: any, b: any) => Number(b?.durationMs ?? 0) - Number(a?.durationMs ?? 0))[0]
+      : null
+    return { phase: p, list, pTotal, pSag, pInt, pMaxMag, pMinResidual, pMaxDur, worstEvt }
+  })
+
+  if (isThreePhase) {
+    lines.push('三相对比：')
+    for (const p of ['A', 'B', 'C']) {
+      const item = perPhase.find((x) => x.phase === p)
+      if (!item) continue
+      const parts: string[] = []
+      parts.push(`${p}相 ${item.pTotal}条（暂降${item.pSag}/中断${item.pInt}）`)
+      if (Number.isFinite(item.pMaxMag)) parts.push(`最大暂降${formatPercent(item.pMaxMag)}%`)
+      if (Number.isFinite(item.pMinResidual)) parts.push(`最低残余${formatPercent(item.pMinResidual)}%`)
+      if (Number.isFinite(item.pMaxDur)) parts.push(`最长${formatMs(item.pMaxDur)}ms`)
+      lines.push(`- ${parts.join('，')}`)
+    }
+
+    const mags = perPhase
+      .filter((x) => ['A', 'B', 'C'].includes(x.phase) && Number.isFinite(x.pMaxMag))
+      .map((x) => ({ phase: x.phase, v: Number(x.pMaxMag) }))
+      .sort((a, b) => b.v - a.v)
+    if (mags.length >= 2) {
+      const gap = mags[0].v - mags[1].v
+      lines.push(`不平衡评估：最严重相为 ${mags[0].phase} 相，较次严重相差约 ${formatPercent(gap)}%。`)
+      if (gap >= 5) lines.push('提示：相间不平衡较明显，建议核查该相供电回路、接触不良或单相负荷波动。')
+    }
+
+    const worstStarts = perPhase
+      .filter((x) => ['A', 'B', 'C'].includes(x.phase) && x.worstEvt)
+      .map((x) => Number((x.worstEvt as any)?.startMs ?? NaN))
+      .filter((v) => Number.isFinite(v))
+    if (worstStarts.length >= 2) {
+      const spread = Math.max(...worstStarts) - Math.min(...worstStarts)
+      lines.push(`同步性：三相最严重事件起始时间差约 ${formatMs(spread)} ms。`)
+    }
+  } else {
+    const p = phases[0] || '-'
+    const item = perPhase[0]
+    lines.push(`单相分析（${p}相）：`)
+    if (item) {
+      lines.push(`- 事件分布：共 ${item.pTotal} 条（暂降 ${item.pSag} 条，中断 ${item.pInt} 条）。`)
+      if (Number.isFinite(item.pMaxMag)) lines.push(`- 最严重幅值：${formatPercent(item.pMaxMag)}%。`)
+      if (Number.isFinite(item.pMinResidual)) lines.push(`- 最低残余电压：${formatPercent(item.pMinResidual)}%。`)
+      if (Number.isFinite(item.pMaxDur)) lines.push(`- 最长持续：${formatMs(item.pMaxDur)} ms。`)
+      const worst = item.worstEvt as any
+      if (worst) {
+        const t = worst?.occurTimeText || formatUtcMs(worst?.occurTimeUtc || worst?.startTimeUtc || null) || '-'
+        lines.push(`- 最严重事件时间：${t}；持续 ${formatMs(worst?.durationMs)} ms；幅值 ${formatPercent(worst?.sagMagnitudePct)}%。`)
+      }
+    }
+  }
+
+  lines.push('解读建议：优先查看最严重相的RMS下降与恢复过程，并结合容忍度曲线判断是否越界。')
+
+  return lines
+})
 
 const enhancedComputedEvents = computed(() => {
   const refV = getRefVoltage()
@@ -988,6 +1210,45 @@ const findNearestIndex = (times: number[], target: number) => {
 
 const buildToleranceCurve = (xLen: number, y: number) => new Array<number>(xLen).fill(y)
 
+const getRmsWindowN = (times: number[], freqHz: number, windowCycles: number) => {
+  if (!Array.isArray(times) || times.length < 2) return 0
+  const dt = (times[times.length - 1] - times[0]) / Math.max(1, times.length - 1)
+  if (!Number.isFinite(dt) || dt <= 0) return 0
+  const f = Number.isFinite(freqHz) && freqHz > 0 ? freqHz : 50
+  const periodMs = 1000 / f
+  const cycles = Number.isFinite(windowCycles) && windowCycles > 0 ? windowCycles : 1
+  const n = Math.round((periodMs / dt) * cycles)
+  return clamp(n, 3, 5000)
+}
+
+const computeRollingRms = (values: any[], windowN: number, hopN: number) => {
+  const n = Array.isArray(values) ? values.length : 0
+  if (n === 0 || windowN <= 0) return []
+
+  const sumSq = new Array<number>(n + 1).fill(0)
+  const cnt = new Array<number>(n + 1).fill(0)
+
+  for (let i = 0; i < n; i++) {
+    const v = Number(values[i])
+    const ok = Number.isFinite(v)
+    sumSq[i + 1] = sumSq[i] + (ok ? v * v : 0)
+    cnt[i + 1] = cnt[i] + (ok ? 1 : 0)
+  }
+
+  const out = new Array<number | null>(n).fill(null)
+  const hop = clamp(Math.round(hopN || 0), 1, windowN)
+  for (let i = windowN - 1; i < n; i += hop) {
+    const s = sumSq[i + 1] - sumSq[i + 1 - windowN]
+    const c = cnt[i + 1] - cnt[i + 1 - windowN]
+    if (c < Math.max(3, Math.floor(windowN * 0.9))) {
+      out[i] = null
+      continue
+    }
+    out[i] = Math.sqrt(s / c)
+  }
+  return out
+}
+
 /**
  * 原始波形
  */
@@ -1004,6 +1265,8 @@ const updateRawChart = () => {
   const rows = wave.rows
   const xTimes = rows.map((r: any) => Number(r.timeMs))
   const xData = xTimes.map((t: number) => Number(t).toFixed(3))
+  const rmsWindowN = getRmsWindowN(xTimes, Number(process.value?.frequencyHz), rmsWindowCycles.value)
+  const rmsHopN = Math.max(1, Math.round(rmsWindowN * (Number(rmsHopCycles.value) / Math.max(0.0001, Number(rmsWindowCycles.value) || 1))))
 
   const selectedAll = selectedChannels.value
     .filter((x) => (wave.channels || []).includes(x))
@@ -1066,6 +1329,7 @@ const updateRawChart = () => {
     const dataIndex = wave.channels.indexOf(channelIndex)
     const data = dataIndex >= 0 ? rows.map((r: any) => r.analog?.[dataIndex] ?? null) : rows.map(() => null)
     const lineColor = RAW_LINE_COLORS[colorIndex % RAW_LINE_COLORS.length]
+    const rmsLineColor = RMS_LINE_COLORS[colorIndex % RMS_LINE_COLORS.length]
 
     series.push({
       name: info ? `${info.channelIndex}. ${info.channelName}` : `CH${channelIndex}`,
@@ -1079,6 +1343,22 @@ const updateRawChart = () => {
     })
 
     const baseSeriesIndex = series.length - 1
+
+    if (rmsWindowN > 0 && !rmsHiddenChannelIndices.value.includes(channelIndex)) {
+      const rmsData = computeRollingRms(data, rmsWindowN, rmsHopN)
+      series.push({
+        name: `${phase || channelIndex} RMS`,
+        type: 'line',
+        xAxisIndex: i,
+        yAxisIndex: i,
+        showSymbol: false,
+        data: rmsData,
+        connectNulls: true,
+        lineStyle: { width: 2, color: rmsLineColor, opacity: 0.95 },
+        itemStyle: { color: rmsLineColor, opacity: 0.95 }
+      })
+    }
+
     const refV = getRefVoltage()
     const sagPct = Number(params.sagThresholdPct)
     const recoverPct = Number(params.sagThresholdPct) + Number(params.hysteresisPct)
@@ -1166,40 +1446,6 @@ const updateRawChart = () => {
       }
     }
 
-    const dots: any[] = []
-    for (const evt of computedEvents.value || []) {
-      const evtPhase = String((evt as any)?.phase || '').toUpperCase()
-      if (evtPhase && phase && evtPhase !== phase) continue
-
-      const minMs = Number((evt as any)?.minTimeMs ?? (evt as any)?.startMs)
-      if (!Number.isFinite(minMs)) continue
-
-      const idx = findNearestIndex(xTimes, minMs)
-      const y = dataIndex >= 0 ? rows[idx]?.analog?.[dataIndex] : null
-      if (typeof y !== 'number' || !Number.isFinite(y)) continue
-
-      dots.push({
-        name: `${phase || '相'}最小点`,
-        value: [xData[idx], y]
-      })
-    }
-
-    if (dots.length > 0) {
-      series.push({
-        name: `关键点-${channelIndex}`,
-        type: 'scatter',
-        xAxisIndex: i,
-        yAxisIndex: i,
-        symbolSize: 8,
-        data: dots,
-        label: {
-          show: true,
-          formatter: (p: any) => String(p?.name || ''),
-          position: 'top'
-        },
-        itemStyle: { color: '#ff4d4f' }
-      })
-    }
   }
 
   rawChart.setOption(
@@ -1544,6 +1790,10 @@ watch(selectedChannels, async () => {
   await fetchWaveData()
 })
 
+watch([rmsWindowCycles, rmsHopCycles], async () => {
+  updateRawChart()
+})
+
 const handleResize = () => {
   windowHeight.value = window.innerHeight
   rawChart?.resize()
@@ -1562,6 +1812,46 @@ onMounted(async () => {
   window.addEventListener('keydown', onKeyDown)
   await reload()
 })
+
+const exportRms = async () => {
+  const res: any = await zwavSagService.getProcess(eventId)
+  if (!res?.success || !res?.data) {
+    ElMessage.error(res?.message || '导出失败')
+    return
+  }
+
+  const rows = (res.data.rmsPoints || []) as any[]
+  if (!rows || rows.length === 0) {
+    ElMessage.warning('没有可导出的RMS数据')
+    return
+  }
+
+  const header = ['序号', '时间(ms)', '采样点号', '相别', '通道号', '均方根值', '均方根(%)', '参考电压']
+  const lines = [header.join(',')]
+  for (const r of rows) {
+    const line = [
+      r?.seqNo ?? '',
+      r?.timeMs ?? '',
+      r?.sampleNo ?? '',
+      r?.phase ?? '',
+      r?.channelIndex ?? '',
+      r?.rms ?? '',
+      r?.rmsPct ?? '',
+      r?.referenceVoltage ?? ''
+    ]
+    lines.push(line.join(','))
+  }
+
+  const text = '\ufeff' + lines.join('\n')
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const name = String((process.value as any)?.event?.originalName || `event-${eventId}`)
+  a.href = url
+  a.download = `${name}-RMS.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
@@ -1708,6 +1998,40 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   min-width: 0;
+}
+
+.report-card {
+  flex: 0 0 360px;
+  max-width: 360px;
+  min-width: 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.report-card :deep(.el-card__header) {
+  padding: 12px;
+}
+
+.report-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.report-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.report-line {
+  font-size: 12px;
+  color: #303133;
+  line-height: 18px;
+  margin-bottom: 8px;
 }
 
 .raw-card {
@@ -1977,16 +2301,15 @@ onUnmounted(() => {
   padding: 8px 12px 0 12px;
 }
 
-.raw-legend-channels,
-.raw-legend-meta {
+.raw-legend-all {
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
   align-items: center;
 }
 
-.raw-legend-meta {
-  margin-top: 6px;
+.card-header-right :deep(.el-button--primary.el-button--small) {
+  padding: 0 10px;
 }
 
 .raw-legend-item {
@@ -2020,11 +2343,22 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 
+.legend-line.rms {
+  height: 2px;
+}
+
 .legend-dash {
   width: 18px;
   height: 0;
   border-bottom-width: 2px;
   border-bottom-style: dashed;
+}
+
+.legend-solid {
+  width: 18px;
+  height: 0;
+  border-bottom-width: 2px;
+  border-bottom-style: solid;
 }
 
 .dash-sag {
@@ -2037,6 +2371,10 @@ onUnmounted(() => {
 
 .dash-interrupt {
   border-bottom-color: #fa8c16;
+}
+
+.solid-rms {
+  border-bottom-color: #595959;
 }
 
 .legend-area {
@@ -2057,6 +2395,33 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   background: #ff4d4f;
+}
+
+.event-desc :deep(.el-descriptions__body table) {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.event-desc :deep(.el-descriptions__label) {
+  width: 110px;
+  white-space: nowrap;
+}
+
+.event-desc :deep(.el-descriptions__content) {
+  min-width: 0;
+}
+
+.desc-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desc-wrap {
+  display: block;
+  white-space: normal;
+  word-break: break-all;
 }
 
 .phase-section {

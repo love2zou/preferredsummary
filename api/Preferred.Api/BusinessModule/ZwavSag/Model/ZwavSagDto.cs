@@ -18,6 +18,9 @@ namespace Zwav.Application.Sag
         /// <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
         public int Status { get; set; }
 
+        /// <summary>失败原因/错误信息（失败时填写）</summary>
+        public string ErrorMessage { get; set; }
+
         /// <summary>是否检测到暂降/中断事件</summary>
         public bool HasSag { get; set; }
 
@@ -275,6 +278,9 @@ namespace Zwav.Application.Sag
         /// <summary>规则名称/关键词</summary>
         public string RuleName { get; set; }
 
+        /// <summary>相别名称（A/B/C/AB/BC/CA）</summary>
+        public string PhaseName { get; set; }
+
         /// <summary>排序号</summary>
         public int SeqNo { get; set; }
 
@@ -293,6 +299,9 @@ namespace Zwav.Application.Sag
         /// <summary>规则名称/关键词</summary>
         public string RuleName { get; set; }
 
+        /// <summary>相别名称（A/B/C/AB/BC/CA）</summary>
+        public string PhaseName { get; set; }
+
         /// <summary>排序号</summary>
         public int SeqNo { get; set; }
     }
@@ -304,6 +313,9 @@ namespace Zwav.Application.Sag
     {
         /// <summary>规则名称/关键词</summary>
         public string RuleName { get; set; }
+
+        /// <summary>相别名称（A/B/C/AB/BC/CA）</summary>
+        public string PhaseName { get; set; }
 
         /// <summary>排序号</summary>
         public int? SeqNo { get; set; }

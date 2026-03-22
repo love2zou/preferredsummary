@@ -532,31 +532,11 @@ namespace Zwav.Application.Sag
 
         private static string ResolvePhaseName(ZwavVoltageChannelContext channel)
         {
-            var raw = channel?.Phase;
-
-            if (string.IsNullOrWhiteSpace(raw))
-                raw = channel?.ChannelCode;
-
-            if (string.IsNullOrWhiteSpace(raw))
-                raw = channel?.ChannelName;
-
-            if (string.IsNullOrWhiteSpace(raw))
-                return $"CH{channel?.ChannelIndex ?? 0}";
-
-            raw = raw.Trim().ToUpperInvariant();
-
-            if (raw == "A" || raw == "B" || raw == "C" ||
-                raw == "AB" || raw == "BC" || raw == "CA")
+            var raw = (channel?.Phase ?? string.Empty).Trim().ToUpperInvariant();
+            if (raw == "A" || raw == "B" || raw == "C" || raw == "AB" || raw == "BC" || raw == "CA")
                 return raw;
 
-            if (raw.Contains("A") && !raw.Contains("B") && !raw.Contains("C")) return "A";
-            if (raw.Contains("B") && !raw.Contains("A") && !raw.Contains("C")) return "B";
-            if (raw.Contains("C") && !raw.Contains("A") && !raw.Contains("B")) return "C";
-            if (raw.Contains("A") && raw.Contains("B") && !raw.Contains("C")) return "AB";
-            if (raw.Contains("B") && raw.Contains("C") && !raw.Contains("A")) return "BC";
-            if (raw.Contains("C") && raw.Contains("A") && !raw.Contains("B")) return "CA";
-
-            return raw;
+            return $"CH{channel?.ChannelIndex ?? 0}";
         }
 
         private static decimal SafeDuration(double durationMs)

@@ -10,6 +10,7 @@ export type ZwavSagListItemDto = {
   fileId: number
   originalName?: string
   status: number
+  errorMessage?: string | null
   hasSag: boolean
   eventType: string
   eventCount: number
@@ -299,6 +300,7 @@ export type UpdateZwavSagEventRequest = {
 export type ZwavSagChannelRuleDto = {
   id: number
   ruleName: string
+  phaseName: string
   seqNo: number
   crtTime: string
   updTime: string
@@ -306,11 +308,13 @@ export type ZwavSagChannelRuleDto = {
 
 export type CreateZwavSagChannelRuleRequest = {
   ruleName: string
+  phaseName: string
   seqNo: number
 }
 
 export type UpdateZwavSagChannelRuleRequest = {
   ruleName?: string
+  phaseName?: string
   seqNo?: number
 }
 

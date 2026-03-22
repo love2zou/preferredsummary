@@ -575,6 +575,7 @@ namespace Preferred.Api.Controllers
                     {
                         Id = x.Id,
                         RuleName = x.RuleName,
+                        PhaseName = x.PhaseName,
                         SeqNo = x.SeqNo,
                         CrtTime = x.CrtTime,
                         UpdTime = x.UpdTime
@@ -629,6 +630,7 @@ namespace Preferred.Api.Controllers
                 {
                     Id = entity.Id,
                     RuleName = entity.RuleName,
+                    PhaseName = entity.PhaseName,
                     SeqNo = entity.SeqNo,
                     CrtTime = entity.CrtTime,
                     UpdTime = entity.UpdTime
@@ -665,7 +667,13 @@ namespace Preferred.Api.Controllers
                 if (string.IsNullOrWhiteSpace(req.RuleName))
                     return BadRequestApi("RuleName 不能为空");
 
+                if (string.IsNullOrWhiteSpace(req.PhaseName))
+                    return BadRequestApi("PhaseName 不能为空");
+
                 var ruleName = req.RuleName.Trim();
+                var phaseName = NormalizePhaseName(req.PhaseName);
+                if (string.IsNullOrWhiteSpace(phaseName))
+                    return BadRequestApi("PhaseName 必须为 A/B/C/AB/BC/CA");
 
                 var exists = await _context.ZwavSagChannelRules
                     .AnyAsync(x => x.RuleName == ruleName);
@@ -678,6 +686,7 @@ namespace Preferred.Api.Controllers
                 var entity = new ZwavSagChannelRule
                 {
                     RuleName = ruleName,
+                    PhaseName = phaseName,
                     SeqNo = req.SeqNo,
                     CrtTime = now,
                     UpdTime = now
@@ -690,6 +699,7 @@ namespace Preferred.Api.Controllers
                 {
                     Id = entity.Id,
                     RuleName = entity.RuleName,
+                    PhaseName = entity.PhaseName,
                     SeqNo = entity.SeqNo,
                     CrtTime = entity.CrtTime,
                     UpdTime = entity.UpdTime
@@ -746,6 +756,14 @@ namespace Preferred.Api.Controllers
                         return BadRequestApi("词库规则已存在");
 
                     entity.RuleName = ruleName;
+                }
+
+                if (!string.IsNullOrWhiteSpace(req.PhaseName))
+                {
+                    var phaseName = NormalizePhaseName(req.PhaseName);
+                    if (string.IsNullOrWhiteSpace(phaseName))
+                        return BadRequestApi("PhaseName 必须为 A/B/C/AB/BC/CA");
+                    entity.PhaseName = phaseName;
                 }
 
                 if (req.SeqNo.HasValue)
@@ -863,6 +881,10 @@ namespace Preferred.Api.Controllers
 
         private async Task<ZwavSagVoltageChannelDto[]> ResolveVoltageChannelsAsync(int analysisId)
         {
+            var rules = await Services.ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context);
+            if (rules.Length == 0)
+                return Array.Empty<ZwavSagVoltageChannelDto>();
+
             var channels = await _context.ZwavChannels
                 .AsNoTracking()
                 .Where(x => x.AnalysisId == analysisId)
@@ -878,10 +900,7 @@ namespace Preferred.Api.Controllers
                     var code = (ch.ChannelCode ?? string.Empty).Trim();
                     var unit = (ch.Unit ?? string.Empty).Trim();
 
-                    if (!IsVoltageChannel(name, code, unit))
-                        return null;
-
-                    var phase = ResolvePhase(name, code);
+                    var phase = Services.ZwavSagVoltageChannelRuleMatcher.MatchPhase(name, code, unit, rules);
                     if (string.IsNullOrWhiteSpace(phase))
                         return null;
 
@@ -900,39 +919,11 @@ namespace Preferred.Api.Controllers
             return result;
         }
 
-        private static bool IsVoltageChannel(string channelName, string channelCode, string unit)
+        private static string NormalizePhaseName(string phaseName)
         {
-            var text = $"{channelName} {channelCode}".ToUpperInvariant();
-
-            if (text.Contains("电压")) return true;
-            if (text.Contains("保护电压")) return true;
-            if (text.Contains("UA")) return true;
-            if (text.Contains("UB")) return true;
-            if (text.Contains("UC")) return true;
-
-            var u = (unit ?? string.Empty).Trim().ToUpperInvariant();
-            if ((u == "V" || u == "KV") &&
-                (text.Contains("A相") || text.Contains("B相") || text.Contains("C相")))
-                return true;
-
-            return false;
-        }
-
-        private static string ResolvePhase(string channelName, string channelCode)
-        {
-            var text = $"{channelName} {channelCode}".ToUpperInvariant();
-
-            if (text.Contains("A相") || text.Contains("(UA)") || text.EndsWith("UA") || text.Contains(" UA"))
-                return "A";
-            if (text.Contains("B相") || text.Contains("(UB)") || text.EndsWith("UB") || text.Contains(" UB"))
-                return "B";
-            if (text.Contains("C相") || text.Contains("(UC)") || text.EndsWith("UC") || text.Contains(" UC"))
-                return "C";
-
-            if (text.Contains("AB")) return "AB";
-            if (text.Contains("BC")) return "BC";
-            if (text.Contains("CA")) return "CA";
-
+            var p = (phaseName ?? string.Empty).Trim().ToUpperInvariant();
+            if (p == "A" || p == "B" || p == "C" || p == "AB" || p == "BC" || p == "CA")
+                return p;
             return string.Empty;
         }
 

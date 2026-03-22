@@ -93,6 +93,10 @@
           </template>
         </el-table-column>
 
+        <el-table-column prop="errorMessage" label="错误信息" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
+        </el-table-column>
+
         <el-table-column prop="hasSag" label="是否暂降" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.hasSag ? 'danger' : 'success'">
@@ -115,7 +119,7 @@
         <el-table-column prop="sagPercent" label="暂降幅值(%)" width="100" align="left">
           <template #default="{ row }">{{ formatPercent(row.sagPercent) }}</template>
         </el-table-column>
-        <el-table-column prop="residualVoltage" label="残余电压(V)" width="100" align="left">
+        <el-table-column prop="residualVoltage" label="残余电压(%)" width="100" align="left">
           <template #default="{ row }">{{ formatNumber(row.residualVoltage) }}</template>
         </el-table-column>
 
@@ -192,7 +196,7 @@
           border
           stripe
           style="width: 100%"
-          height="420"
+          height="300"
           @selection-change="handleAnalysisSelectionChange"
         >
           <el-table-column type="selection" width="55" align="center" />
@@ -247,21 +251,27 @@
       :close-on-click-modal="false"
     >
       <div class="dialog-body">
-        <div class="search-bar inner-search-bar">
-          <el-input
-            v-model="channelRuleKeyword"
-            placeholder="请输入规则名称"
-            style="width: 220px"
-            clearable
-            @keyup.enter="handleChannelRuleSearch"
-          />
-          <el-button type="primary" @click="handleChannelRuleSearch">查询</el-button>
-          <el-button type="success" @click="openChannelRuleEditDialog()">新增规则</el-button>
+        <div class="inner-search-bar">
+          <div class="inner-search-left">
+            <span class="search-label">规则名称</span>
+            <el-input
+              v-model="channelRuleKeyword"
+              placeholder="请输入规则名称"
+              style="width: 220px"
+              clearable
+              @keyup.enter="handleChannelRuleSearch"
+            />
+          </div>
+          <div class="inner-search-right">
+            <el-button type="primary" @click="handleChannelRuleSearch">查询</el-button>
+            <el-button type="success" @click="openChannelRuleEditDialog()">新增规则</el-button>
+          </div>
         </div>
 
         <el-table :data="channelRuleRows" v-loading="channelRuleLoading" border stripe style="width: 100%">
           <el-table-column type="index" label="序号" width="60" align="center" />
           <el-table-column prop="ruleName" label="规则名称 (包含文本)" min-width="200" />
+          <el-table-column prop="phaseName" label="相别" width="90" align="center" />
           <el-table-column prop="seqNo" label="排序号" width="100" align="center" />
           <el-table-column prop="crtTime" label="创建时间" width="180">
             <template #default="{ row }">{{ formatDateTime(row.crtTime) }}</template>
@@ -308,6 +318,16 @@
       <el-form :model="channelRuleForm" label-width="100px">
         <el-form-item label="规则名称" required>
           <el-input v-model="channelRuleForm.ruleName" placeholder="例如：Ua, Ub, 10kV" />
+        </el-form-item>
+        <el-form-item label="相别" required>
+          <el-select v-model="channelRuleForm.phaseName" placeholder="请选择相别" style="width: 100%">
+            <el-option label="A相" value="A" />
+            <el-option label="B相" value="B" />
+            <el-option label="C相" value="C" />
+            <el-option label="AB" value="AB" />
+            <el-option label="BC" value="BC" />
+            <el-option label="CA" value="CA" />
+          </el-select>
         </el-form-item>
         <el-form-item label="排序号">
           <el-input-number v-model="channelRuleForm.seqNo" :min="0" :step="1" />
@@ -777,6 +797,7 @@ const channelRuleSaving = ref(false)
 const currentRuleId = ref(0)
 const channelRuleForm = reactive({
   ruleName: '',
+  phaseName: 'A',
   seqNo: 0
 })
 
@@ -828,11 +849,13 @@ const openChannelRuleEditDialog = async (row?: ZwavSagChannelRuleDto) => {
     isEditRule.value = true
     currentRuleId.value = row.id
     channelRuleForm.ruleName = row.ruleName
+    channelRuleForm.phaseName = row.phaseName || 'A'
     channelRuleForm.seqNo = row.seqNo
   } else {
     isEditRule.value = false
     currentRuleId.value = 0
     channelRuleForm.ruleName = ''
+    channelRuleForm.phaseName = 'A'
     const localNext = computeLocalNextChannelRuleSeqNo()
     channelRuleForm.seqNo = localNext
     const serverNext = await getNextChannelRuleSeqNo()
@@ -847,6 +870,10 @@ const saveChannelRule = async () => {
     ElMessage.warning('规则名称不能为空')
     return
   }
+  if (!channelRuleForm.phaseName?.trim()) {
+    ElMessage.warning('相别不能为空')
+    return
+  }
 
   channelRuleSaving.value = true
   try {
@@ -854,11 +881,13 @@ const saveChannelRule = async () => {
     if (isEditRule.value) {
       res = await zwavSagService.updateChannelRule(currentRuleId.value, {
         ruleName: channelRuleForm.ruleName.trim(),
+        phaseName: channelRuleForm.phaseName.trim(),
         seqNo: channelRuleForm.seqNo
       })
     } else {
       res = await zwavSagService.createChannelRule({
         ruleName: channelRuleForm.ruleName.trim(),
+        phaseName: channelRuleForm.phaseName.trim(),
         seqNo: channelRuleForm.seqNo
       })
     }
@@ -917,6 +946,33 @@ const saveChannelRule = async () => {
 .inner-search-bar {
   margin-bottom: 15px;
   padding: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+}
+
+.inner-search-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.search-label {
+  color: #606266;
+  white-space: nowrap;
+}
+
+.inner-search-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .search-row {

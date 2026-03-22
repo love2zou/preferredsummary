@@ -77,6 +77,7 @@ namespace Preferred.Api.Services
                     FileId = x.FileId,
                     OriginalName = x.OriginalName,
                     Status = x.Status,
+                    ErrorMessage = x.ErrorMessage,
                     HasSag = x.HasSag,
                     EventType = x.EventType,
                     EventCount = x.EventCount,
@@ -199,86 +200,108 @@ namespace Preferred.Api.Services
                     }
                     else
                     {
-                        int seqNo = 1;
-                        foreach (var evt in analyzeResult.Events)
+                        var evts = (analyzeResult.Events ?? new List<ZwavSagEventResult>())
+                            .Where(x => x != null)
+                            .ToList();
+
+                        if (evts.Count == 0)
+                            throw new InvalidOperationException("分析结果异常：Events 为空");
+
+                        var mergedStartUtc = evts.Min(x => x.StartTimeUtc);
+                        var mergedEndUtc = evts.Max(x => x.EndTimeUtc);
+
+                        var worstEvt = evts
+                            .OrderBy(x => x.ResidualVoltagePct)
+                            .ThenByDescending(x => x.DurationMs)
+                            .First();
+
+                        var maxDuration = evts
+                            .Select(x => x.DurationMs)
+                            .DefaultIfEmpty(0m)
+                            .Max();
+
+                        bool anyInterruption = evts.Any(x =>
+                            string.Equals(x.EventType, "Interruption", StringComparison.OrdinalIgnoreCase));
+
+                        var mergeGroupId = Guid.NewGuid().ToString("N");
+
+                        var entity = new ZwavSagEvent
                         {
-                            var entity = new ZwavSagEvent
+                            FileId = fileId,
+                            OriginalName = file.OriginalName,
+                            Status = 2,
+                            ErrorMessage = null,
+                            HasSag = true,
+                            EventType = anyInterruption ? "Interruption" : "Sag",
+                            EventCount = evts.Count,
+                            StartTime = startAt,
+                            FinishTime = finishAt,
+                            CostMs = costMs,
+                            StartTimeUtc = mergedStartUtc,
+                            EndTimeUtc = mergedEndUtc,
+                            OccurTimeUtc = worstEvt.OccurTimeUtc,
+                            DurationMs = maxDuration,
+                            TriggerPhase = worstEvt.TriggerPhase,
+                            EndPhase = worstEvt.EndPhase,
+                            WorstPhase = worstEvt.WorstPhase,
+                            ReferenceType = worstEvt.ReferenceType,
+                            ReferenceVoltage = worstEvt.ReferenceVoltage,
+                            ResidualVoltage = worstEvt.ResidualVoltage,
+                            ResidualVoltagePct = worstEvt.ResidualVoltagePct,
+                            SagDepth = worstEvt.SagDepth,
+                            SagPercent = worstEvt.SagPercent,
+                            StartAngleDeg = worstEvt.StartAngleDeg,
+                            PhaseJumpDeg = worstEvt.PhaseJumpDeg,
+                            SagThresholdPct = worstEvt.SagThresholdPct,
+                            InterruptThresholdPct = worstEvt.InterruptThresholdPct,
+                            HysteresisPct = worstEvt.HysteresisPct,
+                            IsMergedStatEvent = true,
+                            MergeGroupId = mergeGroupId,
+                            RawEventCount = evts.Count,
+                            SeqNo = 0,
+                            Remark = null,
+                            CrtTime = finishAt,
+                            UpdTime = finishAt
+                        };
+
+                        _context.ZwavSagEvents.Add(entity);
+                        await _context.SaveChangesAsync();
+
+                        createdEventCount++;
+                        rmsEventId = entity.Id;
+
+                        var phasesToSave = worstEvt.Phases;
+                        if (phasesToSave != null && phasesToSave.Count > 0)
+                        {
+                            int phaseSeq = 1;
+                            foreach (var phase in phasesToSave)
                             {
-                                FileId = fileId,
-                                OriginalName = file.OriginalName,
-                                Status = 2,
-                                ErrorMessage = null,
-                                HasSag = true,
-                                EventType = evt.EventType,
-                                EventCount = analyzeResult.Events.Count,
-                                StartTime = startAt,
-                                FinishTime = finishAt,
-                                CostMs = costMs,
-                                StartTimeUtc = evt.StartTimeUtc,
-                                EndTimeUtc = evt.EndTimeUtc,
-                                OccurTimeUtc = evt.OccurTimeUtc,
-                                DurationMs = evt.DurationMs,
-                                TriggerPhase = evt.TriggerPhase,
-                                EndPhase = evt.EndPhase,
-                                WorstPhase = evt.WorstPhase,
-                                ReferenceType = evt.ReferenceType,
-                                ReferenceVoltage = evt.ReferenceVoltage,
-                                ResidualVoltage = evt.ResidualVoltage,
-                                ResidualVoltagePct = evt.ResidualVoltagePct,
-                                SagDepth = evt.SagDepth,
-                                SagPercent = evt.SagPercent,
-                                StartAngleDeg = evt.StartAngleDeg,
-                                PhaseJumpDeg = evt.PhaseJumpDeg,
-                                SagThresholdPct = evt.SagThresholdPct,
-                                InterruptThresholdPct = evt.InterruptThresholdPct,
-                                HysteresisPct = evt.HysteresisPct,
-                                IsMergedStatEvent = evt.IsMergedStatEvent,
-                                MergeGroupId = evt.MergeGroupId,
-                                RawEventCount = evt.RawEventCount,
-                                SeqNo = seqNo++,
-                                Remark = null,
-                                CrtTime = finishAt,
-                                UpdTime = finishAt
-                            };
-
-                            _context.ZwavSagEvents.Add(entity);
-                            await _context.SaveChangesAsync();
-
-                            createdEventCount++;
-                            if (!rmsEventId.HasValue) rmsEventId = entity.Id;
-
-                            if (evt.Phases != null && evt.Phases.Count > 0)
-                            {
-                                int phaseSeq = 1;
-                                foreach (var phase in evt.Phases)
+                                _context.ZwavSagEventPhases.Add(new ZwavSagEventPhase
                                 {
-                                    _context.ZwavSagEventPhases.Add(new ZwavSagEventPhase
-                                    {
-                                        SagEventId = entity.Id,
-                                        SeqNo = phaseSeq++,
-                                        Phase = phase.Phase,
-                                        StartTimeUtc = phase.StartTimeUtc,
-                                        EndTimeUtc = phase.EndTimeUtc,
-                                        DurationMs = phase.DurationMs,
-                                        ReferenceType = phase.ReferenceType,
-                                        ReferenceVoltage = phase.ReferenceVoltage,
-                                        ResidualVoltage = phase.ResidualVoltage,
-                                        ResidualVoltagePct = phase.ResidualVoltagePct,
-                                        SagDepth = phase.SagDepth,
-                                        SagPercent = phase.SagPercent,
-                                        StartAngleDeg = phase.StartAngleDeg,
-                                        PhaseJumpDeg = phase.PhaseJumpDeg,
-                                        SagThresholdPct = phase.SagThresholdPct,
-                                        InterruptThresholdPct = phase.InterruptThresholdPct,
-                                        HysteresisPct = phase.HysteresisPct,
-                                        IsTriggerPhase = phase.IsTriggerPhase,
-                                        IsEndPhase = phase.IsEndPhase,
-                                        IsWorstPhase = phase.IsWorstPhase,
-                                        CrtTime = finishAt,
-                                        UpdTime = finishAt
-                                    });
-                                    createdPhaseCount++;
-                                }
+                                    SagEventId = entity.Id,
+                                    SeqNo = phaseSeq++,
+                                    Phase = phase.Phase,
+                                    StartTimeUtc = phase.StartTimeUtc,
+                                    EndTimeUtc = phase.EndTimeUtc,
+                                    DurationMs = phase.DurationMs,
+                                    ReferenceType = phase.ReferenceType,
+                                    ReferenceVoltage = phase.ReferenceVoltage,
+                                    ResidualVoltage = phase.ResidualVoltage,
+                                    ResidualVoltagePct = phase.ResidualVoltagePct,
+                                    SagDepth = phase.SagDepth,
+                                    SagPercent = phase.SagPercent,
+                                    StartAngleDeg = phase.StartAngleDeg,
+                                    PhaseJumpDeg = phase.PhaseJumpDeg,
+                                    SagThresholdPct = phase.SagThresholdPct,
+                                    InterruptThresholdPct = phase.InterruptThresholdPct,
+                                    HysteresisPct = phase.HysteresisPct,
+                                    IsTriggerPhase = phase.IsTriggerPhase,
+                                    IsEndPhase = phase.IsEndPhase,
+                                    IsWorstPhase = phase.IsWorstPhase,
+                                    CrtTime = finishAt,
+                                    UpdTime = finishAt
+                                });
+                                createdPhaseCount++;
                             }
 
                             await _context.SaveChangesAsync();
@@ -444,6 +467,10 @@ namespace Preferred.Api.Services
 
         private async Task<ZwavVoltageChannelContext[]> BuildVoltageChannelsAsync(int analysisId)
         {
+            var rules = await ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context);
+            if (rules.Length == 0)
+                return Array.Empty<ZwavVoltageChannelContext>();
+
             var channels = await _context.ZwavChannels
                 .AsNoTracking()
                 .Where(x => x.AnalysisId == analysisId)
@@ -460,10 +487,7 @@ namespace Preferred.Api.Services
                 var channelCode = (ch.ChannelCode ?? string.Empty).Trim();
                 var unit = (ch.Unit ?? string.Empty).Trim();
 
-                if (!IsVoltageChannel(channelName, channelCode, unit))
-                    continue;
-
-                var phase = ResolvePhase(channelName, channelCode);
+                var phase = ZwavSagVoltageChannelRuleMatcher.MatchPhase(channelName, channelCode, unit, rules);
                 if (string.IsNullOrWhiteSpace(phase))
                     continue;
 
@@ -478,42 +502,6 @@ namespace Preferred.Api.Services
             }
 
             return result.ToArray();
-        }
-
-        private static bool IsVoltageChannel(string channelName, string channelCode, string unit)
-        {
-            var text = $"{channelName} {channelCode}".ToUpperInvariant();
-
-            if (text.Contains("电压")) return true;
-            if (text.Contains("保护电压")) return true;
-            if (text.Contains("UA")) return true;
-            if (text.Contains("UB")) return true;
-            if (text.Contains("UC")) return true;
-
-            var u = (unit ?? string.Empty).Trim().ToUpperInvariant();
-            if ((u == "V" || u == "KV") &&
-                (text.Contains("A相") || text.Contains("B相") || text.Contains("C相")))
-                return true;
-
-            return false;
-        }
-
-        private static string ResolvePhase(string channelName, string channelCode)
-        {
-            var text = $"{channelName} {channelCode}".ToUpperInvariant();
-
-            if (text.Contains("A相") || text.Contains("(UA)") || text.EndsWith("UA") || text.Contains(" UA"))
-                return "A";
-            if (text.Contains("B相") || text.Contains("(UB)") || text.EndsWith("UB") || text.Contains(" UB"))
-                return "B";
-            if (text.Contains("C相") || text.Contains("(UC)") || text.EndsWith("UC") || text.Contains(" UC"))
-                return "C";
-
-            if (text.Contains("AB")) return "AB";
-            if (text.Contains("BC")) return "BC";
-            if (text.Contains("CA")) return "CA";
-
-            return string.Empty;
         }
 
         private async Task<List<WaveRowRaw>> LoadWaveRowsAsync(int analysisId)

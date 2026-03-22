@@ -762,6 +762,11 @@ namespace Preferred.Api.Data
                     .HasMaxLength(100)
                     .HasComment("通道关键词，如A相电压、UA等");
 
+                entity.Property(e => e.PhaseName)
+                    .IsRequired()
+                    .HasMaxLength(100)
+                    .HasComment("相别名称（A/B/C/AB/BC/CA）");
+
                 entity.Property(e => e.SeqNo)
                     .HasDefaultValue(0)
                     .HasComment("排序号");

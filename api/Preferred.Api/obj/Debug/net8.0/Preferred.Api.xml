@@ -1059,6 +1059,9 @@
         <member name="P:Preferred.Api.Models.ZwavSagChannelRule.RuleName">
             <summary>规则名称/关键词</summary>
         </member>
+        <member name="P:Preferred.Api.Models.ZwavSagChannelRule.PhaseName">
+            <summary>相别名称（A/B/C/AB/BC/CA）</summary>
+        </member>
         <member name="P:Preferred.Api.Models.ZwavSagChannelRule.SeqNo">
             <summary>排序号（越小越靠前）</summary>
         </member>
@@ -3925,6 +3928,9 @@
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.Status">
             <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.ErrorMessage">
+            <summary>失败原因/错误信息（失败时填写）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.HasSag">
             <summary>是否检测到暂降/中断事件</summary>
         </member>
@@ -4176,6 +4182,9 @@
         <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.RuleName">
             <summary>规则名称/关键词</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.PhaseName">
+            <summary>相别名称（A/B/C/AB/BC/CA）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.SeqNo">
             <summary>排序号</summary>
         </member>
@@ -4193,6 +4202,9 @@
         <member name="P:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest.RuleName">
             <summary>规则名称/关键词</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest.PhaseName">
+            <summary>相别名称（A/B/C/AB/BC/CA）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest.SeqNo">
             <summary>排序号</summary>
         </member>
@@ -4203,6 +4215,9 @@
         </member>
         <member name="P:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest.RuleName">
             <summary>规则名称/关键词</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest.PhaseName">
+            <summary>相别名称（A/B/C/AB/BC/CA）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest.SeqNo">
             <summary>排序号</summary>
