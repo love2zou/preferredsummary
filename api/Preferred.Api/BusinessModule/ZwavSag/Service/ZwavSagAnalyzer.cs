@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace Zwav.Application.Sag
 {
     /// <summary>
-    /// 电压暂降分析器（稳定版）
+    /// 电压暂降分析器（优化版）
     /// 方案：
     /// 1）RMS窗口：1周波
     /// 2）更新步长：半周波
@@ -26,7 +26,7 @@ namespace Zwav.Application.Sag
             if (seriesList.Count == 0)
                 return Task.FromResult(result);
 
-            result.RmsPoints.AddRange(BuildRmsPointResults(seriesList));
+            AppendRmsPointResults(seriesList, result.RmsPoints);
 
             var alignedRows = AlignRmsSeries(seriesList);
             if (alignedRows.Count == 0)
@@ -41,26 +41,25 @@ namespace Zwav.Application.Sag
 
         #region 核心流程
 
-        private List<ChannelRmsSeries> BuildRmsSeries(ZwavSagAnalyzeContext context)
+        private static List<ChannelRmsSeries> BuildRmsSeries(ZwavSagAnalyzeContext context)
         {
-            var result = new List<ChannelRmsSeries>();
+            var result = new List<ChannelRmsSeries>(context.VoltageChannels.Length);
 
             double avgSampleIntervalMs = EstimateSampleIntervalMs(context.Samples);
             if (avgSampleIntervalMs <= 0)
                 throw new InvalidOperationException("无法估算采样间隔，请检查 TimeMs 是否为毫秒");
 
             double cycleMs = 1000d / (double)context.FrequencyHz;
-
-            // 固定方案：1周波窗口 + 半周波更新
             double windowMs = cycleMs;
             double stepMs = cycleMs / 2d;
 
             int windowSize = Math.Max(1, (int)Math.Round(windowMs / avgSampleIntervalMs));
             int stepSize = Math.Max(1, (int)Math.Round(stepMs / avgSampleIntervalMs));
 
-            foreach (var channel in context.VoltageChannels ?? Array.Empty<ZwavVoltageChannelContext>())
+            var channels = context.VoltageChannels;
+            for (int i = 0; i < channels.Length; i++)
             {
-                var series = BuildSingleChannelRmsSeries(context, channel, windowSize, stepSize);
+                var series = BuildSingleChannelRmsSeries(context, channels[i], windowSize, stepSize);
                 if (series != null && series.Points.Count > 0)
                     result.Add(series);
             }
@@ -68,7 +67,7 @@ namespace Zwav.Application.Sag
             return result;
         }
 
-        private ChannelRmsSeries BuildSingleChannelRmsSeries(
+        private static ChannelRmsSeries BuildSingleChannelRmsSeries(
             ZwavSagAnalyzeContext context,
             ZwavVoltageChannelContext channel,
             int windowSize,
@@ -77,42 +76,46 @@ namespace Zwav.Application.Sag
             if (channel == null)
                 return null;
 
-            var rawRmsPoints = new List<RawRmsWindowPoint>();
+            var samples = context.Samples;
+            if (samples == null || samples.Count < windowSize)
+                return null;
 
-            for (int start = 0; start + windowSize <= context.Samples.Count; start += stepSize)
+            int estimatedCount = ((samples.Count - windowSize) / stepSize) + 1;
+            if (estimatedCount < 1) estimatedCount = 1;
+
+            var rawRmsPoints = new List<RawRmsWindowPoint>(estimatedCount);
+
+            for (int start = 0; start + windowSize <= samples.Count; start += stepSize)
             {
                 int end = start + windowSize - 1;
-
                 double sumSq = 0d;
                 int validCount = 0;
 
                 for (int i = start; i <= end; i++)
                 {
-                    var sample = context.Samples[i];
+                    var sample = samples[i];
                     if (sample?.ChannelValues == null)
                         continue;
 
                     if (sample.ChannelValues.TryGetValue(channel.ChannelIndex, out var value) && value.HasValue)
                     {
-                        double v = value.Value;
+                        var v = value.Value;
                         sumSq += v * v;
                         validCount++;
                     }
                 }
 
-                // 这一窗没有有效值，直接跳过
                 if (validCount == 0)
                     continue;
 
-                decimal rms = (decimal)Math.Sqrt(sumSq / validCount);
-                rms = decimal.Round(rms, 6);
+                var rms = decimal.Round((decimal)Math.Sqrt(sumSq / validCount), 6);
 
                 rawRmsPoints.Add(new RawRmsWindowPoint
                 {
-                    SampleNo = context.Samples[end].SampleNo,
-                    TimeMs = context.Samples[end].TimeMs,
-                    WindowStartMs = context.Samples[start].TimeMs,
-                    WindowEndMs = context.Samples[end].TimeMs,
+                    SampleNo = samples[end].SampleNo,
+                    TimeMs = samples[end].TimeMs,
+                    WindowStartMs = samples[start].TimeMs,
+                    WindowEndMs = samples[end].TimeMs,
                     Rms = rms
                 });
             }
@@ -120,7 +123,7 @@ namespace Zwav.Application.Sag
             if (rawRmsPoints.Count == 0)
                 return null;
 
-            decimal referenceVoltage = ResolveReferenceVoltage(context, channel.ChannelIndex, rawRmsPoints);
+            var referenceVoltage = ResolveReferenceVoltage(context, rawRmsPoints);
             if (referenceVoltage <= 0)
                 return null;
 
@@ -131,9 +134,10 @@ namespace Zwav.Application.Sag
                 ReferenceVoltage = referenceVoltage
             };
 
-            foreach (var p in rawRmsPoints)
+            for (int i = 0; i < rawRmsPoints.Count; i++)
             {
-                decimal rmsPct = decimal.Round(p.Rms / referenceVoltage * 100m, 3);
+                var p = rawRmsPoints[i];
+                var rmsPct = decimal.Round(p.Rms / referenceVoltage * 100m, 3);
 
                 series.Points.Add(new RmsWindowPoint
                 {
@@ -149,17 +153,25 @@ namespace Zwav.Application.Sag
             return series;
         }
 
-        private List<ZwavSagRmsPointResult> BuildRmsPointResults(List<ChannelRmsSeries> seriesList)
+        private static void AppendRmsPointResults(List<ChannelRmsSeries> seriesList, List<ZwavSagRmsPointResult> target)
         {
-            var result = new List<ZwavSagRmsPointResult>();
+            int total = 0;
+            for (int i = 0; i < seriesList.Count; i++)
+                total += seriesList[i].Points.Count;
 
-            foreach (var series in seriesList)
+            if (total == 0)
+                return;
+
+            if (target.Capacity < target.Count + total)
+                target.Capacity = target.Count + total;
+
+            for (int i = 0; i < seriesList.Count; i++)
             {
-                for (int i = 0; i < series.Points.Count; i++)
+                var series = seriesList[i];
+                for (int j = 0; j < series.Points.Count; j++)
                 {
-                    var p = series.Points[i];
-
-                    result.Add(new ZwavSagRmsPointResult
+                    var p = series.Points[j];
+                    target.Add(new ZwavSagRmsPointResult
                     {
                         ChannelIndex = series.ChannelIndex,
                         Phase = series.Phase,
@@ -168,21 +180,26 @@ namespace Zwav.Application.Sag
                         Rms = p.Rms,
                         RmsPct = p.RmsPct,
                         ReferenceVoltage = series.ReferenceVoltage,
-                        SeqNo = i + 1
+                        SeqNo = j + 1
                     });
                 }
             }
-
-            return result;
         }
 
-        private List<AlignedRmsRow> AlignRmsSeries(List<ChannelRmsSeries> seriesList)
+        private static List<AlignedRmsRow> AlignRmsSeries(List<ChannelRmsSeries> seriesList)
         {
             if (seriesList == null || seriesList.Count == 0)
                 return new List<AlignedRmsRow>();
 
-            int minCount = seriesList.Min(x => x.Points.Count);
-            if (minCount <= 0)
+            int minCount = int.MaxValue;
+            for (int i = 0; i < seriesList.Count; i++)
+            {
+                var count = seriesList[i].Points.Count;
+                if (count < minCount)
+                    minCount = count;
+            }
+
+            if (minCount <= 0 || minCount == int.MaxValue)
                 return new List<AlignedRmsRow>();
 
             var rows = new List<AlignedRmsRow>(minCount);
@@ -190,17 +207,18 @@ namespace Zwav.Application.Sag
             for (int i = 0; i < minCount; i++)
             {
                 var first = seriesList[0].Points[i];
-
                 var row = new AlignedRmsRow
                 {
                     SampleNo = first.SampleNo,
                     TimeMs = first.TimeMs,
                     WindowStartMs = first.WindowStartMs,
-                    WindowEndMs = first.WindowEndMs
+                    WindowEndMs = first.WindowEndMs,
+                    Phases = new List<AlignedRmsPhaseRow>(seriesList.Count)
                 };
 
-                foreach (var series in seriesList)
+                for (int j = 0; j < seriesList.Count; j++)
                 {
+                    var series = seriesList[j];
                     var point = series.Points[i];
 
                     row.Phases.Add(new AlignedRmsPhaseRow
@@ -219,11 +237,13 @@ namespace Zwav.Application.Sag
             return rows;
         }
 
-        private List<ZwavSagEventResult> DetectEvents(
+        private static List<ZwavSagEventResult> DetectEvents(
             ZwavSagAnalyzeContext context,
             List<AlignedRmsRow> alignedRows)
         {
             var results = new List<ZwavSagEventResult>();
+            if (alignedRows == null || alignedRows.Count == 0)
+                return results;
 
             decimal sagThreshold = context.SagThresholdPct;
             decimal recoverThreshold = context.SagThresholdPct + context.HysteresisPct;
@@ -233,22 +253,34 @@ namespace Zwav.Application.Sag
 
             for (int i = 0; i < alignedRows.Count; i++)
             {
-                var row = alignedRows[i];
+                var phases = alignedRows[i].Phases;
+                bool anyBelowSag = false;
+                bool allRecovered = phases.Count > 0;
 
-                bool anyBelowSag = row.Phases.Any(p => p.RmsPct <= sagThreshold);
-                bool allRecovered = row.Phases.All(p => p.RmsPct >= recoverThreshold);
-
-                if (!inEvent && anyBelowSag)
+                for (int j = 0; j < phases.Count; j++)
                 {
-                    inEvent = true;
-                    eventStartRow = i;
+                    var rmsPct = phases[j].RmsPct;
+                    if (rmsPct <= sagThreshold)
+                        anyBelowSag = true;
+
+                    if (rmsPct < recoverThreshold)
+                        allRecovered = false;
+                }
+
+                if (!inEvent)
+                {
+                    if (anyBelowSag)
+                    {
+                        inEvent = true;
+                        eventStartRow = i;
+                    }
+
                     continue;
                 }
 
-                if (inEvent && allRecovered)
+                if (allRecovered)
                 {
                     int eventEndRow = Math.Max(eventStartRow, i - 1);
-
                     var evt = BuildEventResult(context, alignedRows, eventStartRow, eventEndRow);
                     if (evt != null && evt.DurationMs >= context.MinDurationMs)
                         results.Add(evt);
@@ -268,7 +300,7 @@ namespace Zwav.Application.Sag
             return results;
         }
 
-        private ZwavSagEventResult BuildEventResult(
+        private static ZwavSagEventResult BuildEventResult(
             ZwavSagAnalyzeContext context,
             List<AlignedRmsRow> rows,
             int startRow,
@@ -277,81 +309,96 @@ namespace Zwav.Application.Sag
             if (startRow < 0 || endRow < startRow || endRow >= rows.Count)
                 return null;
 
-            var window = rows.Skip(startRow).Take(endRow - startRow + 1).ToList();
-            if (window.Count == 0)
-                return null;
+            var firstRow = rows[startRow];
+            var lastRow = rows[endRow];
 
-            double eventStartMs = window.First().WindowStartMs;
-            double eventEndMs = window.Last().WindowEndMs;
+            double eventStartMs = firstRow.WindowStartMs;
+            double eventEndMs = lastRow.WindowEndMs;
             decimal eventDurationMs = SafeDuration(eventEndMs - eventStartMs);
 
-            var phaseWindows = new List<PhaseWindowInfo>();
-            var phaseResults = new List<ZwavSagEventPhaseResult>();
+            var phaseInfoMap = new Dictionary<string, PhaseAggregate>(StringComparer.OrdinalIgnoreCase);
 
-            var phaseNames = window.First().Phases
-                .Select(x => x.Phase)
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            foreach (var phaseName in phaseNames)
+            for (int rowIndex = startRow; rowIndex <= endRow; rowIndex++)
             {
-                var phaseRows = window
-                    .Select((row, index) => new
+                var row = rows[rowIndex];
+                int localIndex = rowIndex - startRow;
+
+                for (int phaseIndex = 0; phaseIndex < row.Phases.Count; phaseIndex++)
+                {
+                    var phaseRow = row.Phases[phaseIndex];
+                    if (string.IsNullOrWhiteSpace(phaseRow.Phase))
+                        continue;
+
+                    if (!phaseInfoMap.TryGetValue(phaseRow.Phase, out var agg))
                     {
-                        RowIndex = index,
-                        Row = row,
-                        Data = row.Phases.FirstOrDefault(p =>
-                            string.Equals(p.Phase, phaseName, StringComparison.OrdinalIgnoreCase))
-                    })
-                    .Where(x => x.Data != null)
-                    .ToList();
+                        agg = new PhaseAggregate
+                        {
+                            Phase = phaseRow.Phase,
+                            ReferenceVoltage = decimal.Round(phaseRow.ReferenceVoltage, 6),
+                            MinRms = decimal.Round(phaseRow.Rms, 6),
+                            MinRmsPct = decimal.Round(phaseRow.RmsPct, 3),
+                            MinRowIndex = localIndex,
+                            StartIndex = -1,
+                            EndIndex = -1
+                        };
+                        phaseInfoMap.Add(phaseRow.Phase, agg);
+                    }
 
-                if (phaseRows.Count == 0)
+                    if (phaseRow.RmsPct <= context.SagThresholdPct)
+                    {
+                        if (agg.StartIndex < 0)
+                            agg.StartIndex = localIndex;
+
+                        agg.EndIndex = localIndex;
+                    }
+
+                    if (phaseRow.RmsPct < agg.MinRmsPct ||
+                        (phaseRow.RmsPct == agg.MinRmsPct && localIndex < agg.MinRowIndex))
+                    {
+                        agg.MinRmsPct = decimal.Round(phaseRow.RmsPct, 3);
+                        agg.MinRms = decimal.Round(phaseRow.Rms, 6);
+                        agg.MinRowIndex = localIndex;
+                        agg.ReferenceVoltage = decimal.Round(phaseRow.ReferenceVoltage, 6);
+                    }
+                }
+            }
+
+            if (phaseInfoMap.Count == 0)
+                return null;
+
+            var phaseResults = new List<ZwavSagEventPhaseResult>(phaseInfoMap.Count);
+            var phaseWindows = new List<PhaseWindowInfo>(phaseInfoMap.Count);
+
+            foreach (var kv in phaseInfoMap)
+            {
+                var agg = kv.Value;
+                if (agg.StartIndex < 0 || agg.EndIndex < 0)
                     continue;
 
-                var belowThresholdRows = phaseRows
-                    .Where(x => x.Data.RmsPct <= context.SagThresholdPct)
-                    .ToList();
+                var phaseStartMs = rows[startRow + agg.StartIndex].WindowStartMs;
+                var phaseEndMs = rows[startRow + agg.EndIndex].WindowEndMs;
+                var phaseDurationMs = SafeDuration(phaseEndMs - phaseStartMs);
 
-                if (belowThresholdRows.Count == 0)
-                    continue;
-
-                int phaseStartIndex = belowThresholdRows.First().RowIndex;
-                int phaseEndIndex = belowThresholdRows.Last().RowIndex;
-
-                var minRow = phaseRows
-                    .OrderBy(x => x.Data.RmsPct)
-                    .ThenBy(x => x.RowIndex)
-                    .First();
-
-                decimal referenceVoltage = decimal.Round(phaseRows.First().Data.ReferenceVoltage, 6);
-                decimal residualVoltage = decimal.Round(minRow.Data.Rms, 6);
-                decimal residualVoltagePct = decimal.Round(minRow.Data.RmsPct, 3);
-                decimal sagDepth = Math.Max(0m, decimal.Round(referenceVoltage - residualVoltage, 6));
-                decimal sagPercent = Math.Max(0m, decimal.Round(100m - residualVoltagePct, 3));
-
-                double phaseStartMs = window[phaseStartIndex].WindowStartMs;
-                double phaseEndMs = window[phaseEndIndex].WindowEndMs;
-
-                DateTime phaseStartTimeUtc = ConvertToUtc(context, phaseStartMs);
-                DateTime phaseEndTimeUtc = ConvertToUtc(context, phaseEndMs);
-                decimal phaseDurationMs = SafeDuration(phaseEndMs - phaseStartMs);
+                var residualVoltage = agg.MinRms;
+                var residualVoltagePct = agg.MinRmsPct;
+                var referenceVoltage = agg.ReferenceVoltage;
+                var sagDepth = Math.Max(0m, decimal.Round(referenceVoltage - residualVoltage, 6));
+                var sagPercent = Math.Max(0m, decimal.Round(100m - residualVoltagePct, 3));
 
                 phaseWindows.Add(new PhaseWindowInfo
                 {
-                    Phase = phaseName,
-                    StartIndex = phaseStartIndex,
-                    EndIndex = phaseEndIndex,
+                    Phase = agg.Phase,
+                    StartIndex = agg.StartIndex,
+                    EndIndex = agg.EndIndex,
                     ResidualVoltagePct = residualVoltagePct,
                     DurationMs = phaseDurationMs
                 });
 
                 phaseResults.Add(new ZwavSagEventPhaseResult
                 {
-                    Phase = phaseName,
-                    StartTimeUtc = phaseStartTimeUtc,
-                    EndTimeUtc = phaseEndTimeUtc,
+                    Phase = agg.Phase,
+                    StartTimeUtc = ConvertToUtc(context, phaseStartMs),
+                    EndTimeUtc = ConvertToUtc(context, phaseEndMs),
                     DurationMs = phaseDurationMs,
                     ReferenceType = context.ReferenceType,
                     ReferenceVoltage = referenceVoltage,
@@ -373,35 +420,77 @@ namespace Zwav.Application.Sag
             if (phaseResults.Count == 0)
                 return null;
 
-            var triggerInfo = phaseWindows
-                .OrderBy(x => x.StartIndex)
-                .ThenBy(x => x.Phase, StringComparer.OrdinalIgnoreCase)
-                .First();
+            PhaseWindowInfo triggerInfo = null;
+            PhaseWindowInfo endInfo = null;
+            PhaseWindowInfo worstInfo = null;
 
-            var endInfo = phaseWindows
-                .OrderByDescending(x => x.EndIndex)
-                .ThenBy(x => x.Phase, StringComparer.OrdinalIgnoreCase)
-                .First();
+            for (int i = 0; i < phaseWindows.Count; i++)
+            {
+                var info = phaseWindows[i];
 
-            var worstInfo = phaseWindows
-                .OrderBy(x => x.ResidualVoltagePct)
-                .ThenByDescending(x => x.DurationMs)
-                .ThenBy(x => x.Phase, StringComparer.OrdinalIgnoreCase)
-                .First();
+                if (triggerInfo == null ||
+                    info.StartIndex < triggerInfo.StartIndex ||
+                    (info.StartIndex == triggerInfo.StartIndex &&
+                     string.Compare(info.Phase, triggerInfo.Phase, StringComparison.OrdinalIgnoreCase) < 0))
+                {
+                    triggerInfo = info;
+                }
 
-            var triggerPhase = phaseResults.FirstOrDefault(x =>
-                string.Equals(x.Phase, triggerInfo.Phase, StringComparison.OrdinalIgnoreCase));
-            var endPhase = phaseResults.FirstOrDefault(x =>
-                string.Equals(x.Phase, endInfo.Phase, StringComparison.OrdinalIgnoreCase));
-            var worstPhase = phaseResults.FirstOrDefault(x =>
-                string.Equals(x.Phase, worstInfo.Phase, StringComparison.OrdinalIgnoreCase));
+                if (endInfo == null ||
+                    info.EndIndex > endInfo.EndIndex ||
+                    (info.EndIndex == endInfo.EndIndex &&
+                     string.Compare(info.Phase, endInfo.Phase, StringComparison.OrdinalIgnoreCase) < 0))
+                {
+                    endInfo = info;
+                }
 
-            if (triggerPhase != null) triggerPhase.IsTriggerPhase = true;
-            if (endPhase != null) endPhase.IsEndPhase = true;
-            if (worstPhase != null) worstPhase.IsWorstPhase = true;
+                if (worstInfo == null ||
+                    info.ResidualVoltagePct < worstInfo.ResidualVoltagePct ||
+                    (info.ResidualVoltagePct == worstInfo.ResidualVoltagePct && info.DurationMs > worstInfo.DurationMs) ||
+                    (info.ResidualVoltagePct == worstInfo.ResidualVoltagePct &&
+                     info.DurationMs == worstInfo.DurationMs &&
+                     string.Compare(info.Phase, worstInfo.Phase, StringComparison.OrdinalIgnoreCase) < 0))
+                {
+                    worstInfo = info;
+                }
+            }
 
-            bool isInterruption = phaseResults.Any(x => x.ResidualVoltagePct <= context.InterruptThresholdPct);
-            string eventType = isInterruption ? "Interruption" : "Sag";
+            ZwavSagEventPhaseResult triggerPhase = null;
+            ZwavSagEventPhaseResult endPhase = null;
+            ZwavSagEventPhaseResult worstPhase = null;
+
+            for (int i = 0; i < phaseResults.Count; i++)
+            {
+                var item = phaseResults[i];
+
+                if (triggerInfo != null && string.Equals(item.Phase, triggerInfo.Phase, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.IsTriggerPhase = true;
+                    triggerPhase = item;
+                }
+
+                if (endInfo != null && string.Equals(item.Phase, endInfo.Phase, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.IsEndPhase = true;
+                    endPhase = item;
+                }
+
+                if (worstInfo != null && string.Equals(item.Phase, worstInfo.Phase, StringComparison.OrdinalIgnoreCase))
+                {
+                    item.IsWorstPhase = true;
+                    worstPhase = item;
+                }
+            }
+
+            bool isInterruption = false;
+            for (int i = 0; i < phaseResults.Count; i++)
+            {
+                if (phaseResults[i].ResidualVoltagePct <= context.InterruptThresholdPct)
+                {
+                    isInterruption = true;
+                    break;
+                }
+            }
 
             var worst = worstPhase ?? phaseResults
                 .OrderBy(x => x.ResidualVoltagePct)
@@ -410,7 +499,7 @@ namespace Zwav.Application.Sag
 
             return new ZwavSagEventResult
             {
-                EventType = eventType,
+                EventType = isInterruption ? "Interruption" : "Sag",
                 StartTimeUtc = ConvertToUtc(context, eventStartMs),
                 EndTimeUtc = ConvertToUtc(context, eventEndMs),
                 OccurTimeUtc = ConvertToUtc(context, eventStartMs),
@@ -440,36 +529,35 @@ namespace Zwav.Application.Sag
 
         #region 参考电压
 
-        private decimal ResolveReferenceVoltage(
+        private static decimal ResolveReferenceVoltage(
             ZwavSagAnalyzeContext context,
-            int channelIndex,
             List<RawRmsWindowPoint> rmsPoints)
         {
             if (context.ReferenceVoltage.HasValue && context.ReferenceVoltage.Value > 0)
                 return decimal.Round(context.ReferenceVoltage.Value, 6);
 
-            return EstimateReferenceVoltage(context, channelIndex, rmsPoints);
+            return EstimateReferenceVoltage(rmsPoints);
         }
 
-        private decimal EstimateReferenceVoltage(
-            ZwavSagAnalyzeContext context,
-            int channelIndex,
-            List<RawRmsWindowPoint> rmsPoints)
+        private static decimal EstimateReferenceVoltage(List<RawRmsWindowPoint> rmsPoints)
         {
             if (rmsPoints == null || rmsPoints.Count == 0)
                 return 0m;
 
-            var values = rmsPoints
-                .Select(x => x.Rms)
-                .Where(x => x > 0)
-                .OrderBy(x => x)
-                .ToList();
+            var values = new List<decimal>(rmsPoints.Count);
+            for (int i = 0; i < rmsPoints.Count; i++)
+            {
+                if (rmsPoints[i].Rms > 0)
+                    values.Add(rmsPoints[i].Rms);
+            }
 
             if (values.Count == 0)
                 return 0m;
 
-            int index = (int)Math.Round((values.Count - 1) * 0.95);
-            index = Math.Max(0, Math.Min(index, values.Count - 1));
+            values.Sort();
+            int index = (int)Math.Round((values.Count - 1) * 0.95d);
+            if (index < 0) index = 0;
+            if (index >= values.Count) index = values.Count - 1;
 
             return decimal.Round(values[index], 6);
         }
@@ -533,18 +621,25 @@ namespace Zwav.Application.Sag
         private static string ResolvePhaseName(ZwavVoltageChannelContext channel)
         {
             var raw = (channel?.Phase ?? string.Empty).Trim().ToUpperInvariant();
-            if (raw == "A" || raw == "B" || raw == "C" || raw == "AB" || raw == "BC" || raw == "CA")
-                return raw;
-
-            return $"CH{channel?.ChannelIndex ?? 0}";
+            switch (raw)
+            {
+                case "A":
+                case "B":
+                case "C":
+                case "AB":
+                case "BC":
+                case "CA":
+                    return raw;
+                default:
+                    return $"CH{channel?.ChannelIndex ?? 0}";
+            }
         }
 
         private static decimal SafeDuration(double durationMs)
         {
-            if (durationMs <= 0)
-                return 0m;
-
-            return decimal.Round((decimal)durationMs, 3);
+            return durationMs <= 0
+                ? 0m
+                : decimal.Round((decimal)durationMs, 3);
         }
 
         private static DateTime ConvertToUtc(ZwavSagAnalyzeContext context, double timeMs)
@@ -556,7 +651,7 @@ namespace Zwav.Application.Sag
 
         #region 内部类
 
-        private class ChannelRmsSeries
+        private sealed class ChannelRmsSeries
         {
             public int ChannelIndex { get; set; }
             public string Phase { get; set; }
@@ -564,7 +659,7 @@ namespace Zwav.Application.Sag
             public List<RmsWindowPoint> Points { get; } = new List<RmsWindowPoint>();
         }
 
-        private class RawRmsWindowPoint
+        private sealed class RawRmsWindowPoint
         {
             public int SampleNo { get; set; }
             public double TimeMs { get; set; }
@@ -573,7 +668,7 @@ namespace Zwav.Application.Sag
             public decimal Rms { get; set; }
         }
 
-        private class RmsWindowPoint
+        private sealed class RmsWindowPoint
         {
             public int SampleNo { get; set; }
             public double TimeMs { get; set; }
@@ -583,16 +678,16 @@ namespace Zwav.Application.Sag
             public decimal RmsPct { get; set; }
         }
 
-        private class AlignedRmsRow
+        private sealed class AlignedRmsRow
         {
             public int SampleNo { get; set; }
             public double TimeMs { get; set; }
             public double WindowStartMs { get; set; }
             public double WindowEndMs { get; set; }
-            public List<AlignedRmsPhaseRow> Phases { get; set; } = new List<AlignedRmsPhaseRow>();
+            public List<AlignedRmsPhaseRow> Phases { get; set; }
         }
 
-        private class AlignedRmsPhaseRow
+        private sealed class AlignedRmsPhaseRow
         {
             public int ChannelIndex { get; set; }
             public string Phase { get; set; }
@@ -601,13 +696,24 @@ namespace Zwav.Application.Sag
             public decimal ReferenceVoltage { get; set; }
         }
 
-        private class PhaseWindowInfo
+        private sealed class PhaseWindowInfo
         {
             public string Phase { get; set; }
             public int StartIndex { get; set; }
             public int EndIndex { get; set; }
             public decimal ResidualVoltagePct { get; set; }
             public decimal DurationMs { get; set; }
+        }
+
+        private sealed class PhaseAggregate
+        {
+            public string Phase { get; set; }
+            public int StartIndex { get; set; }
+            public int EndIndex { get; set; }
+            public decimal ReferenceVoltage { get; set; }
+            public decimal MinRms { get; set; }
+            public decimal MinRmsPct { get; set; }
+            public int MinRowIndex { get; set; }
         }
 
         #endregion

@@ -39,7 +39,7 @@
       </div>
     </div>
 
-    <div class="channel-section" v-if="showDigital">
+    <div class="channel-section">
       <div class="section-title">数字通道信号</div>
       <div class="channel-group">
         <div class="group-header group-header-row">
@@ -76,16 +76,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { Search } from '@element-plus/icons-vue'
-import type { ChannelDto } from '@/services/zwavService'
+import type { ChannelDto } from '@/services/zwavService';
+import { computed, ref, watch } from 'vue';
 
 const props = defineProps<{
   analogChannels: ChannelDto[]
   digitalChannels: ChannelDto[]
   selectedChannels: number[]
   selectedDigitalChannels: number[]
-  showDigital?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -105,8 +103,6 @@ const selectedDigitalChannels = computed({
   set: (val) => emit('update:selectedDigitalChannels', val)
 })
 
-const showDigital = computed(() => props.showDigital !== false)
-
 const channelSearchKeyword = ref('')
 const checkAllAnalog = ref(false)
 const isIndeterminateAnalog = ref(false)
@@ -117,7 +113,7 @@ const filteredAnalogChannels = computed(() => {
   if (!channelSearchKeyword.value) return props.analogChannels
   const kw = channelSearchKeyword.value.toLowerCase()
   return props.analogChannels.filter(
-    (c) => c.channelName.toLowerCase().includes(kw) || c.channelIndex.toString().includes(kw)
+    (c) => (c.channelName || '').toLowerCase().includes(kw) || c.channelIndex.toString().includes(kw)
   )
 })
 
@@ -125,7 +121,7 @@ const filteredDigitalChannels = computed(() => {
   if (!channelSearchKeyword.value) return props.digitalChannels
   const kw = channelSearchKeyword.value.toLowerCase()
   return props.digitalChannels.filter(
-    (c) => c.channelName.toLowerCase().includes(kw) || c.channelIndex.toString().includes(kw)
+    (c) => (c.channelName || '').toLowerCase().includes(kw) || c.channelIndex.toString().includes(kw)
   )
 })
 

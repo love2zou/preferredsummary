@@ -22,22 +22,18 @@
     </div>
 
     <div class="content">
-      <!-- 左侧：通道区（基本不动） -->
       <div class="left-panel">
         <ZwavChannelSidebar
           :analog-channels="analogChannels"
-          :digital-channels="digitalChannels"
-          :show-digital="false"
+          :digital-channels="[]"
           v-model:selected-channels="selectedChannels"
-          v-model:selected-digital-channels="selectedDigitalChannels"
+          v-model:selected-digital-channels="emptyDigitalSelection"
         />
       </div>
 
-      <!-- 右侧：波形 + 容忍度曲线 + 暂降清单 -->
       <div class="right-panel">
         <div class="charts-row">
           <div
-            ref="rawCardWrapperRef"
             class="raw-card-wrapper"
             :class="{ 'is-window-fullscreen': isRawFullScreen }"
           >
@@ -86,6 +82,7 @@
                     <span class="legend-line" :style="{ background: c.color }"></span>
                     <span class="legend-text">{{ c.label }}</span>
                   </span>
+
                   <span
                     v-for="c in rmsLegendChannels"
                     :key="c.key"
@@ -96,6 +93,7 @@
                     <span class="legend-line rms" :style="{ background: c.color }"></span>
                     <span class="legend-text">{{ c.label }}</span>
                   </span>
+
                   <span class="raw-legend-item">
                     <span class="legend-dash dash-sag"></span>
                     <span class="legend-text">暂降阈值</span>
@@ -204,7 +202,24 @@
             </template>
 
             <div class="tolerance-legend">
-              <span class="legend-item curve">标准容忍度折线</span>
+              <span
+                class="legend-item curve-legacy"
+                :class="{ 'is-hidden': isToleranceLegendHidden('legacy') }"
+                @click="toggleToleranceLegend('legacy')"
+              >
+                <span class="legend-line-demo legacy"></span>
+                <span class="legend-text">旧版容忍度标准</span>
+              </span>
+
+              <span
+                class="legend-item curve-current"
+                :class="{ 'is-hidden': isToleranceLegendHidden('current') }"
+                @click="toggleToleranceLegend('current')"
+              >
+                <span class="legend-line-demo current"></span>
+                <span class="legend-text">新版容忍度标准</span>
+              </span>
+
               <span v-for="x in tolerancePointLegends" :key="x.key" class="legend-item dyn-point">
                 <span class="legend-dot" :style="{ background: x.color }"></span>
                 <span class="legend-text">{{ x.label }}</span>
@@ -217,7 +232,6 @@
       </div>
     </div>
 
-    <!-- 波形设置 -->
     <el-dialog v-model="showWaveSettingDialog" title="波形设置" width="720px">
       <el-form label-width="120px" size="small">
         <el-row :gutter="16">
@@ -430,7 +444,7 @@ import {
 import { zwavService, type ChannelDto, type WaveDataPageDto } from '@/services/zwavService'
 import { Download, FullScreen, Refresh, Setting, Tickets } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ZwavChannelSidebar from './components/ZwavChannelSidebar.vue'
@@ -448,9 +462,8 @@ const computedEvents = ref<ZwavSagComputedEventDto[]>([])
 const markers = ref<ZwavSagMarkerDto[]>([])
 
 const analogChannels = ref<ChannelDto[]>([])
-const digitalChannels = ref<ChannelDto[]>([])
 const selectedChannels = ref<number[]>([])
-const selectedDigitalChannels = ref<number[]>([])
+const emptyDigitalSelection = ref<number[]>([])
 
 const lastWaveData = ref<WaveDataPageDto | null>(null)
 
@@ -474,7 +487,6 @@ const rmsHopCycles = ref(0.5)
 
 const rawChartRef = ref<HTMLElement | null>(null)
 const toleranceChartRef = ref<HTMLElement | null>(null)
-const rawCardWrapperRef = ref<HTMLElement | null>(null)
 
 let rawChart: echarts.ECharts | null = null
 let toleranceChart: echarts.ECharts | null = null
@@ -494,6 +506,51 @@ const markerSummary = ref({
   deltaXText: '-'
 })
 
+const toleranceLegendState = reactive({
+  legacy: true,
+  current: true
+})
+
+const RAW_LINE_COLORS = ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC']
+const RMS_LINE_COLORS = ['#722ed1', '#c41d7f', '#d48806', '#08979c', '#d4380d', '#237804', '#003a8c', '#ad4e00', '#597ef7']
+
+const windowHeight = ref<number>(window.innerHeight)
+const hiddenChannelIndices = ref<number[]>([])
+const rmsHiddenChannelIndices = ref<number[]>([])
+const selectedSagRows = ref<any[]>([])
+const sagTableRef = ref<any>(null)
+const hasUserPickedSagRows = ref(false)
+const isApplyingDefaultSagSelection = ref(false)
+
+const toleranceStandardLine = [
+  [0, 0],
+  [0.05, 0],
+  [0.05, 50],
+  [0.2, 50],
+  [0.2, 70],
+  [0.5, 70],
+  [0.5, 80],
+  [1, 80],
+  [10, 80]
+]
+
+const toleranceStandardLineLegacy = [
+  [0, 50],
+  [0.2, 50],
+  [0.2, 70],
+  [0.5, 70],
+  [0.5, 80],
+  [1, 80],
+  [10, 80]
+]
+
+const toleranceStandardLineLegacyName = '旧版容忍度标准'
+const toleranceStandardLineName = '新版容忍度标准'
+const TOLERANCE_X_TOTAL_SECONDS = 10
+const TOLERANCE_X_FIRST_SEG_SECONDS = 1
+const TOLERANCE_X_FIRST_SEG_RATIO = 0.75
+const TOLERANCE_SPLIT_X = mapToleranceX(1)
+
 const formatMs = (v?: number | null) => {
   if (v === undefined || v === null || !Number.isFinite(Number(v))) return '-'
   return Number(v).toFixed(3)
@@ -509,6 +566,21 @@ const formatUtc = (s?: string | null) => {
   const d = new Date(s)
   if (Number.isNaN(d.getTime())) return s
   return d.toISOString().replace('T', ' ').slice(0, 19)
+}
+
+const formatUtcMs = (s?: string | null) => {
+  if (!s) return '-'
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return s
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
+  const yyyy = d.getFullYear()
+  const mm = pad(d.getMonth() + 1)
+  const dd = pad(d.getDate())
+  const hh = pad(d.getHours())
+  const mi = pad(d.getMinutes())
+  const ss = pad(d.getSeconds())
+  const ms = pad(d.getMilliseconds(), 3)
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
 }
 
 const formatEventType = (type?: string | null) => {
@@ -533,6 +605,62 @@ const formatV = (v?: number | null) => {
 }
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
+
+const getPhaseOrder = (p: any) => {
+  const u = String(p || '').toUpperCase()
+  if (u === 'A') return 0
+  if (u === 'B') return 1
+  if (u === 'C') return 2
+  return 99
+}
+
+const pickMaxSagRows = (list: any[]) => {
+  let maxMag = -Infinity
+  for (const evt of list || []) {
+    const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
+    if (!Number.isFinite(mag)) continue
+    if (mag > maxMag) maxMag = mag
+  }
+  if (!Number.isFinite(maxMag)) return []
+  return (list || []).filter((evt: any) => {
+    const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
+    return Number.isFinite(mag) && Math.abs(mag - maxMag) < 1e-9
+  })
+}
+
+const toggleNumberFromList = (source: number[], value: number) => {
+  const list = source.slice()
+  const i = list.indexOf(value)
+  if (i >= 0) list.splice(i, 1)
+  else list.push(value)
+  return list
+}
+
+function mapToleranceX(seconds: number) {
+  const x = Number(seconds)
+  if (!Number.isFinite(x) || x <= 0) return 0
+
+  const total = TOLERANCE_X_TOTAL_SECONDS
+  const firstSeg = TOLERANCE_X_FIRST_SEG_SECONDS
+  const firstRatio = TOLERANCE_X_FIRST_SEG_RATIO
+
+  if (x <= firstSeg) {
+    return (x / firstSeg) * firstRatio
+  }
+
+  const tail = Math.min(x, total) - firstSeg
+  const tailTotal = total - firstSeg
+  if (tailTotal <= 0) return firstRatio
+
+  return firstRatio + (tail / tailTotal) * (1 - firstRatio)
+}
+
+const toggleToleranceLegend = (type: 'legacy' | 'current') => {
+  toleranceLegendState[type] = !toleranceLegendState[type]
+  updateToleranceChart()
+}
+
+const isToleranceLegendHidden = (type: 'legacy' | 'current') => !toleranceLegendState[type]
 
 const toggleRawFullScreen = () => {
   isRawFullScreen.value = !isRawFullScreen.value
@@ -566,35 +694,13 @@ const getRefVoltageText = () => {
   return refV ? refV.toFixed(2) : '-'
 }
 
-const RAW_LINE_COLORS = ['#5470C6', '#91CC75', '#FAC858', '#EE6666', '#73C0DE', '#3BA272', '#FC8452', '#9A60B4', '#EA7CCC']
-const RMS_LINE_COLORS = ['#722ed1', '#c41d7f', '#d48806', '#08979c', '#d4380d', '#237804', '#003a8c', '#ad4e00', '#597ef7']
-
-const windowHeight = ref<number>(window.innerHeight)
-const hiddenChannelIndices = ref<number[]>([])
-const rmsHiddenChannelIndices = ref<number[]>([])
-const selectedSagRows = ref<any[]>([])
-const sagTableRef = ref<any>(null)
-const hasUserPickedSagRows = ref(false)
-const isApplyingDefaultSagSelection = ref(false)
-
-const defaultSagRowsForTolerance = computed(() => {
-  const list = (computedEvents.value || []).slice()
-  let maxMag = -Infinity
-  for (const evt of list) {
-    const mag = Number((evt as any)?.sagMagnitudePct ?? (evt as any)?.sagPercent)
-    if (!Number.isFinite(mag)) continue
-    if (mag > maxMag) maxMag = mag
-  }
-  if (!Number.isFinite(maxMag)) return []
-  return list.filter((evt: any) => {
-    const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
-    return Number.isFinite(mag) && Math.abs(mag - maxMag) < 1e-9
-  })
-})
+const defaultSagRowsForTolerance = computed(() => pickMaxSagRows(computedEvents.value || []))
 
 const tolerancePointLegends = computed(() => {
   const picked = selectedSagRows.value || []
-  const list = hasUserPickedSagRows.value ? picked : picked.length > 0 ? picked : defaultSagRowsForTolerance.value
+  const shouldUsePicked = hasUserPickedSagRows.value || picked.length > 0
+  const list = shouldUsePicked ? picked : defaultSagRowsForTolerance.value
+
   return list
     .map((evt: any, idx: number) => {
       const durationMs = Number(evt?.durationMs)
@@ -605,17 +711,16 @@ const tolerancePointLegends = computed(() => {
       const phase = String(evt?.phase || '-')
       const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
       if (!Number.isFinite(mag)) return null
-      const magText = formatPercent(mag)
-      const label = `${phase}-${magText}%`
+      const pointName = `${phase}-${formatPercent(mag)}%`
       const key = getSagRowKey(evt)
       const color = RAW_LINE_COLORS[idx % RAW_LINE_COLORS.length]
 
       return {
         key,
-        label,
+        label: pointName,
         color,
         point: {
-          name: label,
+          name: pointName,
           value: [x, y],
           phase: evt.phase,
           eventTypeText: evt.eventTypeText,
@@ -666,88 +771,48 @@ const rmsLegendChannels = computed(() => {
   })
 })
 
-const toggleLegendChannel = (channelIndex: number) => {
-  const list = hiddenChannelIndices.value.slice()
-  const i = list.indexOf(channelIndex)
-  if (i >= 0) list.splice(i, 1)
-  else list.push(channelIndex)
-  hiddenChannelIndices.value = list
-  updateRawChart()
-}
+const enhancedComputedEvents = computed(() => {
+  const refV = getRefVoltage()
+  return (computedEvents.value || [])
+    .slice()
+    .sort((a: any, b: any) => Number(a?.startMs ?? 0) - Number(b?.startMs ?? 0))
+    .map((evt: any) => {
+      const phase = String(evt?.phase || '')
+      const channel = analogChannels.value.find(
+        (c) => String(c.phase || '').toUpperCase() === phase.toUpperCase()
+      )
+      const residualPct = Number(evt?.residualVoltagePct)
+      const residualVoltage =
+        Number.isFinite(residualPct) && refV ? (refV * residualPct) / 100 : null
 
-const toggleRmsLegendChannel = (channelIndex: number) => {
-  const list = rmsHiddenChannelIndices.value.slice()
-  const i = list.indexOf(channelIndex)
-  if (i >= 0) list.splice(i, 1)
-  else list.push(channelIndex)
-  rmsHiddenChannelIndices.value = list
-  updateRawChart()
-}
+      return {
+        ...evt,
+        eventTypeText:
+          evt?.eventType === 'Interruption'
+            ? '中断'
+            : evt?.eventType === 'Sag'
+              ? '暂降'
+              : evt?.eventType || '-',
+        channelText: channel ? `${channel.channelIndex}. ${channel.channelName}` : '-',
+        residualVoltage
+      }
+    })
+})
 
-const getSagRowKey = (row: any) => {
-  const phase = String(row?.phase || '')
-  const startMs = Number(row?.startMs ?? row?.startTimeMs ?? 0)
-  const endMs = Number(row?.endMs ?? row?.endTimeMs ?? 0)
-  const kind = String(row?.eventType || '')
-  return `${phase}-${kind}-${startMs}-${endMs}`
-}
-
-const handleSagSelectionChange = (val: any[]) => {
-  if (!isApplyingDefaultSagSelection.value) hasUserPickedSagRows.value = true
-  selectedSagRows.value = val || []
-  updateToleranceChart()
-}
-
-const getDefaultSagRowsForTable = () => {
-  const list = (sagListRows.value || []).slice()
-  let maxMag = -Infinity
-  for (const evt of list) {
-    const mag = Number((evt as any)?.sagMagnitudePct ?? (evt as any)?.sagPercent)
-    if (!Number.isFinite(mag)) continue
-    if (mag > maxMag) maxMag = mag
-  }
-  if (!Number.isFinite(maxMag)) return []
-  return list.filter((evt: any) => {
-    const mag = Number(evt?.sagMagnitudePct ?? evt?.sagPercent)
-    return Number.isFinite(mag) && Math.abs(mag - maxMag) < 1e-9
-  })
-}
-
-const applyDefaultSagSelectionIfNeeded = async () => {
-  if (hasUserPickedSagRows.value) return
-  const table = sagTableRef.value
-  if (!table) return
-  await nextTick()
-  if ((selectedSagRows.value || []).length > 0) return
-
-  const defaults = getDefaultSagRowsForTable()
-  if (defaults.length === 0) return
-
-  isApplyingDefaultSagSelection.value = true
-  try {
-    table.clearSelection?.()
-    for (const row of defaults) {
-      table.toggleRowSelection?.(row, true)
-    }
-  } finally {
-    isApplyingDefaultSagSelection.value = false
-  }
-}
-
-const formatUtcMs = (s?: string | null) => {
-  if (!s) return '-'
-  const d = new Date(s)
-  if (Number.isNaN(d.getTime())) return s
-  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
-  const yyyy = d.getFullYear()
-  const mm = pad(d.getMonth() + 1)
-  const dd = pad(d.getDate())
-  const hh = pad(d.getHours())
-  const mi = pad(d.getMinutes())
-  const ss = pad(d.getSeconds())
-  const ms = pad(d.getMilliseconds(), 3)
-  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
-}
+const sagListRows = computed(() => {
+  return enhancedComputedEvents.value
+    .slice()
+    .sort((a: any, b: any) => {
+      const pa = getPhaseOrder(a?.phase)
+      const pb = getPhaseOrder(b?.phase)
+      if (pa !== pb) return pa - pb
+      return Number(a?.startMs ?? 0) - Number(b?.startMs ?? 0)
+    })
+    .map((row: any) => ({
+      ...row,
+      occurTimeText: formatUtcMs(row?.occurTimeUtc || row?.startTimeUtc || null)
+    }))
+})
 
 const reportLines = computed(() => {
   const rows = enhancedComputedEvents.value || []
@@ -768,7 +833,6 @@ const reportLines = computed(() => {
   const normPhase = (p: any) => String(p || '').toUpperCase()
   const isSag = (e: any) => String(e?.eventType || '').toLowerCase() === 'sag'
   const isInterrupt = (e: any) => String(e?.eventType || '').toLowerCase() === 'interruption'
-  const phaseOrder = (p: string) => (p === 'A' ? 0 : p === 'B' ? 1 : p === 'C' ? 2 : 99)
 
   const total = rows.length
   const sagCount = rows.filter(isSag).length
@@ -781,7 +845,7 @@ const reportLines = computed(() => {
     .sort()[0]
 
   const phaseSet = new Set(rows.map((x: any) => normPhase(x?.phase)).filter(Boolean))
-  const phases = Array.from(phaseSet).sort((a, b) => phaseOrder(a) - phaseOrder(b))
+  const phases = Array.from(phaseSet).sort((a, b) => getPhaseOrder(a) - getPhaseOrder(b))
   const isThreePhase = ['A', 'B', 'C'].every((p) => phaseSet.has(p))
 
   const overallMaxMag = rows.reduce((m: number, x: any) => {
@@ -883,59 +947,7 @@ const reportLines = computed(() => {
   }
 
   lines.push('解读建议：优先查看最严重相的RMS下降与恢复过程，并结合容忍度曲线判断是否越界。')
-
   return lines
-})
-
-const enhancedComputedEvents = computed(() => {
-  const refV = getRefVoltage()
-  return (computedEvents.value || [])
-    .slice()
-    .sort((a: any, b: any) => Number(a?.startMs ?? 0) - Number(b?.startMs ?? 0))
-    .map((evt: any) => {
-      const phase = String(evt?.phase || '')
-      const channel = analogChannels.value.find(
-        (c) => String(c.phase || '').toUpperCase() === phase.toUpperCase()
-      )
-      const residualPct = Number(evt?.residualVoltagePct)
-      const residualVoltage =
-        Number.isFinite(residualPct) && refV ? (refV * residualPct) / 100 : null
-
-      return {
-        ...evt,
-        eventTypeText:
-          evt?.eventType === 'Interruption'
-            ? '中断'
-            : evt?.eventType === 'Sag'
-              ? '暂降'
-              : evt?.eventType || '-',
-        channelText: channel ? `${channel.channelIndex}. ${channel.channelName}` : '-',
-        residualVoltage
-      }
-    })
-})
-
-const sagListRows = computed(() => {
-  const phaseOrder = (p: string) => {
-    const u = String(p || '').toUpperCase()
-    if (u === 'A') return 0
-    if (u === 'B') return 1
-    if (u === 'C') return 2
-    return 99
-  }
-
-  return enhancedComputedEvents.value
-    .slice()
-    .sort((a: any, b: any) => {
-      const pa = phaseOrder(a?.phase)
-      const pb = phaseOrder(b?.phase)
-      if (pa !== pb) return pa - pb
-      return Number(a?.startMs ?? 0) - Number(b?.startMs ?? 0)
-    })
-    .map((row: any) => ({
-      ...row,
-      occurTimeText: formatUtcMs(row?.occurTimeUtc || row?.startTimeUtc || null)
-    }))
 })
 
 watch(
@@ -946,7 +958,71 @@ watch(
   { flush: 'post' }
 )
 
+watch(selectedChannels, () => {
+  fetchWaveData()
+})
+
+watch([rmsWindowCycles, rmsHopCycles], () => {
+  updateRawChart()
+})
+
 const bottomRowHeight = computed(() => Math.max(260, Math.floor(windowHeight.value * 0.32)))
+
+const toggleLegendChannel = (channelIndex: number) => {
+  hiddenChannelIndices.value = toggleNumberFromList(hiddenChannelIndices.value, channelIndex)
+  updateRawChart()
+}
+
+const toggleRmsLegendChannel = (channelIndex: number) => {
+  rmsHiddenChannelIndices.value = toggleNumberFromList(rmsHiddenChannelIndices.value, channelIndex)
+  updateRawChart()
+}
+const applyDefaultHiddenRmsForABC = () => {
+  if (rmsHiddenChannelIndices.value.length > 0) return
+
+  const abcChannelIndexes = (analogChannels.value || [])
+    .filter((c) => ['A', 'B', 'C'].includes(String(c.phase || '').toUpperCase()))
+    .map((c) => c.channelIndex)
+
+  const selectedSet = new Set(selectedChannels.value || [])
+  rmsHiddenChannelIndices.value = abcChannelIndexes.filter((idx) => selectedSet.has(idx))
+}
+const getSagRowKey = (row: any) => {
+  const phase = String(row?.phase || '')
+  const startMs = Number(row?.startMs ?? row?.startTimeMs ?? 0)
+  const endMs = Number(row?.endMs ?? row?.endTimeMs ?? 0)
+  const kind = String(row?.eventType || '')
+  return `${phase}-${kind}-${startMs}-${endMs}`
+}
+
+const handleSagSelectionChange = (val: any[]) => {
+  if (!isApplyingDefaultSagSelection.value) hasUserPickedSagRows.value = true
+  selectedSagRows.value = val || []
+  updateToleranceChart()
+}
+
+const getDefaultSagRowsForTable = () => pickMaxSagRows(sagListRows.value || [])
+
+const applyDefaultSagSelectionIfNeeded = async () => {
+  if (hasUserPickedSagRows.value) return
+  const table = sagTableRef.value
+  if (!table) return
+  await nextTick()
+  if ((selectedSagRows.value || []).length > 0) return
+
+  const defaults = getDefaultSagRowsForTable()
+  if (defaults.length === 0) return
+
+  isApplyingDefaultSagSelection.value = true
+  try {
+    table.clearSelection?.()
+    for (const row of defaults) {
+      table.toggleRowSelection?.(row, true)
+    }
+  } finally {
+    isApplyingDefaultSagSelection.value = false
+  }
+}
 
 const getGridRect = () => {
   if (!rawChart) return null
@@ -1249,9 +1325,78 @@ const computeRollingRms = (values: any[], windowN: number, hopN: number) => {
   return out
 }
 
-/**
- * 原始波形
- */
+const buildToleranceNormalAreaData = (lineData: any[]) => {
+  if (!Array.isArray(lineData) || lineData.length === 0) return []
+
+  const topY = 100
+  const polygon: any[] = []
+
+  for (const item of lineData) {
+    const x = Number(item?.[0])
+    if (!Number.isFinite(x)) continue
+    polygon.push([x, topY])
+  }
+
+  for (let i = lineData.length - 1; i >= 0; i--) {
+    const item = lineData[i]
+    const x = Number(item?.[0])
+    const y = Number(item?.[1])
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+    polygon.push([x, y])
+  }
+
+  return polygon
+}
+
+const formatToleranceXAxisLabel = (v: number) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return ''
+  if (Math.abs(n - Math.round(n)) < 1e-9) return `${Math.round(n)}s`
+  return `${n.toFixed(2).replace(/\.?0+$/, '')}s`
+}
+
+const buildToleranceXAxisTicks = () => {
+  const ticks = [0, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10]
+  return ticks.map((sec) => ({
+    raw: sec,
+    pos: mapToleranceX(sec),
+    label: formatToleranceXAxisLabel(sec)
+  }))
+}
+
+const mapToleranceLineData = (list: number[][]) => {
+  return (list || []).map((item) => {
+    const x = Number(item?.[0])
+    const y = Number(item?.[1])
+    return [mapToleranceX(x), y, x]
+  })
+}
+
+const mapTolerancePointData = (point: any) => {
+  const rawX = Number(point?.value?.[0])
+  const y = Number(point?.value?.[1])
+  return {
+    ...point,
+    rawDurationSec: rawX,
+    value: [mapToleranceX(rawX), y]
+  }
+}
+
+const findNearestToleranceTick = (axisValue: number, ticks: Array<{ raw: number; pos: number; label: string }>) => {
+  let best: { raw: number; pos: number; label: string } | null = null
+  let bestDiff = Infinity
+
+  for (const tick of ticks) {
+    const diff = Math.abs(Number(tick.pos) - axisValue)
+    if (diff < bestDiff) {
+      best = tick
+      bestDiff = diff
+    }
+  }
+
+  return best && bestDiff <= 0.025 ? best : null
+}
+
 const updateRawChart = () => {
   if (!rawChart) return
 
@@ -1445,7 +1590,6 @@ const updateRawChart = () => {
         data: vLines
       }
     }
-
   }
 
   rawChart.setOption(
@@ -1469,46 +1613,187 @@ const updateRawChart = () => {
   renderMarkerGraphics()
 }
 
-/**
- * 容忍度曲线
- * 横轴：持续时间(s)
- * 纵轴：残余电压(%)
- *
- * 当前给一条前端内置的“标准容忍度折线”
- * 后续你有明确标准时，只需要替换 toleranceStandardLine 即可
- */
-const toleranceStandardLine = [
-  [0, 0],
-  [0.05, 0],
-  [0.05, 50],
-  [0.2, 50],
-  [0.2, 70],
-  [0.5, 70],
-  [0.5, 80],
-  [1, 80],
-  [10, 80]
-]
-
 const updateToleranceChart = () => {
   if (!toleranceChart) return
 
+  const xTicks = buildToleranceXAxisTicks()
+  const mappedToleranceStandardLine = mapToleranceLineData(toleranceStandardLine)
+  const mappedToleranceStandardLineLegacy = mapToleranceLineData(toleranceStandardLineLegacy)
+
+  const currentNormalAreaData = buildToleranceNormalAreaData(mappedToleranceStandardLine)
+  const legacyNormalAreaData = buildToleranceNormalAreaData(mappedToleranceStandardLineLegacy)
+
   const pointSeries = tolerancePointLegends.value.map((x: any) => {
+    const mappedPoint = mapTolerancePointData(x.point)
+
     return {
       name: x.label,
       type: 'scatter',
-      symbolSize: 7,
-      data: [x.point],
-      itemStyle: { color: x.color },
+      showInLegend: false,
+      symbol: 'circle',
+      symbolSize: 9,
+      data: [mappedPoint],
+      z: 20,
+      itemStyle: {
+        color: x.color,
+        borderColor: '#ffffff',
+        borderWidth: 1.5,
+        shadowBlur: 6,
+        shadowColor: 'rgba(0,0,0,0.20)'
+      },
+      emphasis: {
+        scale: true,
+        itemStyle: {
+          color: x.color,
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: 'rgba(0,0,0,0.28)'
+        }
+      },
       label: {
-        show: true,
-        formatter: (p: any) => {
-          const d = p?.data || {}
-          return d.phase ? `${d.phase}相` : ''
-        },
-        position: 'top'
+        show: false
       }
     }
   })
+
+  const toleranceSeries: any[] = []
+
+  if (toleranceLegendState.legacy) {
+    toleranceSeries.push(
+      {
+        name: '旧版正常范围',
+        type: 'custom',
+        silent: true,
+        z: 1,
+        renderItem: (_params: any, api: any) => {
+          const pts = legacyNormalAreaData
+            .map((item: any) => {
+              const x = api.value(0, item)
+              const y = api.value(1, item)
+              return api.coord([x, y])
+            })
+            .filter((p: any) => Array.isArray(p) && p.length >= 2)
+
+          if (!pts.length) return null
+
+          return {
+            type: 'polygon',
+            shape: { points: pts },
+            style: {
+              fill: 'rgba(0, 0, 0, 0.05)'
+            }
+          }
+        },
+        data: legacyNormalAreaData
+      },
+      {
+        name: toleranceStandardLineLegacyName,
+        type: 'line',
+        data: mappedToleranceStandardLineLegacy,
+        showSymbol: false,
+        smooth: false,
+        z: 3,
+        lineStyle: {
+          width: 1,
+          color: '#000000',
+          type: 'solid'
+        },
+        itemStyle: {
+          color: '#000000'
+        }
+      },
+      {
+        name: '旧版标准折点',
+        type: 'scatter',
+        showInLegend: false,
+        data: mappedToleranceStandardLineLegacy,
+        symbolSize: 9,
+        z: 4,
+        itemStyle: {
+          color: '#000000',
+          opacity: 0
+        },
+        emphasis: {
+          scale: true,
+          itemStyle: {
+            opacity: 1,
+            borderColor: '#ffffff',
+            borderWidth: 1.5
+          }
+        },
+        silent: false
+      }
+    )
+  }
+
+  if (toleranceLegendState.current) {
+    toleranceSeries.push(
+      {
+        name: '新版正常范围',
+        type: 'custom',
+        silent: true,
+        z: 2,
+        renderItem: (_params: any, api: any) => {
+          const pts = currentNormalAreaData
+            .map((item: any) => {
+              const x = api.value(0, item)
+              const y = api.value(1, item)
+              return api.coord([x, y])
+            })
+            .filter((p: any) => Array.isArray(p) && p.length >= 2)
+
+          if (!pts.length) return null
+
+          return {
+            type: 'polygon',
+            shape: { points: pts },
+            style: {
+              fill: 'rgba(22, 119, 255, 0.08)'
+            }
+          }
+        },
+        data: currentNormalAreaData
+      },
+      {
+        name: toleranceStandardLineName,
+        type: 'line',
+        data: mappedToleranceStandardLine,
+        showSymbol: false,
+        smooth: false,
+        z: 5,
+        lineStyle: {
+          width: 1,
+          color: '#1677ff',
+          type: 'solid'
+        },
+        itemStyle: {
+          color: '#1677ff'
+        }
+      },
+      {
+        name: '新版标准折点',
+        type: 'scatter',
+        showInLegend: false,
+        data: mappedToleranceStandardLine,
+        symbolSize: 9,
+        z: 6,
+        itemStyle: {
+          color: '#1677ff',
+          opacity: 0
+        },
+        emphasis: {
+          scale: true,
+          itemStyle: {
+            opacity: 1,
+            borderColor: '#ffffff',
+            borderWidth: 1.5
+          }
+        },
+        silent: false
+      }
+    )
+  }
 
   toleranceChart.setOption(
     {
@@ -1518,24 +1803,31 @@ const updateToleranceChart = () => {
           const seriesName = String(p?.seriesName || '')
           const d = p?.data
 
-          if (seriesName === '标准折点') {
-            const value = (Array.isArray(p?.value) ? p.value : Array.isArray(d) ? d : []) as any[]
-            const x = Number(value[0])
-            const y = Number(value[1])
+          if (
+            seriesName === toleranceStandardLineName ||
+            seriesName === toleranceStandardLineLegacyName ||
+            seriesName === '新版标准折点' ||
+            seriesName === '旧版标准折点'
+          ) {
+            const value = Array.isArray(d) ? d : Array.isArray(p?.value) ? p.value : []
+            const rawX = Number(value?.[2] ?? value?.[0])
+            const y = Number(value?.[1])
+
             return [
-              `<div><b>标准折点</b></div>`,
-              `<div>持续时间：${Number.isFinite(x) ? x.toFixed(3) : '-'} s</div>`,
+              `<div><b>${seriesName}</b></div>`,
+              `<div>持续时间：${Number.isFinite(rawX) ? rawX.toFixed(3) : '-'} s</div>`,
               `<div>残余电压：${Number.isFinite(y) ? y.toFixed(3) : '-'} %</div>`
             ].join('')
           }
 
           const obj = (d && typeof d === 'object' && !Array.isArray(d) ? d : {}) as any
+          const rawX = Number(obj?.rawDurationSec)
           const value = (obj?.value || []) as any[]
-          const x = Number(value[0])
           const y = Number(value[1])
+
           return [
             `<div><b>${obj.name || '事件点'}</b></div>`,
-            `<div>持续时间：${Number.isFinite(x) ? x.toFixed(3) : '-'} s</div>`,
+            `<div>持续时间：${Number.isFinite(rawX) ? rawX.toFixed(3) : '-'} s</div>`,
             `<div>残余电压：${Number.isFinite(y) ? y.toFixed(3) : '-'} %</div>`,
             `<div>发生时间：${obj.occurTimeText || '-'}</div>`,
             `<div>残余电压：${formatV(obj.residualVoltage)}</div>`
@@ -1545,10 +1837,60 @@ const updateToleranceChart = () => {
       grid: {
         left: 32,
         right: 80,
-        top: 12,
+        top: 42,
         bottom: 0,
         containLabel: true
       },
+      legend: {
+        show: false
+      },
+      graphic: [
+        {
+          id: 'tolerance-split-line',
+          type: 'line',
+          silent: true,
+          z: 30,
+          shape: {
+            x1: 0,
+            y1: 0,
+            x2: 0,
+            y2: 0
+          },
+          style: {
+            stroke: '#909399',
+            lineWidth: 1,
+            lineDash: [4, 4]
+          }
+        },
+        {
+          id: 'tolerance-text-left',
+          type: 'text',
+          silent: true,
+          z: 31,
+          style: {
+            text: '0~1s 重点观察区',
+            fill: '#606266',
+            font: '12px sans-serif',
+            textAlign: 'center'
+          },
+          left: '28%',
+          top: 14
+        },
+        {
+          id: 'tolerance-text-right',
+          type: 'text',
+          silent: true,
+          z: 31,
+          style: {
+            text: '1~10s 压缩显示区',
+            fill: '#909399',
+            font: '12px sans-serif',
+            textAlign: 'center'
+          },
+          left: '78%',
+          top: 14
+        }
+      ],
       xAxis: {
         type: 'value',
         name: '持续时间 (s)',
@@ -1557,22 +1899,23 @@ const updateToleranceChart = () => {
         nameTextStyle: { align: 'right' },
         min: 0,
         max: 1,
-        splitNumber: 5,
+        interval: 0.1,
         axisLabel: {
           fontSize: 10,
           margin: 8,
           formatter: (v: any) => {
             const n = Number(v)
-            if (!Number.isFinite(n)) return String(v)
-            const s = n.toFixed(2)
-            return s.replace(/\.?0+$/, '')
+            const hit = findNearestToleranceTick(n, xTicks)
+            return hit ? hit.label : ''
           }
         },
-        minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
-        minorTick: { show: true, splitNumber: 4 },
+        axisTick: {
+          show: true
+        },
+        minorTick: { show: false },
         splitLine: {
           show: true,
-          lineStyle: { type: 'solid', opacity: 0.35 }
+          lineStyle: { type: 'solid', opacity: 0.2 }
         }
       },
       yAxis: {
@@ -1583,7 +1926,7 @@ const updateToleranceChart = () => {
         nameGap: 32,
         min: 0,
         max: 100,
-        splitNumber: 5,
+        interval: 10,
         axisLabel: {
           fontSize: 10,
           margin: 8,
@@ -1601,36 +1944,63 @@ const updateToleranceChart = () => {
         }
       },
       series: [
+        ...toleranceSeries,
+        ...pointSeries,
         {
-          name: '标准容忍度折线',
+          name: '1秒分界线',
           type: 'line',
-          data: toleranceStandardLine,
+          silent: true,
           showSymbol: false,
+          z: 25,
+          data: [
+            [TOLERANCE_SPLIT_X, 0],
+            [TOLERANCE_SPLIT_X, 100]
+          ],
           lineStyle: {
-            width: 2,
-            color: '#1677ff'
-          },
-          itemStyle: {
-            color: '#1677ff'
+            width: 1,
+            color: '#909399',
+            type: 'dashed'
           }
-        },
-        {
-          name: '标准折点',
-          type: 'scatter',
-          data: toleranceStandardLine,
-          symbolSize: 12,
-          itemStyle: { color: '#1677ff', opacity: 0 },
-          emphasis: {
-            scale: true,
-            itemStyle: { opacity: 1 }
-          },
-          silent: false
-        },
-        ...pointSeries
+        }
       ]
     },
     true
   )
+
+  nextTick(() => {
+    if (!toleranceChart) return
+    const grid = toleranceChart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [TOLERANCE_SPLIT_X, 100])
+    const base = toleranceChart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [TOLERANCE_SPLIT_X, 0])
+
+    if (
+      Array.isArray(grid) &&
+      grid.length >= 2 &&
+      Array.isArray(base) &&
+      base.length >= 2
+    ) {
+      toleranceChart.setOption({
+        graphic: [
+          {
+            id: 'tolerance-split-line',
+            type: 'line',
+            silent: true,
+            z: 30,
+            shape: {
+              x1: grid[0],
+              y1: grid[1],
+              x2: base[0],
+              y2: base[1]
+            },
+            style: {
+              stroke: '#909399',
+              lineWidth: 1,
+              lineDash: [4, 4]
+            }
+          }
+        ]
+      })
+    }
+  })
 
   toleranceChart.resize()
 }
@@ -1700,7 +2070,7 @@ const reload = async () => {
 
     if (selectedChannels.value.length === 0) selectABC()
     if (selectedChannels.value.length === 0) selectFirst3()
-
+    applyDefaultHiddenRmsForABC()
     await fetchWaveData()
   } catch (e: any) {
     ElMessage.error(e?.message ? `查询失败（${e.message}）` : '查询失败')
@@ -1786,14 +2156,6 @@ const preview = async () => {
   }
 }
 
-watch(selectedChannels, async () => {
-  await fetchWaveData()
-})
-
-watch([rmsWindowCycles, rmsHopCycles], async () => {
-  updateRawChart()
-})
-
 const handleResize = () => {
   windowHeight.value = window.innerHeight
   rawChart?.resize()
@@ -1802,18 +2164,17 @@ const handleResize = () => {
   renderMarkerGraphics()
 }
 
-onMounted(async () => {
-  await nextTick()
-
-  if (rawChartRef.value) rawChart = echarts.init(rawChartRef.value)
-  if (toleranceChartRef.value) toleranceChart = echarts.init(toleranceChartRef.value)
-
-  window.addEventListener('resize', handleResize)
-  window.addEventListener('keydown', onKeyDown)
-  await reload()
-})
-
 const exportRms = async () => {
+  try {
+    await ElMessageBox.confirm('确定要导出均方根值（RMS）吗？', '导出确认', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return
+  }
+
   const res: any = await zwavSagService.getProcess(eventId)
   if (!res?.success || !res?.data) {
     ElMessage.error(res?.message || '导出失败')
@@ -1852,6 +2213,17 @@ const exportRms = async () => {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+onMounted(async () => {
+  await nextTick()
+
+  if (rawChartRef.value) rawChart = echarts.init(rawChartRef.value)
+  if (toleranceChartRef.value) toleranceChart = echarts.init(toleranceChartRef.value)
+
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', onKeyDown)
+  await reload()
+})
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
@@ -1940,29 +2312,6 @@ onUnmounted(() => {
   gap: 12px;
   min-width: 0;
   min-height: 0;
-}
-
-.toolbar-card {
-  border-radius: 8px;
-}
-
-.toolbar-row {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  align-items: center;
-}
-
-.toolbar-left {
-  flex: 1;
-  min-width: 0;
-}
-
-.toolbar-right {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-  align-items: center;
 }
 
 .param-field {
@@ -2059,8 +2408,8 @@ onUnmounted(() => {
 }
 
 .tolerance-card {
-  flex: 0 0 40%;
-  max-width: 40%;
+  flex: 1;
+  min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -2129,30 +2478,37 @@ onUnmounted(() => {
   align-items: center;
   font-size: 12px;
   color: #606266;
+  cursor: pointer;
+  user-select: none;
 }
 
-.legend-item::before {
-  content: '';
-  display: inline-block;
-  margin-right: 6px;
-  border-radius: 2px;
+.legend-item.is-hidden {
+  opacity: 0.45;
 }
 
-.legend-item.curve::before {
-  width: 20px;
-  height: 3px;
-  background: #1677ff;
-}
-
-.legend-item.point::before {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff4d4f;
+.legend-item.is-hidden .legend-text {
+  text-decoration: line-through;
 }
 
 .legend-item.dyn-point::before {
   display: none;
+}
+
+.legend-line-demo {
+  width: 20px;
+  height: 0;
+  border-top: 2px solid;
+  display: inline-block;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.legend-line-demo.legacy {
+  border-top-color: #000000;
+}
+
+.legend-line-demo.current {
+  border-top-color: #1677ff;
 }
 
 .legend-dot {
@@ -2161,14 +2517,6 @@ onUnmounted(() => {
   border-radius: 50%;
   display: inline-block;
   margin-right: 6px;
-}
-
-.tolerance-note {
-  margin-top: 10px;
-  font-size: 12px;
-  color: #909399;
-  line-height: 18px;
-  flex-shrink: 0;
 }
 
 .list-card {
@@ -2266,16 +2614,6 @@ onUnmounted(() => {
 .left-panel :deep(.el-scrollbar) {
   flex: 1;
   min-height: 0;
-}
-
-.toolbar-left :deep(.el-form--inline) {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.toolbar-left :deep(.el-form-item) {
-  margin-bottom: 0;
 }
 
 .marker-footer {
@@ -2388,13 +2726,6 @@ onUnmounted(() => {
   width: 0;
   height: 12px;
   border-left: 2px solid #ff4d4f;
-}
-
-.legend-point {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ff4d4f;
 }
 
 .event-desc :deep(.el-descriptions__body table) {

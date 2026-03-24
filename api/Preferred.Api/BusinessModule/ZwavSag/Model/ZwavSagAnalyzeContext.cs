@@ -46,10 +46,10 @@ namespace Zwav.Application.Sag
         public string RmsMode { get; set; }
 
         /// <summary>电压通道集合（用于参与暂降/中断判定）</summary>
-        public ZwavVoltageChannelContext[] VoltageChannels { get; set; }
+        public ZwavVoltageChannelContext[] VoltageChannels { get; set; } = Array.Empty<ZwavVoltageChannelContext>();
 
         /// <summary>采样点序列（按时间排序）</summary>
-        public IReadOnlyList<ZwavSagSamplePoint> Samples { get; set; }
+        public IReadOnlyList<ZwavSagSamplePoint> Samples { get; set; } = Array.Empty<ZwavSagSamplePoint>();
     }
 
     /// <summary>电压通道上下文</summary>
@@ -86,6 +86,6 @@ namespace Zwav.Application.Sag
         /// <summary>
         /// 模拟量值字典：key=ChannelIndex，value=通道值
         /// </summary>
-        public Dictionary<int, double?> ChannelValues { get; set; }
+        public Dictionary<int, double?> ChannelValues { get; set; } = new Dictionary<int, double?>();
     }
 }

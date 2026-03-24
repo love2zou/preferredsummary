@@ -451,7 +451,7 @@ onMounted(async () => {
   try {
     const [analogRes, digitalRes, cfgRes, hdrRes, detailRes] = await Promise.all([
       zwavService.getChannels(analysisGuid, 'Analog', true),
-      zwavService.getChannels(analysisGuid, 'Digital', true),
+      zwavService.getChannels(analysisGuid, 'Digital', false),
       zwavService.getCfg(analysisGuid, true),
       zwavService.getHdr(analysisGuid).catch(() => ({ success: true, data: null } as any)),
       zwavService.getDetail(analysisGuid).catch(() => ({ success: true, data: null } as any))

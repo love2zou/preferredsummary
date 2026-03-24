@@ -4447,7 +4447,7 @@
         </member>
         <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer">
             <summary>
-            电压暂降分析器（稳定版）
+            电压暂降分析器（优化版）
             方案：
             1）RMS窗口：1周波
             2）更新步长：半周波

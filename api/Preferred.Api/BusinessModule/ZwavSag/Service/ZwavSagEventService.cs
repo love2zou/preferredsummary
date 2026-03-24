@@ -33,11 +33,12 @@ namespace Preferred.Api.Services
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
-            var query = _context.ZwavSagEvents.AsNoTracking();
+            var eventQuery = _context.ZwavSagEvents.AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(keyword))
             {
-                query = query.Where(x =>
+                keyword = keyword.Trim();
+                eventQuery = eventQuery.Where(x =>
                     x.OriginalName.Contains(keyword) ||
                     x.EventType.Contains(keyword) ||
                     (x.ErrorMessage != null && x.ErrorMessage.Contains(keyword)));
@@ -45,71 +46,76 @@ namespace Preferred.Api.Services
 
             if (!string.IsNullOrWhiteSpace(eventType))
             {
-                query = query.Where(x => x.EventType == eventType);
+                eventType = eventType.Trim();
+                eventQuery = eventQuery.Where(x => x.EventType == eventType);
             }
 
             if (!string.IsNullOrWhiteSpace(phase))
             {
-                query = query.Where(x =>
+                phase = phase.Trim();
+                eventQuery = eventQuery.Where(x =>
                     _context.ZwavSagEventPhases.Any(p => p.SagEventId == x.Id && p.Phase == phase));
             }
 
             if (fromUtc.HasValue)
             {
-                query = query.Where(x => (x.OccurTimeUtc.HasValue ? x.OccurTimeUtc.Value : x.CrtTime) >= fromUtc.Value);
+                var from = fromUtc.Value;
+                eventQuery = eventQuery.Where(x => (x.OccurTimeUtc ?? x.CrtTime) >= from);
             }
 
             if (toUtc.HasValue)
             {
-                query = query.Where(x => (x.OccurTimeUtc.HasValue ? x.OccurTimeUtc.Value : x.CrtTime) <= toUtc.Value);
+                var to = toUtc.Value;
+                eventQuery = eventQuery.Where(x => (x.OccurTimeUtc ?? x.CrtTime) <= to);
             }
 
-            var total = await query.CountAsync();
+            var total = await eventQuery.CountAsync().ConfigureAwait(false);
 
-            var items = await query
-                .OrderByDescending(x => x.CrtTime)
-                .ThenByDescending(x => x.Id)
+            var worstPhaseQuery = _context.ZwavSagEventPhases
+                .AsNoTracking()
+                .Where(p => p.IsWorstPhase)
+                .Select(p => new
+                {
+                    p.SagEventId,
+                    p.DurationMs,
+                    p.SagPercent,
+                    p.ResidualVoltage,
+                    p.ResidualVoltagePct,
+                    StartTimeUtc = (DateTime?)p.StartTimeUtc
+                });
+
+            var items = await
+                (from e in eventQuery
+                 join wp in worstPhaseQuery on e.Id equals wp.SagEventId into wpGroup
+                 from wp in wpGroup.DefaultIfEmpty()
+                 orderby e.CrtTime descending, e.Id descending
+                 select new ZwavSagListItemDto
+                 {
+                     Id = e.Id,
+                     FileId = e.FileId,
+                     OriginalName = e.OriginalName,
+                     Status = e.Status,
+                     ErrorMessage = e.ErrorMessage,
+                     HasSag = e.HasSag,
+                     EventType = e.EventType,
+                     EventCount = e.EventCount,
+                     StartTime = e.StartTime,
+                     FinishTime = e.FinishTime,
+                     CostMs = e.CostMs,
+                     TriggerPhase = e.TriggerPhase,
+                     EndPhase = e.EndPhase,
+                     WorstPhase = e.WorstPhase,
+                     DurationMs = e.DurationMs ?? wp.DurationMs,
+                     SagPercent = e.SagPercent ?? wp.SagPercent,
+                     ResidualVoltage = e.ResidualVoltage ?? wp.ResidualVoltage,
+                     ResidualVoltagePct = e.ResidualVoltagePct ?? wp.ResidualVoltagePct,
+                     OccurTimeUtc = e.StartTimeUtc ?? wp.StartTimeUtc,
+                     CrtTime = e.CrtTime
+                 })
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(x => new ZwavSagListItemDto
-                {
-                    Id = x.Id,
-                    FileId = x.FileId,
-                    OriginalName = x.OriginalName,
-                    Status = x.Status,
-                    ErrorMessage = x.ErrorMessage,
-                    HasSag = x.HasSag,
-                    EventType = x.EventType,
-                    EventCount = x.EventCount,
-                    StartTime = x.StartTime,
-                    FinishTime = x.FinishTime,
-                    CostMs = x.CostMs,
-                    TriggerPhase = x.TriggerPhase,
-                    EndPhase = x.EndPhase,
-                    WorstPhase = x.WorstPhase,
-                    DurationMs = x.DurationMs ?? _context.ZwavSagEventPhases
-                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
-                        .Select(p => (decimal?)p.DurationMs)
-                        .FirstOrDefault(),
-                    SagPercent = x.SagPercent ?? _context.ZwavSagEventPhases
-                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
-                        .Select(p => (decimal?)p.SagPercent)
-                        .FirstOrDefault(),
-                    ResidualVoltage = x.ResidualVoltage ?? _context.ZwavSagEventPhases
-                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
-                        .Select(p => (decimal?)p.ResidualVoltage)
-                        .FirstOrDefault(),
-                    ResidualVoltagePct = x.ResidualVoltagePct ?? _context.ZwavSagEventPhases
-                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
-                        .Select(p => (decimal?)p.ResidualVoltagePct)
-                        .FirstOrDefault(),
-                    OccurTimeUtc = x.StartTimeUtc ?? _context.ZwavSagEventPhases
-                        .Where(p => p.SagEventId == x.Id && p.IsWorstPhase)
-                        .Select(p => (DateTime?)p.StartTimeUtc)
-                        .FirstOrDefault(),
-                    CrtTime = x.CrtTime
-                })
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             return new PagedResult<ZwavSagListItemDto>
             {
@@ -126,7 +132,7 @@ namespace Preferred.Api.Services
             if (req == null)
                 throw new ArgumentNullException(nameof(req));
 
-            var fileIds = await ResolveFileIdsAsync(req);
+            var fileIds = await ResolveFileIdsAsync(req).ConfigureAwait(false);
             if (fileIds.Count == 0)
                 throw new InvalidOperationException("未选择录波文件");
 
@@ -139,7 +145,8 @@ namespace Preferred.Api.Services
             {
                 var file = await _context.ZwavFiles
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Id == fileId);
+                    .FirstOrDefaultAsync(x => x.Id == fileId)
+                    .ConfigureAwait(false);
 
                 if (file == null)
                     continue;
@@ -148,218 +155,66 @@ namespace Preferred.Api.Services
                     .AsNoTracking()
                     .Where(x => x.FileId == fileId)
                     .OrderByDescending(x => x.Id)
-                    .FirstOrDefaultAsync();
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false);
 
                 if (analysis == null)
                     continue;
 
                 if (req.ForceRebuild)
-                {
-                    await DeleteByFileIdAsync(fileId);
-                }
+                    await DeleteByFileIdAsync(fileId).ConfigureAwait(false);
 
                 var startAt = DateTime.UtcNow;
 
                 try
                 {
-                    var context = await BuildAnalyzeContextAsync(analysis, req);
-                    var analyzeResult = await _analyzer.AnalyzeAsync(context);
+                    var analyzeContext = await BuildAnalyzeContextAsync(analysis, req).ConfigureAwait(false);
+                    var analyzeResult = await _analyzer.AnalyzeAsync(analyzeContext).ConfigureAwait(false);
 
                     var finishAt = DateTime.UtcNow;
                     var costMs = (long)Math.Round((finishAt - startAt).TotalMilliseconds);
-                    int? rmsEventId = null;
+
+                    int sagEventId;
+                    int phaseCreated;
+                    int rmsCreated;
 
                     if (analyzeResult.Events == null || analyzeResult.Events.Count == 0)
                     {
-                        var normal = new ZwavSagEvent
-                        {
-                            FileId = fileId,
-                            OriginalName = file.OriginalName,
-                            Status = 2,
-                            ErrorMessage = null,
-                            HasSag = false,
-                            EventType = "Normal",
-                            EventCount = 0,
-                            StartTime = startAt,
-                            FinishTime = finishAt,
-                            CostMs = costMs,
-                            IsMergedStatEvent = false,
-                            MergeGroupId = null,
-                            RawEventCount = 0,
-                            SeqNo = 0,
-                            Remark = null,
-                            CrtTime = finishAt,
-                            UpdTime = finishAt
-                        };
-
+                        var normal = CreateNormalEvent(fileId, file.OriginalName, startAt, finishAt, costMs);
                         _context.ZwavSagEvents.Add(normal);
-                        await _context.SaveChangesAsync();
+                        await _context.SaveChangesAsync().ConfigureAwait(false);
 
+                        sagEventId = normal.Id;
+                        phaseCreated = 0;
                         createdEventCount++;
-                        rmsEventId = normal.Id;
                     }
                     else
                     {
-                        var evts = (analyzeResult.Events ?? new List<ZwavSagEventResult>())
-                            .Where(x => x != null)
-                            .ToList();
-
+                        var evts = analyzeResult.Events.Where(x => x != null).ToList();
                         if (evts.Count == 0)
                             throw new InvalidOperationException("分析结果异常：Events 为空");
 
-                        var mergedStartUtc = evts.Min(x => x.StartTimeUtc);
-                        var mergedEndUtc = evts.Max(x => x.EndTimeUtc);
+                        var merged = CreateMergedEvent(fileId, file.OriginalName, startAt, finishAt, costMs, evts);
+                        _context.ZwavSagEvents.Add(merged);
+                        await _context.SaveChangesAsync().ConfigureAwait(false);
 
-                        var worstEvt = evts
-                            .OrderBy(x => x.ResidualVoltagePct)
-                            .ThenByDescending(x => x.DurationMs)
-                            .First();
-
-                        var maxDuration = evts
-                            .Select(x => x.DurationMs)
-                            .DefaultIfEmpty(0m)
-                            .Max();
-
-                        bool anyInterruption = evts.Any(x =>
-                            string.Equals(x.EventType, "Interruption", StringComparison.OrdinalIgnoreCase));
-
-                        var mergeGroupId = Guid.NewGuid().ToString("N");
-
-                        var entity = new ZwavSagEvent
-                        {
-                            FileId = fileId,
-                            OriginalName = file.OriginalName,
-                            Status = 2,
-                            ErrorMessage = null,
-                            HasSag = true,
-                            EventType = anyInterruption ? "Interruption" : "Sag",
-                            EventCount = evts.Count,
-                            StartTime = startAt,
-                            FinishTime = finishAt,
-                            CostMs = costMs,
-                            StartTimeUtc = mergedStartUtc,
-                            EndTimeUtc = mergedEndUtc,
-                            OccurTimeUtc = worstEvt.OccurTimeUtc,
-                            DurationMs = maxDuration,
-                            TriggerPhase = worstEvt.TriggerPhase,
-                            EndPhase = worstEvt.EndPhase,
-                            WorstPhase = worstEvt.WorstPhase,
-                            ReferenceType = worstEvt.ReferenceType,
-                            ReferenceVoltage = worstEvt.ReferenceVoltage,
-                            ResidualVoltage = worstEvt.ResidualVoltage,
-                            ResidualVoltagePct = worstEvt.ResidualVoltagePct,
-                            SagDepth = worstEvt.SagDepth,
-                            SagPercent = worstEvt.SagPercent,
-                            StartAngleDeg = worstEvt.StartAngleDeg,
-                            PhaseJumpDeg = worstEvt.PhaseJumpDeg,
-                            SagThresholdPct = worstEvt.SagThresholdPct,
-                            InterruptThresholdPct = worstEvt.InterruptThresholdPct,
-                            HysteresisPct = worstEvt.HysteresisPct,
-                            IsMergedStatEvent = true,
-                            MergeGroupId = mergeGroupId,
-                            RawEventCount = evts.Count,
-                            SeqNo = 0,
-                            Remark = null,
-                            CrtTime = finishAt,
-                            UpdTime = finishAt
-                        };
-
-                        _context.ZwavSagEvents.Add(entity);
-                        await _context.SaveChangesAsync();
-
+                        sagEventId = merged.Id;
                         createdEventCount++;
-                        rmsEventId = entity.Id;
 
-                        var phasesToSave = worstEvt.Phases;
-                        if (phasesToSave != null && phasesToSave.Count > 0)
-                        {
-                            int phaseSeq = 1;
-                            foreach (var phase in phasesToSave)
-                            {
-                                _context.ZwavSagEventPhases.Add(new ZwavSagEventPhase
-                                {
-                                    SagEventId = entity.Id,
-                                    SeqNo = phaseSeq++,
-                                    Phase = phase.Phase,
-                                    StartTimeUtc = phase.StartTimeUtc,
-                                    EndTimeUtc = phase.EndTimeUtc,
-                                    DurationMs = phase.DurationMs,
-                                    ReferenceType = phase.ReferenceType,
-                                    ReferenceVoltage = phase.ReferenceVoltage,
-                                    ResidualVoltage = phase.ResidualVoltage,
-                                    ResidualVoltagePct = phase.ResidualVoltagePct,
-                                    SagDepth = phase.SagDepth,
-                                    SagPercent = phase.SagPercent,
-                                    StartAngleDeg = phase.StartAngleDeg,
-                                    PhaseJumpDeg = phase.PhaseJumpDeg,
-                                    SagThresholdPct = phase.SagThresholdPct,
-                                    InterruptThresholdPct = phase.InterruptThresholdPct,
-                                    HysteresisPct = phase.HysteresisPct,
-                                    IsTriggerPhase = phase.IsTriggerPhase,
-                                    IsEndPhase = phase.IsEndPhase,
-                                    IsWorstPhase = phase.IsWorstPhase,
-                                    CrtTime = finishAt,
-                                    UpdTime = finishAt
-                                });
-                                createdPhaseCount++;
-                            }
-
-                            await _context.SaveChangesAsync();
-                        }
+                        phaseCreated = await SavePhasesAsync(sagEventId, GetPhasesToSave(evts), finishAt).ConfigureAwait(false);
                     }
 
-                    if (rmsEventId.HasValue && analyzeResult.RmsPoints != null && analyzeResult.RmsPoints.Count > 0)
-                    {
-                        foreach (var p in analyzeResult.RmsPoints)
-                        {
-                            _context.ZwavSagRmsPoints.Add(new ZwavSagRmsPoint
-                            {
-                                SagEventId = rmsEventId.Value,
-                                ChannelIndex = p.ChannelIndex,
-                                Phase = p.Phase,
-                                SampleNo = p.SampleNo,
-                                TimeMs = p.TimeMs,
-                                Rms = p.Rms,
-                                RmsPct = p.RmsPct,
-                                ReferenceVoltage = p.ReferenceVoltage,
-                                SeqNo = p.SeqNo,
-                                CrtTime = finishAt,
-                                UpdTime = finishAt
-                            });
-                            createdRmsPointCount++;
-                        }
+                    rmsCreated = await SaveRmsPointsAsync(sagEventId, analyzeResult.RmsPoints, finishAt).ConfigureAwait(false);
 
-                        await _context.SaveChangesAsync();
-                    }
-
+                    createdPhaseCount += phaseCreated;
+                    createdRmsPointCount += rmsCreated;
                     analyzedCount++;
                 }
                 catch (Exception ex)
                 {
                     var failAt = DateTime.UtcNow;
-
-                    _context.ZwavSagEvents.Add(new ZwavSagEvent
-                    {
-                        FileId = fileId,
-                        OriginalName = file.OriginalName,
-                        Status = 3,
-                        ErrorMessage = ex.Message,
-                        HasSag = false,
-                        EventType = "Failed",
-                        EventCount = 0,
-                        StartTime = startAt,
-                        FinishTime = failAt,
-                        CostMs = (long)Math.Round((failAt - startAt).TotalMilliseconds),
-                        IsMergedStatEvent = false,
-                        MergeGroupId = null,
-                        RawEventCount = 0,
-                        SeqNo = 0,
-                        Remark = null,
-                        CrtTime = failAt,
-                        UpdTime = failAt
-                    });
-
-                    await _context.SaveChangesAsync();
+                    _context.ZwavSagEvents.Add(CreateFailedEvent(fileId, file.OriginalName, startAt, failAt, ex.Message));
+                    await _context.SaveChangesAsync().ConfigureAwait(false);
                 }
             }
 
@@ -378,9 +233,10 @@ namespace Preferred.Api.Services
 
             if (req.FileIds != null && req.FileIds.Length > 0)
             {
-                foreach (var id in req.FileIds)
+                for (int i = 0; i < req.FileIds.Length; i++)
                 {
-                    if (id > 0) fileIds.Add(id);
+                    if (req.FileIds[i] > 0)
+                        fileIds.Add(req.FileIds[i]);
                 }
             }
 
@@ -399,11 +255,13 @@ namespace Preferred.Api.Services
                         .Where(x => guids.Contains(x.AnalysisGuid))
                         .Select(x => x.FileId)
                         .Distinct()
-                        .ToListAsync();
+                        .ToListAsync()
+                        .ConfigureAwait(false);
 
-                    foreach (var id in analysisFileIds)
+                    for (int i = 0; i < analysisFileIds.Count; i++)
                     {
-                        if (id > 0) fileIds.Add(id);
+                        if (analysisFileIds[i] > 0)
+                            fileIds.Add(analysisFileIds[i]);
                     }
                 }
             }
@@ -419,29 +277,26 @@ namespace Preferred.Api.Services
                 throw new ArgumentNullException(nameof(analysis));
 
             int analysisId = analysis.Id;
+
             var cfg = await _context.ZwavCfgs
                 .AsNoTracking()
-                .FirstOrDefaultAsync(x => x.AnalysisId == analysisId);
+                .FirstOrDefaultAsync(x => x.AnalysisId == analysisId)
+                .ConfigureAwait(false);
 
-            var voltageChannels = await BuildVoltageChannelsAsync(analysisId);
+            var voltageChannels = await BuildVoltageChannelsAsync(analysisId).ConfigureAwait(false);
             if (voltageChannels.Length == 0)
                 throw new InvalidOperationException("未识别到电压通道，无法进行暂降分析");
 
-            var rawRows = await LoadWaveRowsAsync(analysisId);
+            var rawRows = await LoadWaveRowsAsync(analysisId).ConfigureAwait(false);
             if (rawRows.Count == 0)
                 throw new InvalidOperationException("未读取到波形采样数据");
 
-            var samples = BuildSamples(rawRows, voltageChannels);
+            decimal frequencyHz = (cfg?.FrequencyHz).GetValueOrDefault() > 0 ? cfg.FrequencyHz.Value : 50m;
+            decimal timeMul = (cfg?.TimeMul).GetValueOrDefault() > 0 ? cfg.TimeMul.Value : 0.001m;
+
+            var samples = BuildSamples(rawRows, voltageChannels, timeMul);
             if (samples.Count == 0)
                 throw new InvalidOperationException("采样点构建失败");
-
-            decimal frequencyHz = 50m;
-            if (cfg?.FrequencyHz.HasValue == true && cfg.FrequencyHz.Value > 0)
-                frequencyHz = cfg.FrequencyHz.Value;
-
-            decimal timeMul = 0.001m;
-            if (cfg?.TimeMul.HasValue == true && cfg.TimeMul.Value > 0)
-                timeMul = cfg.TimeMul.Value;
 
             var ctx = new ZwavSagAnalyzeContext
             {
@@ -467,22 +322,29 @@ namespace Preferred.Api.Services
 
         private async Task<ZwavVoltageChannelContext[]> BuildVoltageChannelsAsync(int analysisId)
         {
-            var rules = await ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context);
+            var rules = await ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context).ConfigureAwait(false);
             if (rules.Length == 0)
                 return Array.Empty<ZwavVoltageChannelContext>();
 
             var channels = await _context.ZwavChannels
                 .AsNoTracking()
-                .Where(x => x.AnalysisId == analysisId)
-                .Where(x => x.IsEnable == 1)
-                .Where(x => x.ChannelType == "Analog")
+                .Where(x => x.AnalysisId == analysisId && x.IsEnable == 1 && x.ChannelType == "Analog")
                 .OrderBy(x => x.ChannelIndex)
-                .ToListAsync();
+                .Select(x => new
+                {
+                    x.ChannelIndex,
+                    x.ChannelCode,
+                    x.ChannelName,
+                    x.Unit
+                })
+                .ToListAsync()
+                .ConfigureAwait(false);
 
-            var result = new List<ZwavVoltageChannelContext>();
+            var result = new List<ZwavVoltageChannelContext>(channels.Count);
 
-            foreach (var ch in channels)
+            for (int i = 0; i < channels.Count; i++)
             {
+                var ch = channels[i];
                 var channelName = (ch.ChannelName ?? string.Empty).Trim();
                 var channelCode = (ch.ChannelCode ?? string.Empty).Trim();
                 var unit = (ch.Unit ?? string.Empty).Trim();
@@ -506,8 +368,6 @@ namespace Preferred.Api.Services
 
         private async Task<List<WaveRowRaw>> LoadWaveRowsAsync(int analysisId)
         {
-            // 这里请按你的真实波形表实体替换
-            // 假设 _context.ZwavDatas 可映射到 WaveRowRaw
             return await _context.ZwavDatas
                 .AsNoTracking()
                 .Where(x => x.AnalysisId == analysisId)
@@ -619,12 +479,14 @@ namespace Preferred.Api.Services
                     Channel100 = x.Channel100,
                     DigitalWords = x.DigitalWords
                 })
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
         }
 
         private List<ZwavSagSamplePoint> BuildSamples(
             List<WaveRowRaw> rawRows,
-            ZwavVoltageChannelContext[] voltageChannels)
+            ZwavVoltageChannelContext[] voltageChannels,
+            decimal timeMul)
         {
             if (rawRows == null || rawRows.Count == 0)
                 return new List<ZwavSagSamplePoint>();
@@ -640,20 +502,24 @@ namespace Preferred.Api.Services
 
             var result = new List<ZwavSagSamplePoint>(rawRows.Count);
 
-            foreach (var row in rawRows.OrderBy(x => x.SampleNo))
+            for (int i = 0; i < rawRows.Count; i++)
             {
-                var values = new Dictionary<int, double?>();
+                var row = rawRows[i];
+                var values = new Dictionary<int, double?>(channelIndexes.Length);
 
-                foreach (var idx in channelIndexes)
+                for (int j = 0; j < channelIndexes.Length; j++)
                 {
+                    int idx = channelIndexes[j];
                     values[idx] = row.GetAnalogNullable(idx);
                 }
 
                 double timeMs = row.TimeMs;
                 if (timeMs <= 0 && row.TimeRaw > 0)
                 {
-                    // 兜底：假设 TimeRaw 单位为微秒
-                    timeMs = row.TimeRaw / 1000.0;
+                    if (timeMul > 0)
+                        timeMs = (double)((decimal)row.TimeRaw * timeMul);
+                    else
+                        timeMs = row.TimeRaw / 1000.0;
                 }
 
                 result.Add(new ZwavSagSamplePoint
@@ -685,50 +551,12 @@ namespace Preferred.Api.Services
 
         public async Task<ZwavSagDetailDto> GetDetailAsync(int id)
         {
-            var x = await _context.ZwavSagEvents
+            var entity = await _context.ZwavSagEvents
                 .AsNoTracking()
-                .FirstOrDefaultAsync(e => e.Id == id);
+                .FirstOrDefaultAsync(e => e.Id == id)
+                .ConfigureAwait(false);
 
-            if (x == null)
-                return null;
-
-            return new ZwavSagDetailDto
-            {
-                Id = x.Id,
-                FileId = x.FileId,
-                OriginalName = x.OriginalName,
-                Status = x.Status,
-                ErrorMessage = x.ErrorMessage,
-                HasSag = x.HasSag,
-                EventType = x.EventType,
-                EventCount = x.EventCount,
-                StartTime = x.StartTime,
-                FinishTime = x.FinishTime,
-                CostMs = x.CostMs,
-                StartTimeUtc = x.StartTimeUtc,
-                EndTimeUtc = x.EndTimeUtc,
-                OccurTimeUtc = x.OccurTimeUtc,
-                DurationMs = x.DurationMs,
-                TriggerPhase = x.TriggerPhase,
-                EndPhase = x.EndPhase,
-                WorstPhase = x.WorstPhase,
-                ReferenceType = x.ReferenceType,
-                ReferenceVoltage = x.ReferenceVoltage,
-                ResidualVoltage = x.ResidualVoltage,
-                ResidualVoltagePct = x.ResidualVoltagePct,
-                SagDepth = x.SagDepth,
-                SagPercent = x.SagPercent,
-                PhaseJumpDeg = x.PhaseJumpDeg,
-                StartAngleDeg = x.StartAngleDeg,
-                SagThresholdPct = x.SagThresholdPct,
-                InterruptThresholdPct = x.InterruptThresholdPct,
-                HysteresisPct = x.HysteresisPct,
-                IsMergedStatEvent = x.IsMergedStatEvent,
-                MergeGroupId = x.MergeGroupId,
-                RawEventCount = x.RawEventCount,
-                Remark = x.Remark,
-                CrtTime = x.CrtTime
-            };
+            return entity == null ? null : MapDetail(entity);
         }
 
         public async Task<ZwavSagPhaseDto[]> GetPhasesAsync(int id)
@@ -753,7 +581,8 @@ namespace Preferred.Api.Services
                     IsEndPhase = x.IsEndPhase,
                     IsWorstPhase = x.IsWorstPhase
                 })
-                .ToArrayAsync();
+                .ToArrayAsync()
+                .ConfigureAwait(false);
         }
 
         public async Task<ZwavSagDetailDto[]> GetByFileIdAsync(int fileId)
@@ -800,7 +629,8 @@ namespace Preferred.Api.Services
                     Remark = x.Remark,
                     CrtTime = x.CrtTime
                 })
-                .ToArrayAsync();
+                .ToArrayAsync()
+                .ConfigureAwait(false);
         }
 
         public async Task<bool> UpdateAsync(int id, UpdateZwavSagEventRequest req)
@@ -808,39 +638,47 @@ namespace Preferred.Api.Services
             if (req == null)
                 throw new ArgumentNullException(nameof(req));
 
-            var entity = await _context.ZwavSagEvents.FirstOrDefaultAsync(x => x.Id == id);
+            var entity = await _context.ZwavSagEvents
+                .FirstOrDefaultAsync(x => x.Id == id)
+                .ConfigureAwait(false);
+
             if (entity == null)
                 return false;
 
             entity.Remark = req.Remark;
             entity.UpdTime = DateTime.UtcNow;
 
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync().ConfigureAwait(false);
             return true;
         }
 
         public async Task<bool> DeleteAsync(int id)
         {
-            var entity = await _context.ZwavSagEvents.FirstOrDefaultAsync(x => x.Id == id);
+            var entity = await _context.ZwavSagEvents
+                .FirstOrDefaultAsync(x => x.Id == id)
+                .ConfigureAwait(false);
+
             if (entity == null)
                 return false;
 
             var phases = await _context.ZwavSagEventPhases
                 .Where(x => x.SagEventId == id)
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             if (phases.Count > 0)
                 _context.ZwavSagEventPhases.RemoveRange(phases);
 
             var rmsPoints = await _context.ZwavSagRmsPoints
                 .Where(x => x.SagEventId == id)
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             if (rmsPoints.Count > 0)
                 _context.ZwavSagRmsPoints.RemoveRange(rmsPoints);
 
             _context.ZwavSagEvents.Remove(entity);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync().ConfigureAwait(false);
             return true;
         }
 
@@ -848,7 +686,8 @@ namespace Preferred.Api.Services
         {
             var events = await _context.ZwavSagEvents
                 .Where(x => x.FileId == fileId)
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             if (events.Count == 0)
                 return 0;
@@ -857,23 +696,265 @@ namespace Preferred.Api.Services
 
             var phases = await _context.ZwavSagEventPhases
                 .Where(x => eventIds.Contains(x.SagEventId))
-                .ToListAsync();
-
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             if (phases.Count > 0)
                 _context.ZwavSagEventPhases.RemoveRange(phases);
 
             var rmsPoints = await _context.ZwavSagRmsPoints
                 .Where(x => eventIds.Contains(x.SagEventId))
-                .ToListAsync();
+                .ToListAsync()
+                .ConfigureAwait(false);
 
             if (rmsPoints.Count > 0)
                 _context.ZwavSagRmsPoints.RemoveRange(rmsPoints);
 
             _context.ZwavSagEvents.RemoveRange(events);
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync().ConfigureAwait(false);
 
             return events.Count;
         }
+
+        #region 私有辅助方法
+
+        private static ZwavSagDetailDto MapDetail(ZwavSagEvent x)
+        {
+            return new ZwavSagDetailDto
+            {
+                Id = x.Id,
+                FileId = x.FileId,
+                OriginalName = x.OriginalName,
+                Status = x.Status,
+                ErrorMessage = x.ErrorMessage,
+                HasSag = x.HasSag,
+                EventType = x.EventType,
+                EventCount = x.EventCount,
+                StartTime = x.StartTime,
+                FinishTime = x.FinishTime,
+                CostMs = x.CostMs,
+                StartTimeUtc = x.StartTimeUtc,
+                EndTimeUtc = x.EndTimeUtc,
+                OccurTimeUtc = x.OccurTimeUtc,
+                DurationMs = x.DurationMs,
+                TriggerPhase = x.TriggerPhase,
+                EndPhase = x.EndPhase,
+                WorstPhase = x.WorstPhase,
+                ReferenceType = x.ReferenceType,
+                ReferenceVoltage = x.ReferenceVoltage,
+                ResidualVoltage = x.ResidualVoltage,
+                ResidualVoltagePct = x.ResidualVoltagePct,
+                SagDepth = x.SagDepth,
+                SagPercent = x.SagPercent,
+                PhaseJumpDeg = x.PhaseJumpDeg,
+                StartAngleDeg = x.StartAngleDeg,
+                SagThresholdPct = x.SagThresholdPct,
+                InterruptThresholdPct = x.InterruptThresholdPct,
+                HysteresisPct = x.HysteresisPct,
+                IsMergedStatEvent = x.IsMergedStatEvent,
+                MergeGroupId = x.MergeGroupId,
+                RawEventCount = x.RawEventCount,
+                Remark = x.Remark,
+                CrtTime = x.CrtTime
+            };
+        }
+
+        private static ZwavSagEvent CreateNormalEvent(int fileId, string originalName, DateTime startAt, DateTime finishAt, long costMs)
+        {
+            return new ZwavSagEvent
+            {
+                FileId = fileId,
+                OriginalName = originalName,
+                Status = 2,
+                ErrorMessage = null,
+                HasSag = false,
+                EventType = "Normal",
+                EventCount = 0,
+                StartTime = startAt,
+                FinishTime = finishAt,
+                CostMs = costMs,
+                IsMergedStatEvent = false,
+                MergeGroupId = null,
+                RawEventCount = 0,
+                SeqNo = 0,
+                Remark = null,
+                CrtTime = finishAt,
+                UpdTime = finishAt
+            };
+        }
+
+        private static ZwavSagEvent CreateFailedEvent(int fileId, string originalName, DateTime startAt, DateTime failAt, string errorMessage)
+        {
+            return new ZwavSagEvent
+            {
+                FileId = fileId,
+                OriginalName = originalName,
+                Status = 3,
+                ErrorMessage = errorMessage,
+                HasSag = false,
+                EventType = "Failed",
+                EventCount = 0,
+                StartTime = startAt,
+                FinishTime = failAt,
+                CostMs = (long)Math.Round((failAt - startAt).TotalMilliseconds),
+                IsMergedStatEvent = false,
+                MergeGroupId = null,
+                RawEventCount = 0,
+                SeqNo = 0,
+                Remark = null,
+                CrtTime = failAt,
+                UpdTime = failAt
+            };
+        }
+
+        private static ZwavSagEvent CreateMergedEvent(
+            int fileId,
+            string originalName,
+            DateTime startAt,
+            DateTime finishAt,
+            long costMs,
+            List<ZwavSagEventResult> evts)
+        {
+            var mergedStartUtc = evts.Min(x => x.StartTimeUtc);
+            var mergedEndUtc = evts.Max(x => x.EndTimeUtc);
+
+            var worstEvt = evts
+                .OrderBy(x => x.ResidualVoltagePct)
+                .ThenByDescending(x => x.DurationMs)
+                .First();
+
+            var maxDuration = evts
+                .Select(x => x.DurationMs)
+                .DefaultIfEmpty(0m)
+                .Max();
+
+            bool anyInterruption = evts.Any(x =>
+                string.Equals(x.EventType, "Interruption", StringComparison.OrdinalIgnoreCase));
+
+            return new ZwavSagEvent
+            {
+                FileId = fileId,
+                OriginalName = originalName,
+                Status = 2,
+                ErrorMessage = null,
+                HasSag = true,
+                EventType = anyInterruption ? "Interruption" : "Sag",
+                EventCount = evts.Count,
+                StartTime = startAt,
+                FinishTime = finishAt,
+                CostMs = costMs,
+                StartTimeUtc = mergedStartUtc,
+                EndTimeUtc = mergedEndUtc,
+                OccurTimeUtc = worstEvt.OccurTimeUtc,
+                DurationMs = maxDuration,
+                TriggerPhase = worstEvt.TriggerPhase,
+                EndPhase = worstEvt.EndPhase,
+                WorstPhase = worstEvt.WorstPhase,
+                ReferenceType = worstEvt.ReferenceType,
+                ReferenceVoltage = worstEvt.ReferenceVoltage,
+                ResidualVoltage = worstEvt.ResidualVoltage,
+                ResidualVoltagePct = worstEvt.ResidualVoltagePct,
+                SagDepth = worstEvt.SagDepth,
+                SagPercent = worstEvt.SagPercent,
+                StartAngleDeg = worstEvt.StartAngleDeg,
+                PhaseJumpDeg = worstEvt.PhaseJumpDeg,
+                SagThresholdPct = worstEvt.SagThresholdPct,
+                InterruptThresholdPct = worstEvt.InterruptThresholdPct,
+                HysteresisPct = worstEvt.HysteresisPct,
+                IsMergedStatEvent = true,
+                MergeGroupId = Guid.NewGuid().ToString("N"),
+                RawEventCount = evts.Count,
+                SeqNo = 0,
+                Remark = null,
+                CrtTime = finishAt,
+                UpdTime = finishAt
+            };
+        }
+
+        private static List<ZwavSagEventPhaseResult> GetPhasesToSave(List<ZwavSagEventResult> evts)
+        {
+            var worstEvt = evts
+                .OrderBy(x => x.ResidualVoltagePct)
+                .ThenByDescending(x => x.DurationMs)
+                .First();
+
+            return worstEvt.Phases ?? new List<ZwavSagEventPhaseResult>();
+        }
+
+        private async Task<int> SavePhasesAsync(int sagEventId, List<ZwavSagEventPhaseResult> phases, DateTime finishAt)
+        {
+            if (phases == null || phases.Count == 0)
+                return 0;
+
+            int seq = 1;
+            var entities = new List<ZwavSagEventPhase>(phases.Count);
+
+            for (int i = 0; i < phases.Count; i++)
+            {
+                var phase = phases[i];
+                entities.Add(new ZwavSagEventPhase
+                {
+                    SagEventId = sagEventId,
+                    SeqNo = seq++,
+                    Phase = phase.Phase,
+                    StartTimeUtc = phase.StartTimeUtc,
+                    EndTimeUtc = phase.EndTimeUtc,
+                    DurationMs = phase.DurationMs,
+                    ReferenceType = phase.ReferenceType,
+                    ReferenceVoltage = phase.ReferenceVoltage,
+                    ResidualVoltage = phase.ResidualVoltage,
+                    ResidualVoltagePct = phase.ResidualVoltagePct,
+                    SagDepth = phase.SagDepth,
+                    SagPercent = phase.SagPercent,
+                    StartAngleDeg = phase.StartAngleDeg,
+                    PhaseJumpDeg = phase.PhaseJumpDeg,
+                    SagThresholdPct = phase.SagThresholdPct,
+                    InterruptThresholdPct = phase.InterruptThresholdPct,
+                    HysteresisPct = phase.HysteresisPct,
+                    IsTriggerPhase = phase.IsTriggerPhase,
+                    IsEndPhase = phase.IsEndPhase,
+                    IsWorstPhase = phase.IsWorstPhase,
+                    CrtTime = finishAt,
+                    UpdTime = finishAt
+                });
+            }
+
+            _context.ZwavSagEventPhases.AddRange(entities);
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+            return entities.Count;
+        }
+
+        private async Task<int> SaveRmsPointsAsync(int sagEventId, List<ZwavSagRmsPointResult> rmsPoints, DateTime finishAt)
+        {
+            if (rmsPoints == null || rmsPoints.Count == 0)
+                return 0;
+
+            var entities = new List<ZwavSagRmsPoint>(rmsPoints.Count);
+
+            for (int i = 0; i < rmsPoints.Count; i++)
+            {
+                var p = rmsPoints[i];
+                entities.Add(new ZwavSagRmsPoint
+                {
+                    SagEventId = sagEventId,
+                    ChannelIndex = p.ChannelIndex,
+                    Phase = p.Phase,
+                    SampleNo = p.SampleNo,
+                    TimeMs = p.TimeMs,
+                    Rms = p.Rms,
+                    RmsPct = p.RmsPct,
+                    ReferenceVoltage = p.ReferenceVoltage,
+                    SeqNo = p.SeqNo,
+                    CrtTime = finishAt,
+                    UpdTime = finishAt
+                });
+            }
+
+            _context.ZwavSagRmsPoints.AddRange(entities);
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+            return entities.Count;
+        }
+
+        #endregion
     }
 }

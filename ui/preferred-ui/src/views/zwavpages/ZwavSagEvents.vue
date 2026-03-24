@@ -93,10 +93,6 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="errorMessage" label="错误信息" min-width="180" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
-        </el-table-column>
-
         <el-table-column prop="hasSag" label="是否暂降" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.hasSag ? 'danger' : 'success'">
@@ -122,7 +118,9 @@
         <el-table-column prop="residualVoltage" label="残余电压(%)" width="100" align="left">
           <template #default="{ row }">{{ formatNumber(row.residualVoltage) }}</template>
         </el-table-column>
-
+        <el-table-column prop="errorMessage" label="错误信息" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.errorMessage || '-' }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="240" fixed="right" align="center">
           <template #default="{ row }">
             <el-button link type="primary" @click="openSagWave(row)">暂降分析</el-button>
@@ -182,10 +180,6 @@
 
             <el-form-item label="迟滞(%)">
               <el-input-number v-model="analysisParams.hysteresisPct" :min="0" :max="20" :step="0.5" />
-            </el-form-item>
-
-            <el-form-item>
-              <el-checkbox v-model="analysisParams.forceRebuild">强制重新分析</el-checkbox>
             </el-form-item>
           </el-form>
         </div>
@@ -364,7 +358,6 @@ const DEFAULT_ANALYSIS_PARAMS = {
   sagThresholdPct: 90,
   interruptThresholdPct: 10,
   hysteresisPct: 2,
-  forceRebuild: false,
   minDurationMs: 10
 }
 
@@ -566,7 +559,6 @@ const resetAnalysisParams = () => {
   analysisParams.sagThresholdPct = DEFAULT_ANALYSIS_PARAMS.sagThresholdPct
   analysisParams.interruptThresholdPct = DEFAULT_ANALYSIS_PARAMS.interruptThresholdPct
   analysisParams.hysteresisPct = DEFAULT_ANALYSIS_PARAMS.hysteresisPct
-  analysisParams.forceRebuild = DEFAULT_ANALYSIS_PARAMS.forceRebuild
   analysisParams.minDurationMs = DEFAULT_ANALYSIS_PARAMS.minDurationMs
 }
 
@@ -618,11 +610,10 @@ const handleAnalysisSizeChange = (s: number) => {
   fetchAnalysisList()
 }
 
-const buildAnalyzePayload = (options?: { fileIds?: number[]; analysisGuids?: string[]; forceRebuild?: boolean }) => {
+const buildAnalyzePayload = (options?: { fileIds?: number[]; analysisGuids?: string[] }) => {
   return {
     fileIds: options?.fileIds || [],
     analysisGuids: options?.analysisGuids || [],
-    forceRebuild: options?.forceRebuild ?? analysisParams.forceRebuild,
     referenceVoltage: analysisParams.referenceVoltage,
     sagThresholdPct: analysisParams.sagThresholdPct,
     interruptThresholdPct: analysisParams.interruptThresholdPct,
@@ -643,8 +634,7 @@ const startSagAnalysis = async () => {
   try {
     const res = await zwavSagService.analyze(
       buildAnalyzePayload({
-        analysisGuids,
-        forceRebuild: analysisParams.forceRebuild
+        analysisGuids
       })
     )
 
@@ -865,6 +855,11 @@ const openChannelRuleEditDialog = async (row?: ZwavSagChannelRuleDto) => {
   }
 }
 
+const getApiErrorMessage = (e: any) => {
+  const data = e?.response?.data
+  return data?.message || data?.Message || e?.message || '请求失败'
+}
+
 const saveChannelRule = async () => {
   if (!channelRuleForm.ruleName?.trim()) {
     ElMessage.warning('规则名称不能为空')
@@ -900,7 +895,7 @@ const saveChannelRule = async () => {
       ElMessage.error(res.message || '保存失败')
     }
   } catch (e: any) {
-    ElMessage.error(e?.message || '保存失败')
+    ElMessage.error(getApiErrorMessage(e))
   } finally {
     channelRuleSaving.value = false
   }

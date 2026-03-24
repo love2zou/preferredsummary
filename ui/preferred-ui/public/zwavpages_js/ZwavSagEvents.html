@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>录波暂降分析（HTML+JS）</title>
+  <link href="./assets/app.css" rel="stylesheet" />
+</head>
+
+<body>
+  <div class="zwav-analysis-container">
+    <div class="page-header">
+      <h2>录波暂降分析</h2>
+      <div style="display:flex; gap:10px;">
+        <a class="el-button" href="./ZwavAnalysis.html" target="_blank">解析管理</a>
+        <button class="el-button" id="btnOpenApiConfig">接口配置</button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <div class="search-left">
+        <div class="search-item">
+          <label>文件名</label>
+          <input id="keyword" class="el-input" placeholder="" />
+        </div>
+        <div class="search-item">
+          <label>事件类型</label>
+          <select id="eventType" class="el-select" style="width: 140px">
+            <option value="">全部</option>
+            <option value="Sag">暂降</option>
+            <option value="Interruption">中断</option>
+            <option value="Normal">无事件</option>
+          </select>
+        </div>
+        <div class="search-item">
+          <label>相别</label>
+          <select id="phase" class="el-select" style="width: 120px">
+            <option value="">全部</option>
+            <option value="A">A</option>
+            <option value="B">B</option>
+            <option value="C">C</option>
+            <option value="AB">AB</option>
+            <option value="BC">BC</option>
+            <option value="CA">CA</option>
+            <option value="ABC">ABC</option>
+          </select>
+        </div>
+        <div class="search-item">
+          <label>开始日期</label>
+          <input id="fromDate" type="date" class="el-input" />
+        </div>
+        <div class="search-item">
+          <label>结束日期</label>
+          <input id="toDate" type="date" class="el-input" />
+        </div>
+        <div style="display:flex; gap:10px; align-items:end;">
+          <button class="el-button el-button--primary" id="btnSearch">查询</button>
+          <button class="el-button" id="btnReset">重置</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <div class="page-actions-left">
+        <button class="el-button el-button--danger" id="btnBatchDelete" disabled>批量删除</button>
+      </div>
+      <div class="page-actions-right">
+        <button class="el-button el-button--primary" id="btnOpenAnalyze">新增暂降分析</button>
+        <button class="el-button" id="btnOpenChannelRules">电压暂降通道识别词库</button>
+      </div>
+    </div>
+
+    <div class="data-table">
+      <table class="el-table">
+        <thead>
+          <tr>
+            <th class="cell-center" style="width: 42px"><input type="checkbox" id="checkAll" /></th>
+            <th class="cell-center" style="width: 60px">序号</th>
+            <th style="width: 360px">录波文件名</th>
+            <th style="width: 80px">状态</th>
+            <th style="width: 90px">是否暂降</th>
+            <th style="width: 100px">事件类型</th>
+            <th style="width: 90px">最严重相</th>
+            <th style="width: 210px">发生时间</th>
+            <th style="width: 120px">持续时间(ms)</th>
+            <th style="width: 120px">暂降幅值(%)</th>
+            <th style="width: 120px">残余电压(%)</th>
+            <th style="width: 220px">错误信息</th>
+            <th class="cell-center" style="width: 220px">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+
+      <div class="pagination">
+        <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="totalText">-</span>
+        <select id="pageSize" class="el-select" style="width: 90px; height: 28px">
+          <option value="10" selected>10</option>
+          <option value="20">20</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+        <button class="el-button" id="btnPrev">上一页</button>
+        <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="pageText">1</span> 页</span>
+        <button class="el-button" id="btnNext">下一页</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="apiModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">接口配置</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="search-item" style="width:100%">
+          <label>API Base URL</label>
+          <input id="apiBaseInput" class="el-input" placeholder="例如：http://159.75.184.108:8080" style="width:100%" />
+        </div>
+        <div style="margin-top:8px; font-size:12px; color: var(--el-text-color-secondary);">
+          默认优先读取 ?apiBase=... 其次读取 localStorage.zwav_api_base。
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+        <button class="el-button el-button--primary" id="btnSaveApiBase">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="analyzeModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">新增暂降分析</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="analyze-tip">
+          分析算法已固定：1周波 RMS 窗口 + 半周波更新
+        </div>
+
+        <div class="analyze-params">
+          <div class="search-item">
+            <label>参考电压(V)</label>
+            <input id="referenceVoltage" type="number" step="0.01" class="el-input" />
+          </div>
+          <div class="search-item">
+            <label>暂降阈值(%)</label>
+            <input id="sagThresholdPct" type="number" step="1" class="el-input" />
+          </div>
+          <div class="search-item">
+            <label>最小持续(ms)</label>
+            <input id="minDurationMs" type="number" step="1" class="el-input" />
+          </div>
+          <div class="search-item">
+            <label>中断阈值(%)</label>
+            <input id="interruptThresholdPct" type="number" step="1" class="el-input" />
+          </div>
+          <div class="search-item">
+            <label>迟滞(%)</label>
+            <input id="hysteresisPct" type="number" step="0.5" class="el-input" />
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <input id="analysisKeyword" class="el-input" placeholder="输入文件名关键词" style="width: 260px" />
+          <button class="el-button el-button--primary" id="btnAnalysisSearch">查询</button>
+        </div>
+        <table class="el-table">
+          <thead>
+            <tr>
+              <th class="cell-center" style="width: 42px"><input type="checkbox" id="analysisCheckAll" /></th>
+              <th class="cell-center" style="width: 60px">序号</th>
+              <th style="width: 420px">录波文件名</th>
+              <th style="width: 120px">状态</th>
+              <th style="width: 120px">大小</th>
+              <th style="width: 140px">创建时间</th>
+            </tr>
+          </thead>
+          <tbody id="analysisTbody"></tbody>
+        </table>
+        <div class="pagination" style="margin-top: 12px;">
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="analysisTotalText">-</span>
+          <select id="analysisPageSize" class="el-select" style="width: 90px; height: 28px">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="el-button" id="analysisPrev">上一页</button>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="analysisPageText">1</span>
+            页</span>
+          <button class="el-button" id="analysisNext">下一页</button>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+        <button class="el-button el-button--primary" id="btnStartAnalyze">开始分析</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="channelRuleModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">电压暂降通道词库</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="inner-search-bar">
+          <div class="inner-search-left">
+            <span class="search-label">规则名称</span>
+            <input id="ruleKeyword" class="el-input" placeholder="请输入规则名称" style="width: 220px" />
+          </div>
+          <div class="inner-search-right">
+            <button class="el-button el-button--primary" id="btnRuleSearch">查询</button>
+            <button class="el-button el-button--success" id="btnRuleAdd">新增规则</button>
+          </div>
+        </div>
+        <table class="el-table">
+          <thead>
+            <tr>
+              <th class="cell-center" style="width: 60px">序号</th>
+              <th style="width: 320px">规则名称</th>
+              <th style="width: 90px">相别</th>
+              <th style="width: 100px">排序号</th>
+              <th style="width: 160px">创建时间</th>
+              <th class="cell-center" style="width: 160px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="ruleTbody"></tbody>
+        </table>
+        <div class="pagination" style="margin-top: 12px;">
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="ruleTotalText">-</span>
+          <select id="rulePageSize" class="el-select" style="width: 90px; height: 28px">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="el-button" id="rulePrev">上一页</button>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="rulePageText">1</span>
+            页</span>
+          <button class="el-button" id="ruleNext">下一页</button>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="channelRuleEditModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title" id="ruleEditTitle">新增规则</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="rule-edit-form">
+          <div class="search-item">
+            <label>规则名称</label>
+            <input id="ruleNameInput" class="el-input" placeholder="例如：UA, UB, A相电压" />
+          </div>
+          <div class="search-item">
+            <label>相别</label>
+            <select id="phaseNameSelect" class="el-select">
+              <option value="A">A相</option>
+              <option value="B">B相</option>
+              <option value="C">C相</option>
+              <option value="AB">AB</option>
+              <option value="BC">BC</option>
+              <option value="CA">CA</option>
+            </select>
+          </div>
+          <div class="search-item">
+            <label>排序号</label>
+            <input id="seqNoInput" type="number" class="el-input" />
+          </div>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>取消</button>
+        <button class="el-button el-button--primary" id="btnSaveRule">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    .inner-search-bar {
+      margin-bottom: 15px;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: nowrap;
+      background-color: var(--el-fill-color-light);
+      border-radius: 6px;
+    }
+
+    .inner-search-left {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .inner-search-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .search-label {
+      color: var(--el-text-color-regular);
+      white-space: nowrap;
+    }
+
+    .el-button--success {
+      background: var(--el-color-success);
+      border-color: var(--el-color-success);
+      color: #fff;
+    }
+
+    .el-button--success:hover {
+      background: rgba(103, 194, 58, 0.92);
+      border-color: rgba(103, 194, 58, 0.92);
+      color: #fff;
+    }
+
+    .analyze-tip {
+      margin-bottom: 10px;
+      padding: 10px;
+      background: var(--el-fill-color-light);
+      border: 1px solid #ebeef5;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+    }
+
+    .analyze-params {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(260px, 1fr));
+      gap: 10px 14px;
+      align-items: end;
+      margin-bottom: 10px;
+    }
+
+    .analyze-params .search-item {
+      width: 100%;
+    }
+
+    .analyze-params .search-item label {
+      width: 92px;
+      text-align: right;
+    }
+
+    .analyze-params .search-item .el-input {
+      width: auto;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .rule-edit-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .rule-edit-form .search-item {
+      width: 100%;
+    }
+
+    .rule-edit-form .search-item label {
+      width: 72px;
+      text-align: right;
+    }
+
+    .rule-edit-form .search-item .el-input,
+    .rule-edit-form .search-item .el-select {
+      width: auto;
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .page-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 0;
+    }
+
+    .page-actions-left,
+    .page-actions-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  </style>
+
+  <script type="module" src="./assets/zwav-sag-events.js"></script>
+</body>
+
+</html>
