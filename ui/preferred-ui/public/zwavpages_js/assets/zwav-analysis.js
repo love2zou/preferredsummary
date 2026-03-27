@@ -1,4 +1,4 @@
-import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, formatFileSize, getApiBaseUrl, openDialog, parseFileNameFromContentDisposition, setApiBaseUrl, setText } from './common.js'
+import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, getApiBaseUrl, openDialog, parseFileNameFromContentDisposition, setApiBaseUrl, setText } from './common.js'
 import { zwavApi } from './zwav-api.js'
 
 const state = {
@@ -39,6 +39,12 @@ function statusText(status) {
   return map[status] || status || '-'
 }
 
+function formatFileSizeMB(mb) {
+  if (mb === undefined || mb === null) return '-'
+  mb = mb / 1024;
+  return mb.toFixed(2) + ' kb'
+}
+
 function render() {
   const tbody = byId('tbody')
   if (!tbody) return
@@ -63,7 +69,7 @@ function render() {
            <td class="cell-center"><input type="checkbox" class="row-check" data-guid="${escapeHtml(guid)}" ${checked}></td>
            <td class="cell-center">${pageStartIndex + idx + 1}</td>
            <td class="file-name-cell" title="${escapeHtml(r.originalName || '')}">${escapeHtml(r.originalName || '-')}</td>
-           <td>${formatFileSize(r.fileSize)}</td>
+           <td>${formatFileSizeMB(r.fileSize)}</td>
            <td>${pill}</td>
            <td>${progressBar}</td>
            <td>${escapeHtml(formatDateTime(r.crtTime))}</td>
@@ -228,23 +234,74 @@ async function deleteOne(guid) {
 
 async function batchDelete() {
   if (state.selected.size === 0) return
-  if (!confirm('确定要删除选中的任务和文件吗？')) return
 
-  const ids = Array.from(state.selected)
-  let ok = 0
-  let fail = 0
-  for (const guid of ids) {
-    try {
-      const res = await zwavApi.deleteAnalysis(guid, true)
-      if (res && res.success) ok++
-      else fail++
-    } catch {
-      fail++
+  // 创建更友好的确认对话框
+  const confirmDialog = document.createElement('div')
+  confirmDialog.className = 'el-dialog-mask'
+  confirmDialog.innerHTML = `
+    <div class="el-dialog" style="width: 400px;">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">确认删除</div>
+        <button class="el-dialog__close" onclick="this.closest('.el-dialog-mask').remove()">×</button>
+      </div>
+      <div class="el-dialog__body">
+        <p>确定要删除选中的 ${state.selected.size} 个任务和文件吗？</p>
+        <p style="color: var(--el-color-danger); font-size: 12px; margin-top: 8px;">此操作不可恢复</p>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" onclick="this.closest('.el-dialog-mask').remove()">取消</button>
+        <button class="el-button el-button--danger" id="confirmDeleteBtn">确定删除</button>
+      </div>
+    </div>
+  `
+  document.body.appendChild(confirmDialog)
+
+  // 处理确认删除
+  byId('confirmDeleteBtn').addEventListener('click', async () => {
+    confirmDialog.remove()
+
+    const ids = Array.from(state.selected)
+    let ok = 0
+    let fail = 0
+
+    for (const guid of ids) {
+      try {
+        const res = await zwavApi.deleteAnalysis(guid, true)
+        if (res && res.success) ok++
+        else fail++
+      } catch {
+        fail++
+      }
     }
-  }
-  alert(`删除完成：成功 ${ok} 条，失败 ${fail} 条`)
-  state.selected.clear()
-  await fetchList({ silent: true })
+
+    // 显示结果对话框
+    const resultDialog = document.createElement('div')
+    resultDialog.className = 'el-dialog-mask'
+    const resultType = fail === 0 ? 'success' : 'warning'
+    const resultTitle = fail === 0 ? '删除成功' : '删除完成'
+    const resultMessage = fail === 0 ?
+      `成功删除 ${ok} 条记录` :
+      `删除完成：成功 ${ok} 条，失败 ${fail} 条`
+
+    resultDialog.innerHTML = `
+      <div class="el-dialog" style="width: 350px;">
+        <div class="el-dialog__header">
+          <div class="el-dialog__title">${resultTitle}</div>
+          <button class="el-dialog__close" onclick="this.closest('.el-dialog-mask').remove()">×</button>
+        </div>
+        <div class="el-dialog__body">
+          <p>${resultMessage}</p>
+        </div>
+        <div class="el-dialog__footer">
+          <button class="el-button el-button--primary" onclick="this.closest('.el-dialog-mask').remove()">确定</button>
+        </div>
+      </div>
+    `
+    document.body.appendChild(resultDialog)
+
+    state.selected.clear()
+    await fetchList({ silent: true })
+  })
 }
 
 async function downloadOne(guid, originalName) {
@@ -268,6 +325,11 @@ async function downloadOne(guid, originalName) {
 function viewOnline(guid) {
   const u = new URL('./ZwavOnlineViewer.html', window.location.href)
   u.searchParams.set('guid', guid)
+  window.open(u.toString(), '_blank')
+}
+
+function goSagEvents() {
+  const u = new URL('./ZwavSagEvents.html', window.location.href)
   window.open(u.toString(), '_blank')
 }
 
@@ -314,6 +376,7 @@ function bindEvents() {
   })
 
   byId('btnUpload').addEventListener('click', openUploadModal)
+  byId('btnGoSagEvents').addEventListener('click', goSagEvents)
   byId('btnStartUpload').addEventListener('click', startUpload)
   byId('btnBatchDelete').addEventListener('click', batchDelete)
 

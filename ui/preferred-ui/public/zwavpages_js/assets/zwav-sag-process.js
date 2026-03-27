@@ -1,16 +1,35 @@
-import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, getApiBaseUrl, openDialog, qs, setApiBaseUrl, setHtml, setText } from './common.js'
+import { bindDialog, byId, closeDialog, escapeHtml, getApiBaseUrl, openDialog, qs, setApiBaseUrl, setHtml, setText } from './common.js'
 import { zwavApi } from './zwav-api.js'
 
 const RAW_COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#13c2c2', '#722ed1', '#eb2f96', '#2f54eb']
 const RMS_COLORS = ['#722ed1', '#c41d7f', '#d48806', '#08979c', '#d4380d', '#237804', '#003a8c', '#597ef7']
 
-const toleranceStandard = [
-  [0, 90],
-  [0.01, 90],
-  [0.03, 80],
+const toleranceStandardLegacy = [
+  [0, 0],
+  [0.05, 0],
+  [0.05, 50],
+  [0.2, 50],
+  [0.2, 70],
   [0.5, 70],
+  [0.5, 80],
+  [1, 80],
   [10, 80]
 ]
+
+const toleranceStandard = [
+  [0, 0],
+  [0.2, 0],
+  [0.2, 50],
+  [0.5, 50],
+  [0.5, 70],
+  [1, 70],
+  [1, 80],
+  [10, 80]
+]
+
+const TOLERANCE_X_TOTAL_SECONDS = 10
+const TOLERANCE_X_FIRST_SEG_SECONDS = 1
+const TOLERANCE_X_FIRST_SEG_RATIO = 0.75
 
 const state = {
   eventId: 0,
@@ -22,10 +41,15 @@ const state = {
   rmsHidden: new Set(),
   hasPickedSag: false,
   sagSelectedKeys: new Set(),
+  toleranceHidden: { legacy: false, current: false },
   rawChart: null,
   toleranceChart: null,
   lastWaveData: null,
   isFullScreen: false,
+  markerLeftXPixel: null,
+  markerRightXPixel: null,
+  rawSubBaseText: '',
+  markerRenderRetry: 0,
   searchFromSample: 0,
   searchToSample: 10000,
   searchLimit: 20000,
@@ -49,6 +73,20 @@ function on(id, event, handler) {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
+}
+
+let markerRenderRaf = 0
+function scheduleMarkerRender() {
+  if (!state.rawChart) return
+  if (markerRenderRaf) cancelAnimationFrame(markerRenderRaf)
+  markerRenderRaf = requestAnimationFrame(() => {
+    markerRenderRaf = requestAnimationFrame(() => {
+      markerRenderRaf = 0
+      initMarkersIfNeeded()
+      refreshMarkerSummary()
+      renderMarkerGraphics()
+    })
+  })
 }
 
 function formatMs(v) {
@@ -89,7 +127,244 @@ function getRefVoltage() {
 function renderHeader() {
   const name = state.process?.event?.originalName || ''
   const id = state.process?.event?.id || state.eventId
-  setText('headerSub', name ? `事件ID ${id} | ${name}` : `事件ID ${id}`)
+  setText('fileName', name || '-')
+  setText('headerSub', `事件ID: ${id}`)
+}
+
+function getGridRects() {
+  if (!state.rawChart) return []
+  const model = state.rawChart.getModel?.()
+  if (!model) return []
+  const grids = model.getComponents?.('grid') || []
+  const rects = []
+  for (let i = 0; i < grids.length; i++) {
+    const cs = grids[i]?.coordinateSystem
+    const r = cs?.getRect?.()
+    if (r) rects.push(r)
+  }
+  return rects
+}
+
+function getAllGridYRange() {
+  const rects = getGridRects()
+  if (!rects.length) return null
+  let minY = rects[0].y
+  let maxY = rects[0].y + rects[0].height
+  for (let i = 1; i < rects.length; i++) {
+    minY = Math.min(minY, rects[i].y)
+    maxY = Math.max(maxY, rects[i].y + rects[i].height)
+  }
+  return { minY, maxY }
+}
+
+function getGridXRange() {
+  const rects = getGridRects()
+  if (!rects.length) return null
+  let minX = rects[0].x
+  let maxX = rects[0].x + rects[0].width
+  for (let i = 1; i < rects.length; i++) {
+    minX = Math.min(minX, rects[i].x)
+    maxX = Math.max(maxX, rects[i].x + rects[i].width)
+  }
+  return { minX, maxX }
+}
+
+function initMarkersIfNeeded() {
+  const xr = getGridXRange()
+  if (!xr) return
+  const width = xr.maxX - xr.minX
+  if (state.markerLeftXPixel === null) state.markerLeftXPixel = xr.minX + width * 0.3
+  if (state.markerRightXPixel === null) state.markerRightXPixel = xr.minX + width * 0.7
+}
+
+function getWaveAtXPixel(xPixel) {
+  const data = state.lastWaveData
+  if (!state.rawChart || !data || !Array.isArray(data.rows) || data.rows.length === 0) return null
+  const rects = getGridRects()
+  const rect = rects[0]
+  if (!rect) return null
+
+  const val = state.rawChart.convertFromPixel({ xAxisIndex: 0 }, [xPixel, rect.y])
+  const targetMs = Array.isArray(val) ? Number(val[0]) : Number(val)
+  const times = data.rows.map((r) => Number(r?.timeMs))
+  if (!times.length) return null
+
+  let nearestIdx = 0
+  if (Number.isFinite(targetMs)) {
+    nearestIdx = findNearestIndex(times, targetMs)
+  } else {
+    const xr = getGridXRange()
+    if (!xr) return null
+    const w = xr.maxX - xr.minX
+    if (!(w > 0)) return null
+    const ratio = clamp((Number(xPixel) - xr.minX) / w, 0, 1)
+    nearestIdx = clamp(Math.round(ratio * (times.length - 1)), 0, times.length - 1)
+  }
+  const timeMs = Number(times[nearestIdx])
+  if (!Number.isFinite(timeMs)) return null
+  return { timeMs, nearestIdx }
+}
+
+function refreshMarkerSummary() {
+  const lx = state.markerLeftXPixel
+  const rx = state.markerRightXPixel
+  if (lx === null || rx === null) {
+    const rawSub = byId('rawSub')
+    if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
+    return
+  }
+
+  const leftWave = getWaveAtXPixel(lx)
+  const rightWave = getWaveAtXPixel(rx)
+  if (!leftWave || !rightWave) {
+    const rawSub = byId('rawSub')
+    if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
+    return
+  }
+
+  const leftMs = Number(leftWave.timeMs)
+  const rightMs = Number(rightWave.timeMs)
+  const delta = Math.abs(rightMs - leftMs)
+
+  const summary =
+    `LeftLine：[${leftMs.toFixed(3)}ms][第${leftWave.nearestIdx + 1}个点] | ` +
+    `RightLine：[${rightMs.toFixed(3)}ms][第${rightWave.nearestIdx + 1}个点] | ` +
+    `RightLine - LeftLine：${delta.toFixed(3)}ms`
+
+  const rawSub = byId('rawSub')
+  if (rawSub && state.rawSubBaseText) rawSub.textContent = `${state.rawSubBaseText} | ${summary}`
+
+  const footer = byId('markerFooter')
+  const textEl = byId('markerFooterText')
+  if (footer && textEl) {
+    footer.style.display = ''
+    textEl.textContent = summary
+  }
+}
+
+function updateMarkerByPixelX(side, xPixel) {
+  const xr = getGridXRange()
+  if (!xr) return
+  const xx = clamp(Number(xPixel), xr.minX, xr.maxX)
+  if (side === 'left') state.markerLeftXPixel = xx
+  else state.markerRightXPixel = xx
+  refreshMarkerSummary()
+}
+
+function renderMarkerGraphics() {
+  const xr = getGridXRange()
+  const yr = getAllGridYRange()
+  if (!state.rawChart || !xr || !yr) {
+    if (state.markerRenderRetry < 3) {
+      state.markerRenderRetry++
+      setTimeout(() => scheduleMarkerRender(), 60)
+    }
+    return
+  }
+  state.markerRenderRetry = 0
+  if (state.markerLeftXPixel === null || state.markerRightXPixel === null) return
+
+  const lx = clamp(Number(state.markerLeftXPixel), xr.minX, xr.maxX)
+  const rx = clamp(Number(state.markerRightXPixel), xr.minX, xr.maxX)
+  const y1 = yr.minY
+  const y2 = yr.maxY
+
+  state.rawChart.setOption(
+    {
+      graphic: [
+        {
+          id: 'markerLeftLine',
+          type: 'line',
+          zlevel: 10,
+          z: 100,
+          draggable: true,
+          cursor: 'ew-resize',
+          shape: { x1: lx, y1, x2: lx, y2 },
+          style: { stroke: '#E6A23C', lineWidth: 1 },
+          ondrag: function () {
+            const xr2 = getGridXRange()
+            const minX2 = xr2 ? xr2.minX : 0
+            const maxX2 = xr2 ? xr2.maxX : state.rawChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            if (this.position) {
+              this.position[0] = currentX - baseX
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('left', currentX)
+          },
+          ondragend: function () {
+            const xr2 = getGridXRange()
+            const minX2 = xr2 ? xr2.minX : 0
+            const maxX2 = xr2 ? xr2.maxX : state.rawChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            this.shape.x1 = currentX
+            this.shape.x2 = currentX
+            if (this.position) {
+              this.position[0] = 0
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('left', currentX)
+            renderMarkerGraphics()
+          }
+        },
+        {
+          id: 'markerRightLine',
+          type: 'line',
+          zlevel: 10,
+          z: 100,
+          draggable: true,
+          cursor: 'ew-resize',
+          shape: { x1: rx, y1, x2: rx, y2 },
+          style: { stroke: '#409EFF', lineWidth: 1 },
+          ondrag: function () {
+            const xr2 = getGridXRange()
+            const minX2 = xr2 ? xr2.minX : 0
+            const maxX2 = xr2 ? xr2.maxX : state.rawChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            if (this.position) {
+              this.position[0] = currentX - baseX
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('right', currentX)
+          },
+          ondragend: function () {
+            const xr2 = getGridXRange()
+            const minX2 = xr2 ? xr2.minX : 0
+            const maxX2 = xr2 ? xr2.maxX : state.rawChart?.getWidth?.() || 0
+            const baseX = Number(this.shape?.x1) || 0
+            const posX = Number(this.position?.[0]) || 0
+            let currentX = baseX + posX
+            currentX = clamp(currentX, minX2, maxX2)
+            this.shape.x1 = currentX
+            this.shape.x2 = currentX
+            if (this.position) {
+              this.position[0] = 0
+              this.position[1] = 0
+            }
+            updateMarkerByPixelX('right', currentX)
+            renderMarkerGraphics()
+          }
+        }
+      ]
+    },
+    false
+  )
+}
+
+function resetMarkers() {
+  state.markerLeftXPixel = null
+  state.markerRightXPixel = null
+  state.rawChart && state.rawChart.setOption({ graphic: [] }, false)
+  scheduleMarkerRender()
 }
 
 function filterChannels(list, keyword) {
@@ -222,6 +497,97 @@ function getSagRowKey(evt) {
   return `${phase}-${kind}-${startMs}-${endMs}`
 }
 
+function mapToleranceX(seconds) {
+  const x = Number(seconds)
+  if (!Number.isFinite(x) || x <= 0) return 0
+
+  const total = TOLERANCE_X_TOTAL_SECONDS
+  const firstSeg = TOLERANCE_X_FIRST_SEG_SECONDS
+  const firstRatio = TOLERANCE_X_FIRST_SEG_RATIO
+
+  if (x <= firstSeg) {
+    return (x / firstSeg) * firstRatio
+  }
+
+  const tail = Math.min(x, total) - firstSeg
+  const tailTotal = total - firstSeg
+  if (tailTotal <= 0) return firstRatio
+
+  return firstRatio + (tail / tailTotal) * (1 - firstRatio)
+}
+
+function mapToleranceLineData(list) {
+  return (list || []).map((item) => {
+    const x = Number(item?.[0])
+    const y = Number(item?.[1])
+    return [mapToleranceX(x), y, x]
+  })
+}
+
+function mapTolerancePointData(point) {
+  const rawX = Number(point?.value?.[0])
+  const y = Number(point?.value?.[1])
+  return {
+    ...point,
+    rawDurationSec: rawX,
+    value: [mapToleranceX(rawX), y]
+  }
+}
+
+function buildToleranceNormalAreaData(lineData) {
+  if (!Array.isArray(lineData) || lineData.length === 0) return []
+
+  const topY = 100
+  const polygon = []
+
+  for (const item of lineData) {
+    const x = Number(item?.[0])
+    if (!Number.isFinite(x)) continue
+    polygon.push([x, topY])
+  }
+
+  for (let i = lineData.length - 1; i >= 0; i--) {
+    const item = lineData[i]
+    const x = Number(item?.[0])
+    const y = Number(item?.[1])
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue
+    polygon.push([x, y])
+  }
+
+  return polygon
+}
+
+function formatToleranceXAxisLabel(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return ''
+  if (Math.abs(n - Math.round(n)) < 1e-9) return `${Math.round(n)}`
+  return `${n.toFixed(2).replace(/\.?0+$/, '')}`
+}
+
+function buildToleranceXAxisTicks() {
+  const ticks = [0, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10]
+  return ticks.map((sec) => ({
+    raw: sec,
+    pos: mapToleranceX(sec),
+    label: formatToleranceXAxisLabel(sec)
+  }))
+}
+
+function findNearestToleranceTick(axisValue, ticks) {
+  let best = null
+  let bestDiff = Infinity
+
+  for (const tick of ticks) {
+    const diff = Math.abs(Number(tick.pos) - axisValue)
+    if (diff < bestDiff) {
+      best = tick
+      bestDiff = diff
+    }
+  }
+
+  return best && bestDiff <= 0.032 ? best : null
+}
+
 function renderSagTable() {
   const rows = (state.process?.computedEvents || []).slice().sort((a, b) => Number(a.startMs) - Number(b.startMs))
   setText('sagCountText', `共 ${rows.length} 条`)
@@ -235,7 +601,7 @@ function renderSagTable() {
       const key = getSagRowKey(evt)
       const checked = state.sagSelectedKeys.has(key) ? 'checked' : ''
       const occur = evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-')
-      const typeText = String(evt.eventType || '-')
+      const typeText = evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : String(evt.eventType || '-')
       return `
         <tr>
           <td class="cell-center"><input type="checkbox" class="sag-check" data-key="${escapeHtml(key)}" ${checked}></td>
@@ -252,6 +618,9 @@ function renderSagTable() {
     .join('')
   setHtml('sagTbody', tbody)
 
+  const allKeys = rows.map((evt) => getSagRowKey(evt))
+  initSagCheckAll(allKeys)
+
   byId('sagTbody').querySelectorAll('.sag-check').forEach((el) => {
     el.addEventListener('change', () => {
       const key = String(el.getAttribute('data-key') || '')
@@ -259,6 +628,7 @@ function renderSagTable() {
       state.hasPickedSag = true
       if (el.checked) state.sagSelectedKeys.add(key)
       else state.sagSelectedKeys.delete(key)
+      updateSagCheckAll(allKeys)
       updateToleranceChart()
     })
   })
@@ -266,13 +636,59 @@ function renderSagTable() {
   updateToleranceChart()
 }
 
+function initSagCheckAll(allKeys) {
+  const el = byId('sagCheckAll')
+  if (!el) return
+  updateSagCheckAll(allKeys)
+  el.onchange = () => {
+    state.hasPickedSag = true
+    if (el.checked) allKeys.forEach((k) => state.sagSelectedKeys.add(k))
+    else state.sagSelectedKeys.clear()
+    renderSagTable()
+  }
+}
+
+function updateSagCheckAll(allKeys) {
+  const el = byId('sagCheckAll')
+  if (!el) return
+  const total = allKeys.length
+  if (total === 0) {
+    el.checked = false
+    el.indeterminate = false
+    return
+  }
+  let checked = 0
+  for (let i = 0; i < allKeys.length; i++) {
+    if (state.sagSelectedKeys.has(allKeys[i])) checked++
+  }
+  el.checked = checked > 0 && checked === total
+  el.indeterminate = checked > 0 && checked < total
+}
+
 function buildToleranceLegend(points) {
   const legend = []
-  legend.push(`<span class="legend-item curve"><span class="legend-text">标准容忍度折线</span></span>`)
+  const legacyHidden = state.toleranceHidden?.legacy
+  const currentHidden = state.toleranceHidden?.current
+
+  legend.push(
+    `<span class="legend-item curve-legacy ${legacyHidden ? 'is-hidden' : ''}" data-curve="legacy"><span class="legend-line-demo legacy"></span><span class="legend-text">旧版容忍度标准</span></span>`
+  )
+  legend.push(
+    `<span class="legend-item curve-current ${currentHidden ? 'is-hidden' : ''}" data-curve="current"><span class="legend-line-demo current"></span><span class="legend-text">新版容忍度标准</span></span>`
+  )
   for (const p of points) {
     legend.push(`<span class="legend-item dyn-point"><span class="legend-dot" style="background:${escapeHtml(p.color)}"></span><span class="legend-text">${escapeHtml(p.label)}</span></span>`)
   }
   setHtml('toleranceLegend', legend.join(''))
+
+  byId('toleranceLegend').querySelectorAll('.legend-item[data-curve]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const c = String(el.getAttribute('data-curve') || '')
+      if (c === 'legacy') state.toleranceHidden.legacy = !state.toleranceHidden.legacy
+      if (c === 'current') state.toleranceHidden.current = !state.toleranceHidden.current
+      updateToleranceChart()
+    })
+  })
 }
 
 function updateToleranceChart() {
@@ -290,62 +706,380 @@ function updateToleranceChart() {
         key: getSagRowKey(evt),
         label: `${phase}相 ${x.toFixed(3)}s ${y.toFixed(2)}%`,
         color: RAW_COLORS[idx % RAW_COLORS.length],
-        value: [x, y]
+        value: [x, y],
+        phase,
+        durationMs: evt.durationMs,
+        durationSec: x,
+        occurTimeText: evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-'),
+        eventTypeText: evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : evt.eventType || '-',
+        residualVoltage: evt.residualVoltage,
+        residualVoltagePct: evt.residualVoltagePct,
+        sagMagnitudePct: evt.sagMagnitudePct
       }
     })
     .filter(Boolean)
 
   buildToleranceLegend(points)
 
-  const stdXMax = Math.max(1, ...toleranceStandard.map((p) => Number(p[0] || 0)))
-  const pointXMax = Math.max(0, ...points.map((p) => Number(p.value?.[0] || 0)))
-  const xMax = Math.max(1, stdXMax, pointXMax)
+  const xTicks = buildToleranceXAxisTicks()
+  const mappedToleranceStandardLine = mapToleranceLineData(toleranceStandard)
+  const mappedToleranceStandardLineLegacy = mapToleranceLineData(toleranceStandardLegacy)
+  const currentNormalAreaData = buildToleranceNormalAreaData(mappedToleranceStandardLine)
+  const legacyNormalAreaData = buildToleranceNormalAreaData(mappedToleranceStandardLineLegacy)
 
-  const series = [
-    {
-      name: '标准容忍度折线',
-      type: 'line',
-      showSymbol: false,
-      lineStyle: { width: 2, color: '#409eff' },
-      data: toleranceStandard
-    }
-  ]
-  for (const p of points) {
-    series.push({
-      name: p.label,
+  const pointSeries = points.map((x, idx) => {
+    const mappedPoint = mapTolerancePointData(x)
+    return {
+      name: x.label,
       type: 'scatter',
-      symbolSize: 10,
-      itemStyle: { color: p.color },
-      label: { show: true, formatter: () => p.label, position: 'right', fontSize: 10 },
-      data: [{ value: p.value }]
-    })
+      showInLegend: false,
+      symbol: 'circle',
+      symbolSize: 9,
+      data: [mappedPoint],
+      z: 20,
+      itemStyle: {
+        color: x.color,
+        borderColor: '#ffffff',
+        borderWidth: 1.5,
+        shadowBlur: 6,
+        shadowColor: 'rgba(0,0,0,0.20)'
+      },
+      emphasis: {
+        scale: true,
+        itemStyle: {
+          color: x.color,
+          borderColor: '#ffffff',
+          borderWidth: 2,
+          shadowBlur: 10,
+          shadowColor: 'rgba(0,0,0,0.28)'
+        }
+      },
+      label: { show: false }
+    }
+  })
+
+  const toleranceSeries = []
+
+  // Legacy standard
+  if (!state.toleranceHidden?.legacy) {
+    toleranceSeries.push(
+      {
+        name: '旧版正常范围',
+        type: 'custom',
+        silent: true,
+        z: 1,
+        renderItem: (params, api) => {
+          const pts = legacyNormalAreaData
+            .map((item) => {
+              const x = api.value(0, item)
+              const y = api.value(1, item)
+              return api.coord([x, y])
+            })
+            .filter((p) => Array.isArray(p) && p.length >= 2)
+
+          if (!pts.length) return null
+
+          return {
+            type: 'polygon',
+            shape: { points: pts },
+            style: {
+              fill: 'rgba(0, 0, 0, 0.05)'
+            }
+          }
+        },
+        data: legacyNormalAreaData
+      },
+      {
+        name: '旧版容忍度标准',
+        type: 'line',
+        data: mappedToleranceStandardLineLegacy,
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        smooth: false,
+        z: 3,
+        lineStyle: {
+          width: 1,
+          color: '#000000',
+          type: 'solid'
+        },
+        itemStyle: { color: '#000000', opacity: 0 },
+        emphasis: {
+          scale: true,
+          itemStyle: {
+            color: '#000000',
+            opacity: 1,
+            borderColor: '#ffffff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(0,0,0,0.28)'
+          }
+        }
+      }
+    )
   }
 
-  state.toleranceChart.setOption({
-    tooltip: { trigger: 'item' },
-    grid: { left: 40, right: 20, top: 10, bottom: 40 },
-    xAxis: { type: 'value', min: 0, max: xMax, name: '持续时间 (s)', nameGap: 30 },
-    yAxis: { type: 'value', min: 0, max: 100, name: '残余电压 (%)' },
-    series
+  // Current standard
+  if (!state.toleranceHidden?.current) {
+    toleranceSeries.push(
+      {
+        name: '新版正常范围',
+        type: 'custom',
+        silent: true,
+        z: 2,
+        renderItem: (params, api) => {
+          const pts = currentNormalAreaData
+            .map((item) => {
+              const x = api.value(0, item)
+              const y = api.value(1, item)
+              return api.coord([x, y])
+            })
+            .filter((p) => Array.isArray(p) && p.length >= 2)
+
+          if (!pts.length) return null
+
+          return {
+            type: 'polygon',
+            shape: { points: pts },
+            style: {
+              fill: 'rgba(22, 119, 255, 0.08)'
+            }
+          }
+        },
+        data: currentNormalAreaData
+      },
+      {
+        name: '新版容忍度标准',
+        type: 'line',
+        data: mappedToleranceStandardLine,
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        smooth: false,
+        z: 5,
+        lineStyle: {
+          width: 1,
+          color: '#1677ff',
+          type: 'solid'
+        },
+        itemStyle: { color: '#1677ff', opacity: 0 },
+        emphasis: {
+          scale: true,
+          itemStyle: {
+            color: '#1677ff',
+            opacity: 1,
+            borderColor: '#ffffff',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(0,0,0,0.28)'
+          }
+        }
+      }
+    )
+  }
+
+  // 1-second split line
+  toleranceSeries.push({
+    name: '1秒分界线',
+    type: 'line',
+    silent: true,
+    showSymbol: false,
+    z: 25,
+    data: [
+      [mapToleranceX(1), 0],
+      [mapToleranceX(1), 100]
+    ],
+    lineStyle: {
+      width: 1,
+      color: '#909399',
+      type: 'dashed'
+    }
   })
+
+  state.toleranceChart.setOption({
+    tooltip: {
+      trigger: 'item',
+      formatter: (p) => {
+        const seriesName = String(p?.seriesName || '')
+        const d = p?.data
+
+        if (seriesName.includes('标准')) {
+          const value = Array.isArray(d) ? d : Array.isArray(p?.value) ? p.value : []
+          const rawX = Number(value?.[2] ?? value?.[0])
+          const y = Number(value?.[1])
+
+          return [
+            `<div><b>${seriesName}</b></div>`,
+            `<div>持续时间：${Number.isFinite(rawX) ? rawX.toFixed(3) : '-'} s</div>`,
+            `<div>残余电压：${Number.isFinite(y) ? y.toFixed(3) : '-'} %</div>`
+          ].join('')
+        }
+
+        const obj = (d && typeof d === 'object' && !Array.isArray(d) ? d : {})
+        const rawX = Number(obj?.rawDurationSec)
+        const value = (obj?.value || [])
+        const y = Number(value[1])
+
+        return [
+          `<div><b>${escapeHtml(`${obj.phase || '-'}相 ${obj.eventTypeText || '-'}`)}</b></div>`,
+          `<div>发生时间：${escapeHtml(obj.occurTimeText || '-')}</div>`,
+          `<div>持续时间：${Number.isFinite(rawX) ? rawX.toFixed(3) : '-'} s</div>`,
+          `<div>暂降幅值：${Number.isFinite(Number(obj.sagMagnitudePct)) ? Number(obj.sagMagnitudePct).toFixed(2) : '-'} %</div>`,
+          `<div>残余电压：${Number.isFinite(y) ? y.toFixed(2) : '-'} %</div>`
+        ].join('')
+      }
+    },
+    grid: { left: 32, right: 64, top: 42, bottom: 28, containLabel: true },
+    legend: {
+      show: false
+    },
+    graphic: [
+      {
+        id: 'tolerance-split-line',
+        type: 'line',
+        silent: true,
+        z: 30,
+        shape: {
+          x1: 0,
+          y1: 0,
+          x2: 0,
+          y2: 0
+        },
+        style: {
+          stroke: '#909399',
+          lineWidth: 1,
+          lineDash: [4, 4]
+        }
+      },
+      {
+        id: 'tolerance-text-left',
+        type: 'text',
+        silent: true,
+        z: 31,
+        style: {
+          text: '0~1s 重点观察区',
+          fill: '#606266',
+          font: '12px sans-serif',
+          textAlign: 'center'
+        },
+        left: '28%',
+        top: 14
+      },
+      {
+        id: 'tolerance-text-right',
+        type: 'text',
+        silent: true,
+        z: 31,
+        style: {
+          text: '1~10s 压缩显示区',
+          fill: '#909399',
+          font: '12px sans-serif',
+          textAlign: 'center'
+        },
+        left: '78%',
+        top: 14
+      }
+    ],
+    xAxis: {
+      type: 'value',
+      name: '持续时间(s)',
+      nameLocation: 'end',
+      nameGap: 5,
+      nameTextStyle: { align: 'left', padding: [0, 0, 0, 0] },
+      min: 0,
+      max: 1,
+      interval: 0.05,
+      axisLabel: {
+        fontSize: 10,
+        margin: 10,
+        formatter: (v) => {
+          const n = Number(v)
+          const hit = findNearestToleranceTick(n, xTicks)
+          return hit ? hit.label : ''
+        }
+      },
+      axisTick: {
+        show: true,
+        length: 4
+      },
+      axisLine: { show: true },
+      minorTick: { show: false },
+      splitLine: {
+        show: true,
+        lineStyle: { type: 'solid', opacity: 0.15 }
+      }
+    },
+    yAxis: {
+      type: 'value',
+      name: '残余电压 (%)',
+      nameLocation: 'middle',
+      nameRotate: 90,
+      nameGap: 32,
+      min: 0,
+      max: 100,
+      interval: 10,
+      axisLabel: {
+        fontSize: 10,
+        margin: 8,
+        formatter: (v) => {
+          const n = Number(v)
+          if (!Number.isFinite(n)) return String(v)
+          return String(Math.round(n))
+        }
+      },
+      minorTick: { show: true, splitNumber: 4 },
+      minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
+      splitLine: {
+        show: true,
+        lineStyle: { type: 'solid', opacity: 0.35 }
+      }
+    },
+    series: [
+      ...toleranceSeries,
+      ...pointSeries
+    ]
+  }, true)
+
+  // Update split line position
+  setTimeout(() => {
+    if (!state.toleranceChart) return
+    const grid = state.toleranceChart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [mapToleranceX(1), 100])
+    const base = state.toleranceChart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [mapToleranceX(1), 0])
+
+    if (Array.isArray(grid) && grid.length >= 2 && Array.isArray(base) && base.length >= 2) {
+      state.toleranceChart.setOption({
+        graphic: [
+          {
+            id: 'tolerance-split-line',
+            shape: {
+              x1: grid[0],
+              y1: grid[1],
+              x2: base[0],
+              y2: base[1]
+            }
+          }
+        ]
+      })
+    }
+  }, 100)
 }
 
 function renderRawLegend() {
-  const selected = Array.from(state.selected)
+  const wave = state.lastWaveData
+  const selected = Array.from(state.selected).filter((x) => (wave?.channels || []).includes(x)).slice(0, 12)
   const items = []
-  selected.forEach((idx, i) => {
-    const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(idx))
-    const phase = String(ch?.phase || '').toUpperCase()
-    const label = `${phase ? `${phase}相` : `CH${idx}`} 原始`
-    const hiddenCls = state.hidden.has(idx) ? 'style="opacity:0.45"' : ''
-    items.push(`<span class="raw-legend-item" data-kind="raw" data-idx="${escapeHtml(idx)}" ${hiddenCls}><span class="legend-line" style="background:${RAW_COLORS[i % RAW_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
+  selected.forEach((channelIndex, i) => {
+    const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
+    const label = ch ? `${ch.channelIndex}. ${ch.channelName || ''}` : `CH${channelIndex}`
+    const hiddenCls = state.hidden.has(channelIndex) ? 'style="opacity:0.45"' : ''
+    items.push(`<span class="raw-legend-item" data-kind="raw" data-idx="${escapeHtml(channelIndex)}" ${hiddenCls}><span class="legend-line" style="background:${RAW_COLORS[i % RAW_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
   })
-  selected.forEach((idx, i) => {
-    const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(idx))
+  selected.forEach((channelIndex, i) => {
+    const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
     const phase = String(ch?.phase || '').toUpperCase()
-    const label = `${phase ? `${phase}相` : `CH${idx}`} RMS`
-    const hiddenCls = state.rmsHidden.has(idx) ? 'style="opacity:0.45"' : ''
-    items.push(`<span class="raw-legend-item" data-kind="rms" data-idx="${escapeHtml(idx)}" ${hiddenCls}><span class="legend-line rms" style="background:${RMS_COLORS[i % RMS_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
+    const label = `${phase ? `${phase}相` : `CH${channelIndex}`} RMS`
+    const hiddenCls = state.rmsHidden.has(channelIndex) ? 'style="opacity:0.45"' : ''
+    items.push(`<span class="raw-legend-item" data-kind="rms" data-idx="${escapeHtml(channelIndex)}" ${hiddenCls}><span class="legend-line rms" style="background:${RMS_COLORS[i % RMS_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
   })
   items.push(`<span class="raw-legend-item"><span class="legend-dash dash-sag"></span><span class="legend-text">暂降阈值</span></span>`)
   items.push(`<span class="raw-legend-item"><span class="legend-dash dash-recover"></span><span class="legend-text">恢复阈值</span></span>`)
@@ -379,13 +1113,29 @@ function updateRawChart() {
   const wave = state.lastWaveData
   if (!wave || !wave.rows || !wave.rows.length) return
 
-  const selected = Array.from(state.selected).filter((x) => (wave.channels || []).includes(x)).slice(0, 12)
-  if (selected.length === 0) return
+  const selectedAll = Array.from(state.selected).filter((x) => (wave.channels || []).includes(x)).slice(0, 12)
+  const selected = selectedAll.filter((x) => !state.hidden.has(x))
+  if (selected.length === 0) {
+    state.rawChart.setOption({ series: [], xAxis: [], yAxis: [], grid: [] }, true)
+    initMarkersIfNeeded()
+    refreshMarkerSummary()
+    renderMarkerGraphics()
+    renderRawLegend()
+    return
+  }
 
   const rows = wave.rows
   const xTimes = rows.map((r) => Number(r.timeMs))
   const xData = xTimes.map((t) => Number(t).toFixed(3))
-  const gridHeight = Math.max(80, Math.floor(420 / selected.length))
+  const chartEl = byId('rawChart')
+  const gridGap = 20
+  const scroll = byId('rawWrap')?.querySelector('.chart-scroll-container')
+  const fullAvail = state.isFullScreen && scroll ? Number(scroll.clientHeight) : NaN
+  const desiredHeight = Number.isFinite(fullAvail) && fullAvail > 120
+    ? fullAvail
+    : clamp(selected.length * (140 + gridGap) + 40, 420, 2400)
+  if (chartEl) chartEl.style.height = `${desiredHeight}px`
+  const gridHeight = Math.max(140, Math.floor((desiredHeight - gridGap * (selected.length - 1) - 40) / selected.length))
   const freqHz = Number(state.process?.frequencyHz)
   const rmsWindowN = getRmsWindowN(xTimes, freqHz, state.rmsWindowCycles)
   const rmsHopN = Math.max(1, Math.round(rmsWindowN * (Number(state.rmsHopCycles) / Math.max(0.0001, Number(state.rmsWindowCycles) || 1))))
@@ -395,8 +1145,7 @@ function updateRawChart() {
   const yAxis = []
   const series = []
 
-  const topBase = 10
-  const totalHeight = selected.length * gridHeight
+  const topBase = 20
   const refV = getRefVoltage()
   const sagPct = Number(state.params.sagThresholdPct ?? 90)
   const interruptPct = Number(state.params.interruptThresholdPct ?? 10)
@@ -404,31 +1153,43 @@ function updateRawChart() {
   const recoverPct = sagPct + hysteresisPct
 
   selected.forEach((channelIndex, i) => {
-    const top = topBase + i * gridHeight
-    grids.push({ left: 60, right: 20, top, height: gridHeight - 18 })
+    const top = topBase + i * (gridHeight + gridGap)
+    grids.push({ left: 100, right: 20, top, height: gridHeight - 18, containLabel: true })
     xAxis.push({
       type: 'category',
       gridIndex: i,
       data: xData,
       boundaryGap: false,
-      axisLabel: { fontSize: 10, formatter: (v) => `${v}` }
+      position: 'top',
+      axisLabel: { show: i === 0, fontSize: 10, margin: i === 0 ? 23 : 8, formatter: (v) => `${v}` },
+      axisTick: { show: i === 0 },
+      axisLine: { show: i === 0 }
     })
     yAxis.push({
       type: 'value',
       gridIndex: i,
-      axisLabel: { fontSize: 10 },
+      name: '',
+      nameLocation: 'middle',
+      nameRotate: 90,
+      nameGap: 55,
+      nameTextStyle: { fontSize: 12, color: '#606266' },
+      axisLabel: { show: false },
+      axisTick: { show: false },
       scale: true
     })
 
+    const colorIndex = Math.max(0, selectedAll.indexOf(channelIndex))
     const dataIndex = (wave.channels || []).indexOf(channelIndex)
-    const raw = dataIndex >= 0 ? rows.map((r) => (state.hidden.has(channelIndex) ? null : (r.analog?.[dataIndex] ?? null))) : rows.map(() => null)
-    const rawColor = RAW_COLORS[i % RAW_COLORS.length]
-    const rmsColor = RMS_COLORS[i % RMS_COLORS.length]
+    const raw = dataIndex >= 0 ? rows.map((r) => (r.analog?.[dataIndex] ?? null)) : rows.map(() => null)
+    const rawColor = RAW_COLORS[colorIndex % RAW_COLORS.length]
+    const rmsColor = RMS_COLORS[colorIndex % RMS_COLORS.length]
 
     const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
     const phase = String(ch?.phase || '').toUpperCase()
     const name = ch ? `${ch.channelIndex}. ${ch.channelName || ''}` : `CH${channelIndex}`
+    yAxis[i].name = name
 
+    const rawSeriesIndex = series.length
     series.push({
       name,
       type: 'line',
@@ -440,10 +1201,10 @@ function updateRawChart() {
       itemStyle: { color: rawColor }
     })
 
-    if (rmsWindowN > 0 && !state.rmsHidden.has(channelIndex) && !state.hidden.has(channelIndex)) {
+    if (rmsWindowN > 0 && !state.rmsHidden.has(channelIndex)) {
       const rmsData = computeRollingRms(raw, rmsWindowN, rmsHopN)
       series.push({
-        name: `${phase || channelIndex} RMS`,
+        name: `${name} RMS`,
         type: 'line',
         xAxisIndex: i,
         yAxisIndex: i,
@@ -455,7 +1216,7 @@ function updateRawChart() {
       })
     }
 
-    const baseSeriesIndex = series.length - 1
+    const baseSeriesIndex = rawSeriesIndex
 
     if (refV > 0) {
       const sagY = (refV * sagPct) / 100
@@ -504,7 +1265,7 @@ function updateRawChart() {
     if (markAreas.length) {
       series[baseSeriesIndex].markArea = {
         silent: true,
-        itemStyle: { color: 'rgba(255, 173, 20, 0.18)' },
+        itemStyle: { color: '#fff1f1' },
         data: markAreas
       }
     }
@@ -532,21 +1293,50 @@ function updateRawChart() {
   })
 
   state.rawChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      confine: true,
+      axisPointer: { type: 'cross', snap: true },
+      formatter: (params) => {
+        const list = Array.isArray(params) ? params : []
+        if (!list.length) return ''
+        const axisValue = list[0]?.axisValue
+        const title = axisValue !== undefined && axisValue !== null ? `${String(axisValue)} ms` : '-'
+
+        const lines = [`<div><b>${escapeHtml(title)}</b></div>`]
+        for (const p of list) {
+          const name = String(p?.seriesName || '')
+          if (!name) continue
+          if (name.includes('阈值-')) continue
+          const v = Number(p?.data)
+          const valText = Number.isFinite(v) ? v.toFixed(3) : '-'
+          const color = typeof p?.color === 'string' ? p.color : '#909399'
+          lines.push(
+            `<div><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${escapeHtml(color)};margin-right:6px;"></span>${escapeHtml(name)}: ${escapeHtml(valText)}</div>`
+          )
+        }
+        return lines.join('')
+      }
+    },
     animation: false,
     grid: grids,
     xAxis,
     yAxis,
     dataZoom: [
       { type: 'inside', xAxisIndex: selected.map((_, i) => i) },
-      { type: 'slider', xAxisIndex: selected.map((_, i) => i), bottom: 0 }
+      { type: 'slider', xAxisIndex: selected.map((_, i) => i), bottom: 15 }
     ],
     series
-  })
+  }, true)
+  state.rawChart.resize()
+  scheduleMarkerRender()
 
   setText(
     'rawSub',
     `参考电压：${refV ? refV.toFixed(2) : '-'} V，暂降阈值：${formatPercent(sagPct)}%，中断阈值：${formatPercent(interruptPct)}%，迟滞：${formatPercent(hysteresisPct)}%，最小持续：${formatMs(state.params.minDurationMs)} ms`
   )
+  state.rawSubBaseText = byId('rawSub')?.textContent || ''
+  refreshMarkerSummary()
   renderRawLegend()
 }
 
@@ -619,9 +1409,9 @@ function buildReportLines() {
       pMaxDur,
       worstEvt: Number.isFinite(pMaxMag)
         ? list
-            .filter((x) => Number(x?.sagMagnitudePct) === pMaxMag)
-            .slice()
-            .sort((a, b) => Number(b?.durationMs ?? 0) - Number(a?.durationMs ?? 0))[0]
+          .filter((x) => Number(x?.sagMagnitudePct) === pMaxMag)
+          .slice()
+          .sort((a, b) => Number(b?.durationMs ?? 0) - Number(a?.durationMs ?? 0))[0]
         : null
     }
   })
@@ -652,7 +1442,142 @@ function buildReportLines() {
   }
 
   lines.push('解读建议：优先查看最严重相的RMS下降与恢复过程，并结合容忍度曲线判断是否越界。')
+
+  // Tolerance curve analysis
+  if (rows.length > 0) {
+    const toleranceAnalysis = analyzeToleranceCurve(rows)
+    if (toleranceAnalysis) {
+      lines.push('')
+      lines.push('容忍度曲线分析：')
+      lines.push(`- ${toleranceAnalysis.summary}`)
+      if (toleranceAnalysis.details.length > 0) {
+        toleranceAnalysis.details.forEach(detail => {
+          lines.push(`  • ${detail}`)
+        })
+      }
+    }
+  }
+
   return lines
+}
+
+function getCurveBoundaryY(curve, x) {
+  const xx = Number(x)
+  if (!Number.isFinite(xx)) return null
+
+  const points = Array.isArray(curve) ? curve : []
+  if (points.length === 0) return null
+
+  const candidates = []
+
+  for (let i = 0; i < points.length; i++) {
+    const px = Number(points[i]?.[0])
+    const py = Number(points[i]?.[1])
+    if (Number.isFinite(px) && Number.isFinite(py) && px === xx) candidates.push(py)
+  }
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const x1 = Number(points[i]?.[0])
+    const y1 = Number(points[i]?.[1])
+    const x2 = Number(points[i + 1]?.[0])
+    const y2 = Number(points[i + 1]?.[1])
+    if (!Number.isFinite(x1) || !Number.isFinite(y1) || !Number.isFinite(x2) || !Number.isFinite(y2)) continue
+
+    if (x1 === x2) {
+      if (xx === x1) candidates.push(Math.max(y1, y2))
+      continue
+    }
+
+    const minX = Math.min(x1, x2)
+    const maxX = Math.max(x1, x2)
+    if (xx < minX || xx > maxX) continue
+
+    const t = (xx - x1) / (x2 - x1)
+    candidates.push(y1 + (y2 - y1) * t)
+  }
+
+  if (candidates.length) {
+    let best = candidates[0]
+    for (let i = 1; i < candidates.length; i++) best = Math.max(best, candidates[i])
+    return best
+  }
+
+  let minPoint = null
+  let maxPoint = null
+  for (let i = 0; i < points.length; i++) {
+    const px = Number(points[i]?.[0])
+    const py = Number(points[i]?.[1])
+    if (!Number.isFinite(px) || !Number.isFinite(py)) continue
+    if (!minPoint || px < minPoint.x) minPoint = { x: px, y: py }
+    if (!maxPoint || px > maxPoint.x) maxPoint = { x: px, y: py }
+  }
+  if (!minPoint || !maxPoint) return null
+  if (xx <= minPoint.x) return minPoint.y
+  if (xx >= maxPoint.x) return maxPoint.y
+  return null
+}
+
+function analyzeToleranceCurve(events) {
+  if (!Array.isArray(events) || events.length === 0) return null
+
+  const pointsInNormal = events.filter((evt) => {
+    const durationSec = Number(evt.durationMs) / 1000
+    const voltagePct = Number(evt.residualVoltagePct)
+    const boundary = getCurveBoundaryY(toleranceStandard, durationSec)
+    if (!Number.isFinite(voltagePct) || !Number.isFinite(boundary)) return false
+    return voltagePct >= boundary
+  })
+
+  const pointsInLegacy = events.filter((evt) => {
+    const durationSec = Number(evt.durationMs) / 1000
+    const voltagePct = Number(evt.residualVoltagePct)
+    const boundary = getCurveBoundaryY(toleranceStandardLegacy, durationSec)
+    if (!Number.isFinite(voltagePct) || !Number.isFinite(boundary)) return false
+    return voltagePct >= boundary
+  })
+
+  const summary = []
+  const details = []
+
+  if (pointsInNormal.length === events.length) {
+    summary.push('所有事件均在新版容忍度曲线范围内')
+  } else if (pointsInNormal.length > 0) {
+    summary.push(`${pointsInNormal.length}/${events.length} 条事件在新版容忍度曲线范围内`)
+    const outsideEvents = events.filter(evt => !pointsInNormal.includes(evt))
+    if (outsideEvents.length > 0) {
+      const worstOutside = outsideEvents.reduce((a, b) =>
+        Number(a.residualVoltagePct) < Number(b.residualVoltagePct) ? a : b
+      )
+      details.push(`越界最严重：${worstOutside.phase || '-'}相 ${(Number(worstOutside.durationMs) / 1000).toFixed(3)}s ${Number(worstOutside.residualVoltagePct).toFixed(2)}%`)
+    }
+  } else {
+    summary.push('所有事件均超出新版容忍度曲线范围')
+  }
+
+  if (pointsInLegacy.length !== pointsInNormal.length) {
+    if (pointsInLegacy.length > pointsInNormal.length) {
+      summary.push(`旧版标准更宽松，多包含 ${pointsInLegacy.length - pointsInNormal.length} 条事件`)
+    } else {
+      summary.push(`新版标准更宽松，多包含 ${pointsInNormal.length - pointsInLegacy.length} 条事件`)
+    }
+  }
+
+  // Duration-based analysis
+  const shortEvents = events.filter(evt => Number(evt.durationMs) <= 1000)
+  const longEvents = events.filter(evt => Number(evt.durationMs) > 1000)
+
+  if (shortEvents.length > 0 && longEvents.length > 0) {
+    details.push(`短时事件（≤1s）：${shortEvents.length} 条，长时事件（>1s）：${longEvents.length} 条`)
+  } else if (shortEvents.length > 0) {
+    details.push(`主要为短时事件（≤1s）：${shortEvents.length} 条`)
+  } else if (longEvents.length > 0) {
+    details.push(`主要为长时事件（>1s）：${longEvents.length} 条`)
+  }
+
+  return {
+    summary: summary.join('；'),
+    details
+  }
 }
 
 function renderReport() {
@@ -663,14 +1588,35 @@ function renderReport() {
 function initCharts() {
   state.rawChart = echarts.init(byId('rawChart'))
   state.toleranceChart = echarts.init(byId('toleranceChart'))
+  state.rawChart.on('click', (params) => {
+    const x = Number(params?.event?.offsetX)
+    if (!Number.isFinite(x)) return
+    if (state.markerLeftXPixel === null) state.markerLeftXPixel = x
+    else if (state.markerRightXPixel === null) state.markerRightXPixel = x
+    else state.markerRightXPixel = x
+    scheduleMarkerRender()
+  })
   window.addEventListener('resize', () => {
     state.rawChart && state.rawChart.resize()
     state.toleranceChart && state.toleranceChart.resize()
+    scheduleMarkerRender()
   })
+  scheduleMarkerRender()
 }
 
 async function loadProcess() {
-  const res = await zwavApi.sagGetProcess(state.eventId)
+  const prevSelected = Array.from(state.selected)
+  const prevHidden = new Set(Array.from(state.hidden))
+  const prevRmsHidden = new Set(Array.from(state.rmsHidden))
+
+  let res = null
+  try {
+    res = await zwavApi.sagGetProcess(state.eventId)
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : String(e || '')
+    alert(msg ? `获取过程失败：${msg}` : '获取过程失败')
+    return false
+  }
   if (!res || !res.success || !res.data) {
     alert((res && res.message) || '获取过程失败')
     return false
@@ -700,10 +1646,34 @@ async function loadProcess() {
   byId('hysteresisPct').value = String(state.params.hysteresisPct)
   byId('minDurationMs').value = String(state.params.minDurationMs)
 
-  const byPhase = (p) => state.voltageChannels.find((c) => String(c.phase || '').toUpperCase() === p)
-  const initPick = [byPhase('A'), byPhase('B'), byPhase('C')].filter(Boolean).map((x) => x.channelIndex)
-  if (initPick.length) initPick.forEach((x) => state.selected.add(x))
-  if (!state.selected.size) state.voltageChannels.slice(0, 3).forEach((x) => state.selected.add(x.channelIndex))
+  const present = new Set(state.voltageChannels.map((x) => Number(x.channelIndex)))
+  state.selected.clear()
+  state.hidden.clear()
+  state.rmsHidden.clear()
+
+  prevSelected.forEach((x) => {
+    const v = Number(x)
+    if (present.has(v)) state.selected.add(v)
+  })
+  prevHidden.forEach((x) => {
+    const v = Number(x)
+    if (present.has(v)) state.hidden.add(v)
+  })
+  prevRmsHidden.forEach((x) => {
+    const v = Number(x)
+    if (present.has(v)) state.rmsHidden.add(v)
+  })
+
+  if (!state.selected.size) {
+    const byPhase = (p) => state.voltageChannels.find((c) => String(c.phase || '').toUpperCase() === p)
+    const initPick = [byPhase('A'), byPhase('B'), byPhase('C')].filter(Boolean).map((x) => x.channelIndex)
+    if (initPick.length) initPick.forEach((x) => state.selected.add(x))
+    if (!state.selected.size) state.voltageChannels.slice(0, 3).forEach((x) => state.selected.add(x.channelIndex))
+  }
+
+  if (prevRmsHidden.size === 0 && state.rmsHidden.size === 0) {
+    Array.from(state.selected).forEach((x) => state.rmsHidden.add(Number(x)))
+  }
 
   renderChannelList()
   renderSagTable()
@@ -725,16 +1695,32 @@ async function fetchWaveData() {
     limit: state.searchLimit,
     downSample: state.searchDownSample
   }
-  const res = await zwavApi.getWaveData(state.analysisGuid, params)
+  let res = null
+  try {
+    res = await zwavApi.getWaveData(state.analysisGuid, params)
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : String(e || '')
+    alert(msg ? `获取波形失败：${msg}` : '获取波形失败')
+    return
+  }
   if (!res || !res.success || !res.data) {
     alert((res && res.message) || '获取波形失败')
     return
   }
   state.lastWaveData = res.data
+  resetMarkers()
   updateRawChart()
 }
 
+async function reloadAll() {
+  const ok = await loadProcess()
+  if (ok) await fetchWaveData()
+}
+
 async function previewProcess() {
+  // Show loading state
+  setHtml('reportBody', '<div class="report-line">正在重新计算暂降事件...</div>')
+
   try {
     const body = {
       referenceVoltage: state.params.referenceVoltage,
@@ -743,6 +1729,7 @@ async function previewProcess() {
       hysteresisPct: state.params.hysteresisPct,
       minDurationMs: state.params.minDurationMs
     }
+
     const res = await zwavApi.sagPreviewProcess(state.eventId, body)
     if (!res || !res.success || !res.data) {
       alert((res && res.message) || '预览失败')
@@ -764,10 +1751,14 @@ async function previewProcess() {
       byId('toSample').value = String(state.searchToSample)
     }
 
+    // Clear selection and re-render
+    state.sagSelectedKeys.clear()
     renderSagTable()
     renderReport()
     updateRawChart()
-    alert('预览成功')
+
+    // Show success message
+    showAlert('success', '暂降事件重新计算完成')
   } catch (e) {
     alert(e.message || '预览失败')
   }
@@ -794,14 +1785,46 @@ function applyWaveSettings() {
   updateRawChart()
 }
 
+function getRawViewportHeight() {
+  const wrap = byId('rawWrap')
+  if (!wrap) return 420
+  const header = wrap.querySelector('.sag-card-header')
+  const legend = byId('rawLegend')
+  const footer = byId('markerFooter')
+  const extra = 24
+  const total = wrap.clientHeight
+  const h = (header?.offsetHeight || 0) + (legend?.offsetHeight || 0) + (footer?.offsetHeight || 0) + extra
+  const avail = total - h
+  if (Number.isFinite(avail) && avail > 120) return avail
+  return 420
+}
+
 function toggleFullScreen() {
   state.isFullScreen = !state.isFullScreen
   const wrap = byId('rawWrap')
   if (state.isFullScreen) wrap.classList.add('is-window-fullscreen')
   else wrap.classList.remove('is-window-fullscreen')
   byId('reportCard').style.display = state.isFullScreen ? 'none' : ''
+  const sidebar = document.querySelector('.channel-sidebar')
+  if (sidebar) sidebar.style.display = state.isFullScreen ? 'none' : ''
+  const bottom = document.querySelector('.sag-bottom-row')
+  if (bottom) bottom.style.display = state.isFullScreen ? 'none' : ''
+  document.body.style.overflow = state.isFullScreen ? 'hidden' : ''
+
+  const scroll = wrap?.querySelector('.chart-scroll-container')
+  if (scroll) {
+    if (state.isFullScreen) {
+      scroll.style.height = `${Math.max(200, Math.floor(getRawViewportHeight()))}px`
+      scroll.style.overflowY = 'hidden'
+    } else {
+      scroll.style.height = ''
+      scroll.style.overflowY = ''
+    }
+  }
+
   setTimeout(() => {
     state.rawChart && state.rawChart.resize()
+    updateRawChart()
   }, 0)
 }
 
@@ -875,6 +1898,53 @@ async function exportRms() {
   }
 }
 
+function fallbackCopyText(text) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.setAttribute('readonly', 'readonly')
+  ta.style.position = 'fixed'
+  ta.style.left = '-9999px'
+  ta.style.top = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  const ok = document.execCommand('copy')
+  document.body.removeChild(ta)
+  return ok
+}
+
+async function copyReport() {
+  const body = byId('reportBody')
+  if (!body) return
+  const lines = Array.from(body.querySelectorAll('.report-line'))
+    .map((el) => String(el.textContent || '').trim())
+    .filter(Boolean)
+  const text = lines.join('\n')
+  if (!text) {
+    alert('分析报告为空')
+    return
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      alert('已复制')
+      return
+    }
+  } catch { }
+
+  const ok = fallbackCopyText(text)
+  alert(ok ? '已复制' : '复制失败')
+}
+
+function openExportConfirm() {
+  openDialog('exportConfirmModal')
+}
+
+async function confirmExportRms() {
+  closeDialog('exportConfirmModal')
+  await exportRms()
+}
+
 function showEventDetail() {
   const evt = state.process?.event || null
   const phases = state.process?.phases || []
@@ -910,8 +1980,8 @@ function showEventDetail() {
     <div style="font-weight:700; color: var(--el-text-color-primary); margin-bottom:10px;">基本信息</div>
     <div style="display:grid; grid-template-columns: 180px 1fr 180px 1fr; gap: 8px 12px;">
       ${items
-        .map(([k, v]) => `<div style="color: var(--el-text-color-secondary);">${escapeHtml(k)}：</div><div style="min-width:0; word-break:break-all;">${escapeHtml(String(v ?? '-'))}</div>`)
-        .join('')}
+      .map(([k, v]) => `<div style="color: var(--el-text-color-secondary);">${escapeHtml(k)}：</div><div style="min-width:0; word-break:break-all;">${escapeHtml(String(v ?? '-'))}</div>`)
+      .join('')}
     </div>
   `
 
@@ -934,8 +2004,8 @@ function showEventDetail() {
       </thead>
       <tbody>
         ${phases
-          .map((p) => {
-            return `<tr>
+      .map((p) => {
+        return `<tr>
               <td class="cell-center">${escapeHtml(p.phase || '-')}</td>
               <td>${escapeHtml(p.startTimeUtc ? formatUtcMs(p.startTimeUtc) : '-')}</td>
               <td>${escapeHtml(p.endTimeUtc ? formatUtcMs(p.endTimeUtc) : '-')}</td>
@@ -947,8 +2017,8 @@ function showEventDetail() {
               <td class="cell-center">${p.isEndPhase ? '是' : '否'}</td>
               <td class="cell-center">${p.isWorstPhase ? '是' : '否'}</td>
             </tr>`
-          })
-          .join('')}
+      })
+      .join('')}
       </tbody>
     </table>
   `
@@ -964,13 +2034,16 @@ function bindEvents() {
     closeDialog('apiModal')
   })
 
-  on('btnFetch', 'click', fetchWaveData)
+  on('btnFetch', 'click', reloadAll)
   on('btnPreview', 'click', previewProcess)
   on('btnWaveSetting', 'click', () => openDialog('waveModal'))
   on('btnApplyWave', 'click', applyWaveSettings)
   on('btnFullScreen', 'click', toggleFullScreen)
-  on('btnExportRms', 'click', exportRms)
+  on('btnExportRms', 'click', openExportConfirm)
   on('btnEventDetail', 'click', showEventDetail)
+  on('btnResetMarkers', 'click', resetMarkers)
+  on('btnCopyReport', 'click', copyReport)
+  on('btnConfirmExportRms', 'click', confirmExportRms)
 
   on('channelSearch', 'input', renderChannelList)
   on('analogCheckAll', 'change', () => {
@@ -984,6 +2057,7 @@ function bindEvents() {
   bindDialog('apiModal')
   bindDialog('waveModal')
   bindDialog('eventModal')
+  bindDialog('exportConfirmModal')
 
   window.addEventListener('keydown', onKeyDown)
 
@@ -999,8 +2073,13 @@ async function init() {
   }
   bindEvents()
   initCharts()
-  const ok = await loadProcess()
-  if (ok) await fetchWaveData()
+  try {
+    const ok = await loadProcess()
+    if (ok) await fetchWaveData()
+  } catch (e) {
+    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : String(e || '')
+    alert(msg ? `初始化失败：${msg}` : '初始化失败')
+  }
 }
 
 init()

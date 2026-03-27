@@ -194,6 +194,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   background: #fff;
+  table-layout: fixed;
 }
 
 .el-table th,
@@ -228,6 +229,8 @@ body {
   justify-content: center;
   align-items: center;
   gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .file-name-cell {

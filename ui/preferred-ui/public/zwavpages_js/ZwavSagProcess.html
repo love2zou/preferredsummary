@@ -14,48 +14,24 @@
     <div class="viewer-header">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
         <div class="viewer-title">
-          <h2>暂降过程</h2>
-          <span class="sub-title" id="headerSub">-</span>
+          <div class="viewer-title-line">
+            <h2>暂降分析过程</h2>
+            <span class="file-name" id="fileName">-</span>
+            <span class="sub-title" id="headerSub">-</span>
+          </div>
         </div>
         <div style="display:flex; gap:10px;">
           <a class="el-button" href="./ZwavSagEvents.html">返回列表</a>
           <button class="el-button" id="btnOpenApiConfig">接口配置</button>
+          <button class="el-button" id="btnFetch">刷新</button>
+          <button class="el-button" id="btnWaveSetting">波形设置</button>
+          <button class="el-button el-button--primary" id="btnPreview">预览计算</button>
         </div>
       </div>
     </div>
 
     <div class="viewer-content">
       <div class="left-panel">
-        <div class="chart-controls">
-          <button class="el-button el-button--primary" id="btnFetch">加载/刷新波形</button>
-          <button class="el-button" id="btnPreview">预览计算</button>
-          <span class="tip">提示：数据量大时请减少通道数</span>
-          <div style="flex:1"></div>
-          <button class="icon-btn" id="btnWaveSetting" title="波形设置">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="currentColor"
-                d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.02 7.02 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 1h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 7.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.83 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.51.4 1.05.71 1.63.94l.36 2.54c.04.24.25.42.49.42h3.8c.24 0 .45-.18.49-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z" />
-            </svg>
-          </button>
-          <button class="icon-btn" id="btnExportRms" title="导出均方根值">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z" />
-            </svg>
-          </button>
-          <button class="icon-btn" id="btnEventDetail" title="事件详情">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="currentColor"
-                d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 16H4V6h5.17l2 2H20v14z" />
-            </svg>
-          </button>
-          <button class="icon-btn" id="btnFullScreen" title="窗口全屏">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="currentColor"
-                d="M7 14H5v5h5v-2H7v-3zm0-4h2V7h3V5H5v5zm10 9h-3v2h5v-5h-2v3zm0-14V5h-5v2h3v3h2V5z" />
-            </svg>
-          </button>
-        </div>
-
         <div class="main-body">
           <div class="channel-sidebar">
             <div class="sidebar-header">
@@ -81,12 +57,35 @@
               <div id="rawWrap" class="sag-raw-card">
                 <div class="sag-card-header">
                   <div>
-                    <div class="sag-card-title">原始波形</div>
-                    <div class="sag-card-sub" id="rawSub">-</div>
+                    <div class="sag-card-title-line">
+                      <div class="sag-card-title">原始波形</div>
+                      <div class="sag-card-sub" id="rawSub">-</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="icon-btn" id="btnExportRms" title="导出均方根值">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z" />
+                      </svg>
+                    </button>
+                    <button class="icon-btn" id="btnEventDetail" title="事件详情">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor"
+                          d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 16H4V6h5.17l2 2H20v14z" />
+                      </svg>
+                    </button>
+                    <button class="icon-btn" id="btnFullScreen" title="窗口全屏">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor"
+                          d="M7 14H5v5h5v-2H7v-3zm0-4h2V7h3V5H5v5zm10 9h-3v2h5v-5h-2v3zm0-14V5h-5v2h3v3h2V5z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
                 <div class="raw-legend-all" id="rawLegend"></div>
-                <div id="rawChart" style="height: 420px; width: 100%;"></div>
+                <div class="chart-scroll-container">
+                  <div id="rawChart" class="raw-chart-content"></div>
+                </div>
               </div>
 
               <div class="sag-report-card" id="reportCard">
@@ -94,6 +93,9 @@
                   <div>
                     <div class="sag-card-title">分析报告</div>
                     <div class="sag-card-sub">基于暂降事件与RMS曲线</div>
+                  </div>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="el-button is-link" id="btnCopyReport">复制</button>
                   </div>
                 </div>
                 <div id="reportBody" class="report-body"></div>
@@ -104,15 +106,17 @@
               <div class="sag-list-card">
                 <div class="sag-card-header">
                   <div>
-                    <div class="sag-card-title">电压暂降清单</div>
-                    <div class="sag-card-sub" id="sagCountText">共 0 条</div>
+                    <div class="sag-card-title-line">
+                      <div class="sag-card-title">电压暂降清单</div>
+                      <div class="sag-card-sub" id="sagCountText">共 0 条</div>
+                    </div>
                   </div>
                 </div>
                 <div class="list-table-wrap">
                   <table class="el-table">
                     <thead>
                       <tr>
-                        <th class="cell-center" style="width:42px"></th>
+                        <th class="cell-center" style="width:42px"><input id="sagCheckAll" type="checkbox" /></th>
                         <th class="cell-center" style="width:60px">序号</th>
                         <th class="cell-center" style="width:70px">相别</th>
                         <th class="cell-center" style="width:110px">事件类型</th>
@@ -130,12 +134,14 @@
               <div class="sag-tolerance-card">
                 <div class="sag-card-header">
                   <div>
-                    <div class="sag-card-title">容忍度曲线</div>
-                    <div class="sag-card-sub">清单勾选后打点</div>
+                    <div class="sag-card-title-line">
+                      <div class="sag-card-title">容忍度曲线</div>
+                      <div class="sag-card-sub">清单勾选后打点</div>
+                    </div>
                   </div>
                 </div>
                 <div id="toleranceLegend" class="tolerance-legend"></div>
-                <div id="toleranceChart" style="height: 320px; width: 100%;"></div>
+                <div id="toleranceChart" style="height: 245px; width: 100%;"></div>
               </div>
             </div>
           </div>
@@ -244,7 +250,53 @@
     </div>
   </div>
 
+  <div class="el-dialog-mask" id="exportConfirmModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">确认导出</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div style="color: var(--el-text-color-primary); line-height: 20px;">确定导出均方根值（RMS）数据吗？</div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>取消</button>
+        <button class="el-button el-button--primary" id="btnConfirmExportRms">确定</button>
+      </div>
+    </div>
+  </div>
+
   <style>
+    .viewer-title-line {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .viewer-title-line h2 {
+      margin: 0;
+    }
+
+    .file-name {
+      font-size: 12px;
+      color: var(--el-text-color-primary);
+      font-weight: 600;
+    }
+
+    .sag-card-title-line {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .sag-card-title-line .sag-card-sub {
+      margin-top: 0;
+    }
+
     .sag-top-row {
       display: flex;
       gap: 10px;
@@ -321,6 +373,36 @@
       margin-bottom: 8px;
     }
 
+    .chart-scroll-container {
+      height: 480px;
+      overflow-x: hidden;
+      overflow-y: auto;
+    }
+
+    .raw-chart-content {
+      width: 100%;
+      min-height: 420px;
+      box-sizing: border-box;
+    }
+
+    .marker-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+    }
+
+    .marker-footer-text {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .legend-line {
       width: 18px;
       height: 3px;
@@ -357,8 +439,8 @@
     .legend-area {
       width: 18px;
       height: 10px;
-      background: rgba(255, 173, 20, 0.18);
-      border: 1px solid rgba(255, 173, 20, 0.6);
+      background: #fff1f1;
+      border: 1px solid rgba(245, 108, 108, 0.35);
       border-radius: 2px;
       display: inline-block;
       vertical-align: middle;
@@ -400,6 +482,10 @@
       min-height: 0;
     }
 
+    .sag-tolerance-card {
+      overflow: hidden;
+    }
+
     .list-table-wrap {
       overflow: auto;
       flex: 1;
@@ -412,6 +498,15 @@
       gap: 10px 14px;
       align-items: center;
       margin-bottom: 8px;
+      position: relative;
+      z-index: 2;
+    }
+
+    #toleranceChart {
+      max-width: 100%;
+      overflow: hidden;
+      position: relative;
+      z-index: 1;
     }
 
     .legend-dot {
@@ -420,6 +515,32 @@
       border-radius: 50%;
       display: inline-block;
       vertical-align: middle;
+    }
+
+    .legend-item.is-hidden {
+      opacity: 0.45;
+    }
+
+    .legend-item[data-curve] {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .legend-line-demo {
+      width: 18px;
+      height: 0;
+      border-bottom-width: 2px;
+      border-bottom-style: solid;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .legend-line-demo.legacy {
+      border-bottom-color: #000000;
+    }
+
+    .legend-line-demo.current {
+      border-bottom-color: #1677ff;
     }
   </style>
 
