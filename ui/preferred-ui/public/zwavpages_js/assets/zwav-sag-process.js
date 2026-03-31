@@ -46,8 +46,8 @@ const state = {
   toleranceChart: null,
   lastWaveData: null,
   isFullScreen: false,
-  markerLeftXPixel: null,
-  markerRightXPixel: null,
+  markerLeftXPixel: 0,
+  markerRightXPixel: 0,
   rawSubBaseText: '',
   markerRenderRetry: 0,
   searchFromSample: 0,
@@ -131,23 +131,39 @@ function renderHeader() {
   setText('headerSub', `事件ID: ${id}`)
 }
 
+function getGridRect0() {
+  if (!state.rawChart) return null
+  const model = state.rawChart.getModel?.()
+  const grid0 = model && model.getComponent && model.getComponent('grid', 0)
+  const rect = grid0 && grid0.coordinateSystem && grid0.coordinateSystem.getRect && grid0.coordinateSystem.getRect()
+  return rect || null
+}
+
 function getGridRects() {
   if (!state.rawChart) return []
   const model = state.rawChart.getModel?.()
   if (!model) return []
-  const grids = model.getComponents?.('grid') || []
   const rects = []
-  for (let i = 0; i < grids.length; i++) {
-    const cs = grids[i]?.coordinateSystem
-    const r = cs?.getRect?.()
-    if (r) rects.push(r)
+  if (model.getComponent) {
+    for (let i = 0; i < 64; i++) {
+      const g = model.getComponent('grid', i)
+      if (!g) break
+      const r = g.coordinateSystem && g.coordinateSystem.getRect && g.coordinateSystem.getRect()
+      if (r) rects.push(r)
+    }
   }
-  return rects
+  if (rects.length) return rects
+
+  const r0 = getGridRect0()
+  return r0 ? [r0] : []
 }
 
 function getAllGridYRange() {
   const rects = getGridRects()
-  if (!rects.length) return null
+  if (!rects.length) {
+    if (!state.rawChart) return null
+    return { minY: 0, maxY: state.rawChart.getHeight() }
+  }
   let minY = rects[0].y
   let maxY = rects[0].y + rects[0].height
   for (let i = 1; i < rects.length; i++) {
@@ -159,7 +175,10 @@ function getAllGridYRange() {
 
 function getGridXRange() {
   const rects = getGridRects()
-  if (!rects.length) return null
+  if (!rects.length) {
+    if (!state.rawChart) return null
+    return { minX: 0, maxX: state.rawChart.getWidth() }
+  }
   let minX = rects[0].x
   let maxX = rects[0].x + rects[0].width
   for (let i = 1; i < rects.length; i++) {
@@ -173,8 +192,14 @@ function initMarkersIfNeeded() {
   const xr = getGridXRange()
   if (!xr) return
   const width = xr.maxX - xr.minX
-  if (state.markerLeftXPixel === null) state.markerLeftXPixel = xr.minX + width * 0.3
-  if (state.markerRightXPixel === null) state.markerRightXPixel = xr.minX + width * 0.7
+  const lx = Number(state.markerLeftXPixel)
+  const rx = Number(state.markerRightXPixel)
+  if (state.markerLeftXPixel === null || !Number.isFinite(lx) || lx < xr.minX || lx > xr.maxX) {
+    state.markerLeftXPixel = xr.minX + width * 0.3
+  }
+  if (state.markerRightXPixel === null || !Number.isFinite(rx) || rx < xr.minX || rx > xr.maxX) {
+    state.markerRightXPixel = xr.minX + width * 0.7
+  }
 }
 
 function getWaveAtXPixel(xPixel) {
@@ -211,6 +236,12 @@ function refreshMarkerSummary() {
   if (lx === null || rx === null) {
     const rawSub = byId('rawSub')
     if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
+    const markerSub = byId('markerSub')
+    if (markerSub) markerSub.textContent = 'LeftLine：[-][第-个点] | RightLine：[-][第-个点] | RightLine - LeftLine：-'
+    const footer = byId('markerFooter')
+    const textEl = byId('markerFooterText')
+    if (footer) footer.style.display = 'none'
+    if (textEl) textEl.textContent = ''
     return
   }
 
@@ -219,6 +250,12 @@ function refreshMarkerSummary() {
   if (!leftWave || !rightWave) {
     const rawSub = byId('rawSub')
     if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
+    const markerSub = byId('markerSub')
+    if (markerSub) markerSub.textContent = 'LeftLine：[-][第-个点] | RightLine：[-][第-个点] | RightLine - LeftLine：-'
+    const footer = byId('markerFooter')
+    const textEl = byId('markerFooterText')
+    if (footer) footer.style.display = 'none'
+    if (textEl) textEl.textContent = ''
     return
   }
 
@@ -232,14 +269,14 @@ function refreshMarkerSummary() {
     `RightLine - LeftLine：${delta.toFixed(3)}ms`
 
   const rawSub = byId('rawSub')
-  if (rawSub && state.rawSubBaseText) rawSub.textContent = `${state.rawSubBaseText} | ${summary}`
+  if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
+  const markerSub = byId('markerSub')
+  if (markerSub) markerSub.textContent = summary
 
   const footer = byId('markerFooter')
   const textEl = byId('markerFooterText')
-  if (footer && textEl) {
-    footer.style.display = ''
-    textEl.textContent = summary
-  }
+  if (footer) footer.style.display = ''
+  if (textEl) textEl.textContent = summary
 }
 
 function updateMarkerByPixelX(side, xPixel) {
@@ -1129,13 +1166,14 @@ function updateRawChart() {
   const xData = xTimes.map((t) => Number(t).toFixed(3))
   const chartEl = byId('rawChart')
   const gridGap = 20
+  const bottomPad = 60
   const scroll = byId('rawWrap')?.querySelector('.chart-scroll-container')
   const fullAvail = state.isFullScreen && scroll ? Number(scroll.clientHeight) : NaN
   const desiredHeight = Number.isFinite(fullAvail) && fullAvail > 120
     ? fullAvail
-    : clamp(selected.length * (140 + gridGap) + 40, 420, 2400)
+    : clamp(selected.length * (140 + gridGap) + bottomPad, 420, 2400)
   if (chartEl) chartEl.style.height = `${desiredHeight}px`
-  const gridHeight = Math.max(140, Math.floor((desiredHeight - gridGap * (selected.length - 1) - 40) / selected.length))
+  const gridHeight = Math.max(140, Math.floor((desiredHeight - gridGap * (selected.length - 1) - bottomPad) / selected.length))
   const freqHz = Number(state.process?.frequencyHz)
   const rmsWindowN = getRmsWindowN(xTimes, freqHz, state.rmsWindowCycles)
   const rmsHopN = Math.max(1, Math.round(rmsWindowN * (Number(state.rmsHopCycles) / Math.max(0.0001, Number(state.rmsWindowCycles) || 1))))

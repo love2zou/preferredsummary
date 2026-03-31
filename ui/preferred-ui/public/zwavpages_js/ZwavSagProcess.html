@@ -86,6 +86,10 @@
                 <div class="chart-scroll-container">
                   <div id="rawChart" class="raw-chart-content"></div>
                 </div>
+                <div class="marker-footer" id="markerFooter" style="display:none">
+                  <span class="marker-footer-text" id="markerFooterText"></span>
+                  <button class="el-button is-link" id="btnResetMarkers">重置</button>
+                </div>
               </div>
 
               <div class="sag-report-card" id="reportCard">
@@ -141,7 +145,7 @@
                   </div>
                 </div>
                 <div id="toleranceLegend" class="tolerance-legend"></div>
-                <div id="toleranceChart" style="height: 245px; width: 100%;"></div>
+                <div id="toleranceChart" style="height: 210px; width: 100%; margin: 0 auto;"></div>
               </div>
             </div>
           </div>
@@ -495,9 +499,8 @@
     .tolerance-legend {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px 14px;
+      gap: 5px 10px;
       align-items: center;
-      margin-bottom: 8px;
       position: relative;
       z-index: 2;
     }
