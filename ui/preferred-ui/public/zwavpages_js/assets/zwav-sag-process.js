@@ -52,7 +52,7 @@ const state = {
   markerRenderRetry: 0,
   searchFromSample: 0,
   searchToSample: 10000,
-  searchLimit: 20000,
+  searchLimit: 50000,
   searchDownSample: 1,
   rmsWindowCycles: 1,
   rmsHopCycles: 0.5,
@@ -73,6 +73,12 @@ function on(id, event, handler) {
 
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
+}
+
+function setInputValue(id, v) {
+  const el = byId(id)
+  if (!el) return
+  el.value = String(v ?? '')
 }
 
 let markerRenderRaf = 0
@@ -303,8 +309,10 @@ function renderMarkerGraphics() {
 
   const lx = clamp(Number(state.markerLeftXPixel), xr.minX, xr.maxX)
   const rx = clamp(Number(state.markerRightXPixel), xr.minX, xr.maxX)
-  const y1 = yr.minY
-  const y2 = yr.maxY
+  const chartH = state.rawChart.getHeight ? state.rawChart.getHeight() : yr.maxY
+  const yPad = 18
+  const y1 = clamp(yr.minY - yPad, 0, chartH)
+  const y2 = clamp(yr.maxY + yPad, 0, chartH)
 
   state.rawChart.setOption(
     {
@@ -312,8 +320,8 @@ function renderMarkerGraphics() {
         {
           id: 'markerLeftLine',
           type: 'line',
-          zlevel: 10,
           z: 100,
+          position: [0, 0],
           draggable: true,
           cursor: 'ew-resize',
           shape: { x1: lx, y1, x2: lx, y2 },
@@ -353,8 +361,8 @@ function renderMarkerGraphics() {
         {
           id: 'markerRightLine',
           type: 'line',
-          zlevel: 10,
           z: 100,
+          position: [0, 0],
           draggable: true,
           cursor: 'ew-resize',
           shape: { x1: rx, y1, x2: rx, y2 },
@@ -432,11 +440,13 @@ function renderChannelList() {
       const id = `a_${c.channelIndex}`
       const checked = state.selected.has(c.channelIndex) ? 'checked' : ''
       const hidden = state.hidden.has(c.channelIndex) ? 'style="opacity:0.45"' : ''
-      const title = `${c.channelIndex}. ${c.channelName || ''}`
+      const rawName = String(c.channelName || '')
+      const cleanName = rawName.replace(/[\(\（\[].*[\)\）\]]\s*$/, '').trim()
+      const title = `${c.channelIndex}. ${cleanName}`
       const phase = String(c.phase || '').toUpperCase()
       return `<div class="channel-item" ${hidden}>
         <input class="analog-check" type="checkbox" id="${id}" data-idx="${escapeHtml(c.channelIndex)}" ${checked}/>
-        <label for="${id}" title="${escapeHtml(title)}">${escapeHtml(title)}${phase ? ` <span style="color:var(--el-text-color-secondary);font-size:12px;">(${escapeHtml(phase)})</span>` : ''}</label>
+        <label>${escapeHtml(title)}</label>
       </div>`
     })
     .join('')
@@ -1620,7 +1630,16 @@ function analyzeToleranceCurve(events) {
 
 function renderReport() {
   const lines = buildReportLines()
-  setHtml('reportBody', lines.map((x) => `<div class="report-line">${escapeHtml(x)}</div>`).join(''))
+  const highlight = (line) => {
+    const esc = escapeHtml(String(line ?? ''))
+    const idx = esc.indexOf('：')
+    const withKey = idx > 0 ? `<span class="report-key">${esc.slice(0, idx + 1)}</span>${esc.slice(idx + 1)}` : esc
+    return withKey.replace(/(\d+(?:\.\d+)?)(\s*(?:ms|s|V|%|条|周波))?/g, (_m, n, unit) => {
+      const txt = `${n}${unit || ''}`
+      return `<span class="report-hl">${txt}</span>`
+    })
+  }
+  setHtml('reportBody', lines.map((x) => `<div class="report-line">${highlight(x)}</div>`).join(''))
 }
 
 function initCharts() {
@@ -1669,20 +1688,13 @@ async function loadProcess() {
   state.params.minDurationMs = Number(res.data?.event?.minDurationMs ?? 10) || 10
   renderHeader()
 
-  if (res.data.suggestedFromSample !== undefined && res.data.suggestedFromSample !== null) state.searchFromSample = Number(res.data.suggestedFromSample)
-  if (res.data.suggestedToSample !== undefined && res.data.suggestedToSample !== null) state.searchToSample = Number(res.data.suggestedToSample)
+  if (res.data.suggestedFromSample !== undefined && res.data.suggestedFromSample !== null) state.searchFromSample = Math.max(0, Number(res.data.suggestedFromSample))
+  if (res.data.suggestedToSample !== undefined && res.data.suggestedToSample !== null) state.searchToSample = Math.min(20000, Number(res.data.suggestedToSample))
 
-  byId('fromSample').value = String(state.searchFromSample)
-  byId('toSample').value = String(state.searchToSample)
-  byId('limit').value = String(state.searchLimit)
-  byId('downSample').value = String(state.searchDownSample)
-  byId('rmsWindowCycles').value = String(state.rmsWindowCycles)
-  byId('rmsHopCycles').value = String(state.rmsHopCycles)
-  byId('referenceVoltage').value = String(state.params.referenceVoltage || '')
-  byId('sagThresholdPct').value = String(state.params.sagThresholdPct)
-  byId('interruptThresholdPct').value = String(state.params.interruptThresholdPct)
-  byId('hysteresisPct').value = String(state.params.hysteresisPct)
-  byId('minDurationMs').value = String(state.params.minDurationMs)
+  setInputValue('fromSample', state.searchFromSample)
+  setInputValue('toSample', state.searchToSample)
+  setInputValue('limit', state.searchLimit)
+  setInputValue('downSample', state.searchDownSample)
 
   const present = new Set(state.voltageChannels.map((x) => Number(x.channelIndex)))
   state.selected.clear()
@@ -1755,6 +1767,35 @@ async function reloadAll() {
   if (ok) await fetchWaveData()
 }
 
+function setRecalcConfirmValue(id, v) {
+  const el = byId(id)
+  if (el) el.value = String(v ?? '')
+}
+
+function openRecalcConfirm() {
+  setRecalcConfirmValue('recalcReferenceVoltage', state.params.referenceVoltage ?? 0)
+  setRecalcConfirmValue('recalcMinDurationMs', state.params.minDurationMs ?? 10)
+  setRecalcConfirmValue('recalcSagThresholdPct', state.params.sagThresholdPct ?? 90)
+  setRecalcConfirmValue('recalcInterruptThresholdPct', state.params.interruptThresholdPct ?? 10)
+  setRecalcConfirmValue('recalcHysteresisPct', state.params.hysteresisPct ?? 2)
+  setRecalcConfirmValue('recalcRmsWindowCycles', state.rmsWindowCycles ?? 1)
+  setRecalcConfirmValue('recalcRmsHopCycles', state.rmsHopCycles ?? 0.5)
+  openDialog('recalcConfirmModal')
+}
+
+async function confirmRecalc() {
+  closeDialog('recalcConfirmModal')
+  state.params.referenceVoltage = Number(byId('recalcReferenceVoltage')?.value || state.params.referenceVoltage || 0)
+  state.params.minDurationMs = Number(byId('recalcMinDurationMs')?.value || state.params.minDurationMs || 10)
+  state.params.sagThresholdPct = Number(byId('recalcSagThresholdPct')?.value || state.params.sagThresholdPct || 90)
+  state.params.interruptThresholdPct = Number(byId('recalcInterruptThresholdPct')?.value || state.params.interruptThresholdPct || 10)
+  state.params.hysteresisPct = Number(byId('recalcHysteresisPct')?.value || state.params.hysteresisPct || 2)
+  state.rmsWindowCycles = Number(byId('recalcRmsWindowCycles')?.value || state.rmsWindowCycles || 1)
+  state.rmsHopCycles = Number(byId('recalcRmsHopCycles')?.value || state.rmsHopCycles || 0.5)
+  await previewProcess()
+  await fetchWaveData()
+}
+
 async function previewProcess() {
   // Show loading state
   setHtml('reportBody', '<div class="report-line">正在重新计算暂降事件...</div>')
@@ -1765,7 +1806,9 @@ async function previewProcess() {
       sagThresholdPct: state.params.sagThresholdPct,
       interruptThresholdPct: state.params.interruptThresholdPct,
       hysteresisPct: state.params.hysteresisPct,
-      minDurationMs: state.params.minDurationMs
+      minDurationMs: state.params.minDurationMs,
+      rmsWindowCycles: state.rmsWindowCycles,
+      rmsHopCycles: state.rmsHopCycles
     }
 
     const res = await zwavApi.sagPreviewProcess(state.eventId, body)
@@ -1785,7 +1828,7 @@ async function previewProcess() {
       byId('fromSample').value = String(state.searchFromSample)
     }
     if (res.data.suggestedToSample !== undefined && res.data.suggestedToSample !== null) {
-      state.searchToSample = Number(res.data.suggestedToSample)
+      state.searchToSample = Math.min(20000, Number(res.data.suggestedToSample))
       byId('toSample').value = String(state.searchToSample)
     }
 
@@ -1808,17 +1851,15 @@ function openApiModal() {
 }
 
 function applyWaveSettings() {
-  state.params.referenceVoltage = Number(byId('referenceVoltage').value || 0)
-  state.params.sagThresholdPct = Number(byId('sagThresholdPct').value || 90)
-  state.params.interruptThresholdPct = Number(byId('interruptThresholdPct').value || 10)
-  state.params.hysteresisPct = Number(byId('hysteresisPct').value || 2)
-  state.params.minDurationMs = Number(byId('minDurationMs').value || 10)
-  state.searchFromSample = Number(byId('fromSample').value || 0)
-  state.searchToSample = Number(byId('toSample').value || 0)
-  state.searchLimit = Number(byId('limit').value || 20000)
-  state.searchDownSample = Number(byId('downSample').value || 1)
-  state.rmsWindowCycles = Number(byId('rmsWindowCycles').value || 1)
-  state.rmsHopCycles = Number(byId('rmsHopCycles').value || 0.5)
+  state.searchFromSample = Math.max(0, Number(byId('fromSample').value || 0))
+  state.searchToSample = Math.min(20000, Math.max(0, Number(byId('toSample').value || 0)))
+  if (state.searchToSample < state.searchFromSample) state.searchToSample = state.searchFromSample
+  state.searchLimit = Math.min(50000, Math.max(0, Number(byId('limit').value || 50000)))
+  state.searchDownSample = Math.max(1, Number(byId('downSample').value || 1))
+  byId('fromSample').value = String(state.searchFromSample)
+  byId('toSample').value = String(state.searchToSample)
+  byId('limit').value = String(state.searchLimit)
+  byId('downSample').value = String(state.searchDownSample)
   closeDialog('waveModal')
   updateRawChart()
 }
@@ -2072,8 +2113,8 @@ function bindEvents() {
     closeDialog('apiModal')
   })
 
-  on('btnFetch', 'click', reloadAll)
-  on('btnPreview', 'click', previewProcess)
+  on('btnRecalc', 'click', openRecalcConfirm)
+  on('btnLoadWave', 'click', fetchWaveData)
   on('btnWaveSetting', 'click', () => openDialog('waveModal'))
   on('btnApplyWave', 'click', applyWaveSettings)
   on('btnFullScreen', 'click', toggleFullScreen)
@@ -2082,6 +2123,7 @@ function bindEvents() {
   on('btnResetMarkers', 'click', resetMarkers)
   on('btnCopyReport', 'click', copyReport)
   on('btnConfirmExportRms', 'click', confirmExportRms)
+  on('btnConfirmRecalc', 'click', confirmRecalc)
 
   on('channelSearch', 'input', renderChannelList)
   on('analogCheckAll', 'change', () => {
@@ -2096,6 +2138,7 @@ function bindEvents() {
   bindDialog('waveModal')
   bindDialog('eventModal')
   bindDialog('exportConfirmModal')
+  bindDialog('recalcConfirmModal')
 
   window.addEventListener('keydown', onKeyDown)
 

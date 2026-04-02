@@ -23,9 +23,8 @@
         <div style="display:flex; gap:10px;">
           <a class="el-button" href="./ZwavSagEvents.html">返回列表</a>
           <button class="el-button" id="btnOpenApiConfig">接口配置</button>
-          <button class="el-button" id="btnFetch">刷新</button>
           <button class="el-button" id="btnWaveSetting">波形设置</button>
-          <button class="el-button el-button--primary" id="btnPreview">预览计算</button>
+          <button class="el-button el-button--primary" id="btnRecalc">重新计算</button>
         </div>
       </div>
     </div>
@@ -39,7 +38,10 @@
             </div>
             <div class="sidebar-body">
               <div class="channel-group">
-                <div class="section-title">电压通道</div>
+                <div class="section-title">
+                  <span>电压通道</span>
+                  <button class="el-button el-button--primary" id="btnLoadWave">加载波形</button>
+                </div>
                 <div class="sidebar-group-header">
                   <label class="check-all">
                     <input id="analogCheckAll" type="checkbox" />
@@ -96,7 +98,6 @@
                 <div class="sag-card-header">
                   <div>
                     <div class="sag-card-title">分析报告</div>
-                    <div class="sag-card-sub">基于暂降事件与RMS曲线</div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center;">
                     <button class="el-button is-link" id="btnCopyReport">复制</button>
@@ -183,52 +184,26 @@
         <button class="el-dialog__close" data-dialog-close>×</button>
       </div>
       <div class="el-dialog__body">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
-          <div class="search-item" style="width:100%">
-            <label>参考电压(V)</label>
-            <input id="referenceVoltage" type="number" step="0.01" class="el-input" />
-          </div>
-          <div class="search-item" style="width:100%">
-            <label>最小持续(ms)</label>
-            <input id="minDurationMs" type="number" step="1" class="el-input" />
-          </div>
-          <div class="search-item" style="width:100%">
-            <label>暂降阈值(%)</label>
-            <input id="sagThresholdPct" type="number" step="1" class="el-input" />
-          </div>
-          <div class="search-item" style="width:100%">
-            <label>中断阈值(%)</label>
-            <input id="interruptThresholdPct" type="number" step="1" class="el-input" />
-          </div>
-          <div class="search-item" style="width:100%">
-            <label>迟滞(%)</label>
-            <input id="hysteresisPct" type="number" step="0.5" class="el-input" />
-          </div>
-        </div>
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div class="search-item" style="width:100%">
             <label>From Sample</label>
-            <input id="fromSample" type="number" class="el-input" />
+            <div class="search-item-hint">波形显示的起始采样点序号（从0开始）</div>
+            <input id="fromSample" type="number" class="el-input" min="0" />
           </div>
           <div class="search-item" style="width:100%">
             <label>To Sample</label>
-            <input id="toSample" type="number" class="el-input" />
+            <div class="search-item-hint">波形显示的结束采样点序号（默认10000，最大20000）</div>
+            <input id="toSample" type="number" class="el-input" min="0" max="20000" />
           </div>
           <div class="search-item" style="width:100%">
             <label>Limit</label>
-            <input id="limit" type="number" class="el-input" />
+            <div class="search-item-hint">单次请求的最大点数限制（最大50000）</div>
+            <input id="limit" type="number" class="el-input" min="100" step="1000" max="50000" />
           </div>
           <div class="search-item" style="width:100%">
             <label>DownSample</label>
-            <input id="downSample" type="number" class="el-input" />
-          </div>
-          <div class="search-item" style="width:100%">
-            <label>RMS窗口(周波)</label>
-            <input id="rmsWindowCycles" type="number" step="0.5" class="el-input" />
-          </div>
-          <div class="search-item" style="width:100%">
-            <label>RMS更新(周波)</label>
-            <input id="rmsHopCycles" type="number" step="0.25" class="el-input" />
+            <div class="search-item-hint">采样数据抽稀倍率（默认1，全采样）</div>
+            <input id="downSample" type="number" class="el-input" min="1" />
           </div>
         </div>
       </div>
@@ -270,6 +245,62 @@
     </div>
   </div>
 
+  <div class="el-dialog-mask" id="recalcConfirmModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">确认重新计算</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div style="color: var(--el-text-color-primary); line-height: 20px; margin-bottom: 10px;">
+          将使用以下参数重新计算暂降事件，确定继续吗？
+        </div>
+        <table class="el-table">
+          <thead>
+            <tr>
+              <th style="width: 160px">参数</th>
+              <th>值</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>参考电压(V)</td>
+              <td><input id="recalcReferenceVoltage" type="number" step="0.01" class="el-input" /></td>
+            </tr>
+            <tr>
+              <td>最小持续(ms)</td>
+              <td><input id="recalcMinDurationMs" type="number" step="1" class="el-input" /></td>
+            </tr>
+            <tr>
+              <td>暂降阈值(%)</td>
+              <td><input id="recalcSagThresholdPct" type="number" step="1" class="el-input" /></td>
+            </tr>
+            <tr>
+              <td>中断阈值(%)</td>
+              <td><input id="recalcInterruptThresholdPct" type="number" step="1" class="el-input" /></td>
+            </tr>
+            <tr>
+              <td>迟滞(%)</td>
+              <td><input id="recalcHysteresisPct" type="number" step="0.5" class="el-input" /></td>
+            </tr>
+            <tr>
+              <td>RMS窗口(周波)</td>
+              <td><input id="recalcRmsWindowCycles" type="number" step="0.5" class="el-input" /></td>
+            </tr>
+            <tr>
+              <td>RMS更新(半周波)</td>
+              <td><input id="recalcRmsHopCycles" type="number" step="0.25" class="el-input" /></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>取消</button>
+        <button class="el-button el-button--primary" id="btnConfirmRecalc">确定</button>
+      </div>
+    </div>
+  </div>
+
   <style>
     .viewer-title-line {
       display: flex;
@@ -305,6 +336,8 @@
       display: flex;
       gap: 10px;
       align-items: stretch;
+      flex: 2;
+      min-height: 0;
     }
 
     .sag-raw-card {
@@ -314,6 +347,9 @@
       border: 1px solid var(--el-border-color);
       border-radius: 6px;
       padding: 12px;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
 
     .sag-raw-card.is-window-fullscreen {
@@ -351,6 +387,16 @@
       margin-bottom: 8px;
     }
 
+    .report-key {
+      font-weight: 700;
+      color: var(--el-text-color-primary);
+    }
+
+    .report-hl {
+      font-weight: 700;
+      color: var(--el-color-primary);
+    }
+
     .sag-card-header {
       display: flex;
       justify-content: space-between;
@@ -378,7 +424,8 @@
     }
 
     .chart-scroll-container {
-      height: 480px;
+      flex: 1;
+      min-height: 0;
       overflow-x: hidden;
       overflow-y: auto;
     }
@@ -474,6 +521,23 @@
       margin-top: 10px;
     }
 
+    .channel-sidebar .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .channel-sidebar .section-title .el-button {
+      height: 26px;
+      padding: 0 10px;
+      font-size: 12px;
+    }
+
+    #analogList {
+      max-height: none;
+    }
+
     .sag-list-card,
     .sag-tolerance-card {
       flex: 1;
@@ -544,6 +608,20 @@
 
     .legend-line-demo.current {
       border-bottom-color: #1677ff;
+    }
+
+    .search-item label {
+      display: block;
+      margin-bottom: 2px;
+      font-weight: 500;
+      color: var(--el-text-color-regular);
+    }
+
+    .search-item-hint {
+      font-size: 12px;
+      color: var(--el-text-color-secondary);
+      margin-bottom: 4px;
+      line-height: 1.2;
     }
   </style>
 
