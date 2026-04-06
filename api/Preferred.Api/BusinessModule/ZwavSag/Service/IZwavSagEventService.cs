@@ -26,5 +26,18 @@ namespace Preferred.Api.Services
         Task<bool> UpdateAsync(int id, UpdateZwavSagEventRequest req);
         Task<bool> DeleteAsync(int id);
         Task<int> DeleteByFileIdAsync(int fileId);
+
+        Task<ZwavSagProcessDto> GetProcessAsync(int id);
+        Task<ZwavSagProcessPreviewResponse> PreviewProcessAsync(int id, ZwavSagProcessPreviewRequest req);
+
+        Task<PagedResult<ZwavSagChannelRuleDto>> QueryChannelRuleAsync(string keyword, int page, int pageSize);
+        Task<ZwavSagChannelRuleDto> CreateChannelRuleAsync(CreateZwavSagChannelRuleRequest req);
+        Task<bool> UpdateChannelRuleAsync(int id, UpdateZwavSagChannelRuleRequest req);
+        Task<bool> DeleteChannelRuleAsync(int id);
+
+        Task<PagedResult<ZwavSagGroupRuleDto>> QueryGroupRuleAsync(string keyword, int page, int pageSize);
+        Task<ZwavSagGroupRuleDto> CreateGroupRuleAsync(CreateZwavSagGroupRuleRequest req);
+        Task<bool> UpdateGroupRuleAsync(int id, UpdateZwavSagGroupRuleRequest req);
+        Task<bool> DeleteGroupRuleAsync(int id);
     }
 }

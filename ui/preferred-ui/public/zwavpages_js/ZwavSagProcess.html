@@ -65,6 +65,11 @@
                     </div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="icon-btn" id="btnExportSamples" title="导出采样点数据">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z" />
+                      </svg>
+                    </button>
                     <button class="icon-btn" id="btnExportRms" title="导出均方根值">
                       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                         <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z" />
@@ -74,6 +79,12 @@
                       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                         <path fill="currentColor"
                           d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 16H4V6h5.17l2 2H20v14z" />
+                      </svg>
+                    </button>
+                    <button class="icon-btn" id="btnRestoreZoom" title="还原">
+                      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                        <path fill="currentColor"
+                          d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 0 1-9.9 1H5.02A7 7 0 0 0 19 13c0-3.87-3.13-7-7-7z" />
                       </svg>
                     </button>
                     <button class="icon-btn" id="btnFullScreen" title="窗口全屏">
@@ -123,12 +134,13 @@
                       <tr>
                         <th class="cell-center" style="width:42px"><input id="sagCheckAll" type="checkbox" /></th>
                         <th class="cell-center" style="width:60px">序号</th>
-                        <th class="cell-center" style="width:70px">相别</th>
-                        <th class="cell-center" style="width:110px">事件类型</th>
+                        <th style="width:180px">通道名称</th>
+                        <th class="cell-center" style="width:60px">相别</th>
+                        <th class="cell-center" style="width:90px">事件类型</th>
                         <th style="width:180px">发生时间</th>
-                        <th style="width:120px">持续时间(ms)</th>
-                        <th style="width:120px">暂降幅值(%)</th>
-                        <th style="width:120px">残余电压(%)</th>
+                        <th style="width:110px">持续时间(ms)</th>
+                        <th style="width:110px">暂降幅值(%)</th>
+                        <th style="width:110px">残余电压(%)</th>
                       </tr>
                     </thead>
                     <tbody id="sagTbody"></tbody>
@@ -187,17 +199,17 @@
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <div class="search-item" style="width:100%">
             <label>From Sample</label>
-            <div class="search-item-hint">波形显示的起始采样点序号（从0开始）</div>
-            <input id="fromSample" type="number" class="el-input" min="0" />
+            <div class="search-item-hint">波形显示的起始采样点序号（从1开始）</div>
+            <input id="fromSample" type="number" class="el-input" min="1" />
           </div>
           <div class="search-item" style="width:100%">
             <label>To Sample</label>
-            <div class="search-item-hint">波形显示的结束采样点序号（默认10000，最大20000）</div>
-            <input id="toSample" type="number" class="el-input" min="0" max="20000" />
+            <div class="search-item-hint">波形显示的结束采样点序号（默认20000，最大50000）</div>
+            <input id="toSample" type="number" class="el-input" min="1" max="50000" />
           </div>
           <div class="search-item" style="width:100%">
             <label>Limit</label>
-            <div class="search-item-hint">单次请求的最大点数限制（最大50000）</div>
+            <div class="search-item-hint">单次请求的最大点数限制（默认50000，最大50000）</div>
             <input id="limit" type="number" class="el-input" min="100" step="1000" max="50000" />
           </div>
           <div class="search-item" style="width:100%">
@@ -245,6 +257,22 @@
     </div>
   </div>
 
+  <div class="el-dialog-mask" id="exportSamplesConfirmModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">确认导出</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div id="exportSamplesConfirmBody" style="color: var(--el-text-color-primary); line-height: 20px;"></div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>取消</button>
+        <button class="el-button el-button--primary" id="btnConfirmExportSamples" type="button">确定</button>
+      </div>
+    </div>
+  </div>
+
   <div class="el-dialog-mask" id="recalcConfirmModal">
     <div class="el-dialog el-dialog--lg">
       <div class="el-dialog__header">
@@ -284,19 +312,15 @@
               <td><input id="recalcHysteresisPct" type="number" step="0.5" class="el-input" /></td>
             </tr>
             <tr>
-              <td>RMS窗口(周波)</td>
-              <td><input id="recalcRmsWindowCycles" type="number" step="0.5" class="el-input" /></td>
-            </tr>
-            <tr>
-              <td>RMS更新(半周波)</td>
-              <td><input id="recalcRmsHopCycles" type="number" step="0.25" class="el-input" /></td>
+              <td>恢复阈值(%)</td>
+              <td><input id="recalcRecoverThresholdPct" type="number" step="0.5" class="el-input" /></td>
             </tr>
           </tbody>
         </table>
       </div>
       <div class="el-dialog__footer">
         <button class="el-button" data-dialog-close>取消</button>
-        <button class="el-button el-button--primary" id="btnConfirmRecalc">确定</button>
+        <button class="el-button el-button--primary" id="btnConfirmRecalc" type="button">确定</button>
       </div>
     </div>
   </div>

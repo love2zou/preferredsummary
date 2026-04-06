@@ -66,6 +66,34 @@
             查询任务状态（直接查 Tb_ZwavAnalysis）
             </summary>
         </member>
+        <member name="T:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher">
+            <summary>
+            暂降电压通道规则匹配器
+            优化目标：
+            1、稳健识别电压通道，尽量排除电流通道；
+            2、稳健识别相别（A/B/C/AB/BC/CA）；
+            3、稳健识别分组（高压侧/中压侧/低压侧/低压分支）；
+            4、减少三侧录波场景下的误归组。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.BuiltInPhasePatterns">
+            <summary>
+            注意顺序：先匹配线电压，再匹配相电压，避免 UA 抢先匹配 UAB。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.MatchGroup(System.String,System.String,System.String,Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.GroupRuleItem[])">
+            <summary>
+            分组匹配原则：
+            1、优先规则表；
+            2、再走内置侧别识别；
+            3、不再宽松地用“清洗后的通道名”当组名，避免三侧误归组。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.ExtractTidyGroupText(System.String,System.String,System.String)">
+            <summary>
+            仅保留给调试或后续扩展使用，不参与默认 MatchGroup fallback。
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Services.CategoryService">
             <summary>
             分类服务实现
@@ -1199,6 +1227,15 @@
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEventPhase.SagEventId">
             <summary>所属事件ID（关联 Tb_ZwavSagEvent）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.ChannelIndex">
+            <summary>通道索引（CFG 中的通道索引）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.GroupName">
+            <summary>通道分组名称（例如：高压侧/中压侧/低压侧等）</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEventPhase.ChannelName">
+            <summary>通道名称（例如：高压侧A相电压）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEventPhase.Phase">
             <summary>相别（A/B/C 等）</summary>
@@ -3608,21 +3645,6 @@
             分页查询暂降事件列表
             </summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetDetailAsync(System.Int32)">
-            <summary>
-            获取暂降事件详情
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetPhasesAsync(System.Int32)">
-            <summary>
-            获取暂降事件相别明细
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetByFileAsync(System.Int32)">
-            <summary>
-            根据录波文件ID查询暂降结果
-            </summary>
-        </member>
         <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.AnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
             <summary>
             发起电压暂降分析
@@ -3630,36 +3652,14 @@
             控制器层不再暴露 RMS 模式切换。
             </summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.ReAnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
-            <summary>
-            重新分析指定录波文件的暂降结果
-            当前算法固定采用：1周波 RMS 窗口 + 半周波更新。
-            一般由前端显式传 ForceRebuild = true。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.UpdateAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagEventRequest)">
-            <summary>
-            更新暂降事件（仅建议用于备注等有限字段修正）
-            </summary>
-        </member>
         <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteAsync(System.Int32)">
             <summary>
             删除单个暂降事件
             </summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteByFileAsync(System.Int32)">
-            <summary>
-            按录波文件删除全部暂降结果
-            </summary>
-        </member>
         <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetChannelRuleListAsync(System.String,System.Int32,System.Int32)">
             <summary>
             分页查询暂降通道词库
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetChannelRuleDetailAsync(System.Int32)">
-            <summary>
-            获取暂降通道词库详情
             </summary>
         </member>
         <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.CreateChannelRuleAsync(Zwav.Application.Sag.CreateZwavSagChannelRuleRequest)">
@@ -3821,29 +3821,13 @@
         <member name="T:Zwav.Application.Sag.ZwavSagAnalyzeContext">
             <summary>
             暂降分析上下文
-            包含采样点、通道信息、频率、阈值等，用于分析器进行纯计算。
             </summary>
         </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.AnalysisId">
-            <summary>解析任务ID（用于追溯波形来源）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.FrequencyHz">
-            <summary>系统频率（Hz）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.TimeMul">
-            <summary>时间倍率（来自 CFG，TimeRaw * TimeMul -> ms 等换算用）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.WaveStartTimeUtc">
-            <summary>波形起始时间（UTC）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.TriggerTimeUtc">
-            <summary>触发时间（UTC，可选）</summary>
-        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.ReferenceType">
-            <summary>参考电压类型（Declared=公称，Sliding=滑动参考）</summary>
+            <summary>参考电压类型（Declared / Sliding）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.ReferenceVoltage">
-            <summary>参考电压（可选；不传则由算法估算）</summary>
+            <summary>强制参考电压（可空）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.SagThresholdPct">
             <summary>暂降阈值（%）</summary>
@@ -3852,19 +3836,39 @@
             <summary>中断阈值（%）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.HysteresisPct">
-            <summary>迟滞（%）</summary>
+            <summary>迟滞阈值（%）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.RecoverThresholdPct">
+            <summary>恢复阈值（%）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.MinDurationMs">
-            <summary>最小持续时间（毫秒）</summary>
+            <summary>最小时长（ms）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.RmsMode">
-            <summary>RMS 模式（历史字段：当前后端固定为 1周波窗口 + 半周波更新）</summary>
+            <summary>RMS 模式描述</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.VoltageChannels">
-            <summary>电压通道集合（用于参与暂降/中断判定）</summary>
+            <summary>电压通道</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.Samples">
-            <summary>采样点序列（按时间排序）</summary>
+            <summary>
+            保留样本点结构，用于兼容旧逻辑/日志/时间轴
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.TimeAxisMs">
+            <summary>
+            时间轴（与 Samples 等长）
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.ChannelSeriesMap">
+            <summary>
+            通道列缓存：ChannelIndex -> 全部采样值
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzeContext.AnalyzableSegments">
+            <summary>
+            预计算的可分析采样段
+            </summary>
         </member>
         <member name="T:Zwav.Application.Sag.ZwavVoltageChannelContext">
             <summary>电压通道上下文</summary>
@@ -3936,24 +3940,6 @@
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.EventType">
             <summary>结果类型：Normal/Sag/Interruption</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.EventCount">
-            <summary>事件数量</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.StartTime">
-            <summary>分析开始时间（UTC）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.FinishTime">
-            <summary>分析结束时间（UTC）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.CostMs">
-            <summary>分析耗时（毫秒）</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.TriggerPhase">
-            <summary>触发相</summary>
-        </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.EndPhase">
-            <summary>终止相</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.WorstPhase">
             <summary>最严重相</summary>
@@ -4036,6 +4022,9 @@
         <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ReferenceType">
             <summary>参考电压类型（Declared/Sliding）</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.RecoverThresholdPct">
+            <summary>恢复阈值（%）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ReferenceVoltage">
             <summary>参考电压（单位同通道单位）</summary>
         </member>
@@ -4084,6 +4073,15 @@
         <member name="T:Zwav.Application.Sag.ZwavSagPhaseDto">
             <summary>暂降事件相别明细（用于详情展示）</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.ChannelIndex">
+            <summary>通道索引（CFG 中的通道索引）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.GroupName">
+            <summary>通道分组名称（例如：高压侧/中压侧/低压侧等）</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.ChannelName">
+            <summary>通道名称（例如：高压侧A相电压）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagPhaseDto.Phase">
             <summary>相别（A/B/C 等）</summary>
         </member>
@@ -4127,7 +4125,9 @@
             <summary>备注</summary>
         </member>
         <member name="T:Zwav.Application.Sag.AnalyzeZwavSagRequest">
-            <summary>发起暂降分析请求</summary>
+            <summary>
+            发起暂降分析请求
+            </summary>
         </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.FileIds">
             <summary>录波文件ID集合（推荐）</summary>
@@ -4135,26 +4135,54 @@
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.AnalysisGuids">
             <summary>解析任务 GUID 集合（兼容输入，会反查 FileId）</summary>
         </member>
-        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ForceRebuild">
-            <summary>是否强制重建（会先删除该文件旧结果再生成新结果）</summary>
-        </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ReferenceType">
-            <summary>参考电压类型（Declared/Sliding）</summary>
+            <summary>
+            参考值类型：
+            Declared=固定参考值
+            Sliding=滑动参考值
+            </summary>
         </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ReferenceVoltage">
-            <summary>参考电压（可选）</summary>
+            <summary>
+            固定参考电压（可选）
+            若为空，则由算法自动推断
+            </summary>
         </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.SagThresholdPct">
-            <summary>暂降阈值（%）</summary>
+            <summary>
+            暂降阈值（百分比）
+            例如 90 表示低于参考值的 90% 进入暂降判断
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.RecoverThresholdPct">
+            <summary>
+            恢复阈值（百分比，可选）
+            若有值，则优先使用该值作为恢复阈值；
+            若为空，则退回到 SagThresholdPct + HysteresisPct
+            </summary>
         </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.InterruptThresholdPct">
-            <summary>中断阈值（%）</summary>
+            <summary>
+            中断阈值（百分比）
+            例如 10 表示低于参考值 10% 可判为中断
+            </summary>
         </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.HysteresisPct">
-            <summary>迟滞（%）</summary>
+            <summary>
+            迟滞阈值（百分比）
+            当 RecoverThresholdPct 未传时，恢复阈值 = SagThresholdPct + HysteresisPct
+            </summary>
         </member>
         <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.MinDurationMs">
-            <summary>最小持续时间（毫秒）</summary>
+            <summary>
+            最小时长（毫秒）
+            小于该时长的事件将被过滤
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.AnalyzeZwavSagRequest.ForceRebuild">
+            <summary>
+            是否强制重建
+            </summary>
         </member>
         <member name="T:Zwav.Application.Sag.AnalyzeZwavSagResponse">
             <summary>暂降分析响应</summary>
@@ -4191,9 +4219,6 @@
         <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.CrtTime">
             <summary>创建时间（UTC）</summary>
         </member>
-        <member name="P:Zwav.Application.Sag.ZwavSagChannelRuleDto.UpdTime">
-            <summary>更新时间（UTC）</summary>
-        </member>
         <member name="T:Zwav.Application.Sag.CreateZwavSagChannelRuleRequest">
             <summary>
             新增暂降通道词库请求
@@ -4226,6 +4251,12 @@
             <summary>
             暂降事件相别计算结果（纯内存）
             </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.ChannelIndex">
+            <summary>通道索引</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.ChannelName">
+            <summary>通道名称</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagEventPhaseResult.Phase">
             <summary>相别（A/B/C 等）</summary>
@@ -4286,6 +4317,12 @@
             暂降事件计算结果（纯内存）
             用于分析器输出，后续可落库到 Tb_ZwavSagEvent / Tb_ZwavSagEventPhase。
             </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.ChannelIndex">
+            <summary>通道索引</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagEventResult.ChannelName">
+            <summary>通道名称</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagEventResult.EventType">
             <summary>事件类型：Sag/Interruption</summary>
@@ -4385,6 +4422,11 @@
         <member name="P:Zwav.Application.Sag.ZwavSagRmsPointResult.SeqNo">
             <summary>序号（用于排序）</summary>
         </member>
+        <member name="T:Zwav.Application.Sag.ZwavSampleSegmentInfo">
+            <summary>
+            可分析采样段信息
+            </summary>
+        </member>
         <member name="T:Zwav.Application.Sag.RmsPoint">
             <summary>内部 RMS 点（用于算法计算）</summary>
         </member>
@@ -4446,15 +4488,701 @@
             </summary>
         </member>
         <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer">
+             <summary>
+             电压暂降分析器（单通道独立输出版）
+            
+             【整体设计目标】
+             1、不做跨通道合并，不做跨侧合并；
+             2、每个电压通道独立识别暂降事件；
+             3、每个通道检测到的事件直接输出，避免多侧录波相互污染；
+             4、RMS 点全量输出，供前端完整展示波形与分析结果；
+             5、强化恢复判定与尾段稳态裁剪，避免波形已恢复却仍被识别为暂降；
+             6、结果按组（高压/中压/低压）+ 相序（A/B/C）+ 时间排序；
+             7、事件和 RMS 点都保留各自真实通道名称，避免被高压侧名称污染；
+             8、恢复阈值优先取前端传入 RecoverThresholdPct，未传时退回 SagThresholdPct + HysteresisPct。
+            
+             【这版算法的核心思想】
+             传统做法经常把多相、多侧信号先合并再判断，这样容易出现两个问题：
+             - 某一侧的参考值把另一侧“带偏”，造成中压/低压识别不到；
+             - 某一通道明明已恢复，但因为合并窗口和阈值策略，尾巴还会被继续判成暂降。
+            
+             因此本类采用“单通道独立分析”：
+             - 每个通道先单独计算 RMS 序列；
+             - 每个通道独立推断参考电压；
+             - 每个通道独立判断事件进入、恢复、结束；
+             - 最后只做结果排序，不做跨通道物理合并。
+            
+             这样更符合你现在的业务诉求：单通道识别出来就直接输出，不再做复杂归并。
+             </summary>
+        </member>
+        <member name="F:Zwav.Application.Sag.ZwavSagAnalyzer.MaxSupportedAnalogMagnitude">
             <summary>
-            电压暂降分析器（优化版）
-            方案：
-            1）RMS窗口：1周波
-            2）更新步长：半周波
-            3）参考电压：优先传入，其次采用稳态高分位估算
-            4）事件判定：进入阈值 / 恢复阈值（含迟滞）
-            5）时长计算：按窗口覆盖区间
+            允许的模拟量最大绝对值，防止异常值、溢出值参与 RMS 计算。
             </summary>
+        </member>
+        <member name="F:Zwav.Application.Sag.ZwavSagAnalyzer.MaxSupportedDecimalMagnitude">
+            <summary>
+            decimal 安全上限，避免 double -> decimal 转换时溢出。
+            </summary>
+        </member>
+        <member name="F:Zwav.Application.Sag.ZwavSagAnalyzer.MaxSupportedDurationMs">
+            <summary>
+            事件时长的安全上限，防止异常数据导致 duration 无穷大或过大。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.AnalyzeAsync(Zwav.Application.Sag.ZwavSagAnalyzeContext)">
+             <summary>
+             分析入口。
+            
+             流程概览：
+             1）校验上下文；
+             2）遍历每一个电压通道；
+             3）构建该通道的 RMS 序列；
+             4）为该通道独立推断参考电压；
+             5）生成标准化后的检测序列（RmsPct / DetectPct）；
+             6）输出 RMS 点；
+             7）执行单通道事件检测；
+             8）将检测窗口转成最终事件结果；
+             9）整体排序后返回。
+            
+             注意：这里是“单通道独立输出”，没有任何跨通道事件融合逻辑。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildNormalizedSeries(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries,System.Decimal)">
+             <summary>
+             把原始 RMS 序列转换成“检测标准化序列”。
+            
+             关键点：
+             1）anchorReferenceVoltage：
+                用于输出展示的统一参考值；
+            
+             2）detectReferenceVoltage：
+                用于检测时的局部参考值；
+                如果是 Sliding 模式，会随着局部稳态缓慢变化；
+            
+             3）RmsPct：
+                面向展示，等于 p.Rms / anchorReferenceVoltage * 100；
+            
+             4）DetectPct：
+                面向检测，等于 p.Rms / detectReferenceVoltage * 100。
+            
+             这样可以避免慢漂移场景下，输出值和检测值使用同一套参考导致误判。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ApplyDetectionSmoothing(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries)">
+             <summary>
+             对检测序列做轻度平滑，只用于事件检测，不影响最终输出数值。
+            
+             思路：
+             - 取当前点前后最多共 5 个点；
+             - 先取中位数 median；
+             - 再做 0.65 * median + 0.35 * raw 的加权；
+            
+             这样既能抑制尖峰噪声，又不会把真实故障边沿过度抹平。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.DetectSingleChannelEvents(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries)">
+             <summary>
+             单通道事件检测。
+            
+             整体逻辑：
+             1）找到事件进入点；
+             2）进入事件后持续跟踪；
+             3）当连续若干点满足恢复条件时，认为事件结束；
+             4）对事件终点做二次回裁，去掉恢复后的拖尾；
+             5）若到序列尾部仍未恢复，再结合趋势判断和尾段稳态进行裁剪；
+             6）最终把过近窗口做轻量合并。
+            
+             注意：这里的“合并”仅限同一通道、同一组、同一相、相距极短的两个小窗口，
+             不是跨通道合并。
+             </summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "M:Zwav.Application.Sag.ZwavSagAnalyzer.IsSagStartPoint(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal)" -->
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.IsRecoveredPoint(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal,System.Nullable{System.Decimal})">
+             <summary>
+             判断某个点是否可作为“恢复点”。
+            
+             标准恢复条件：
+             - DetectPct >= recoverThreshold
+             - 且 RmsPct >= recoverThreshold - 0.5
+            
+             额外放宽：
+             如果尾段已识别出“稳态恢复电平”，则允许以这个稳态边界作为恢复判据，
+             解决“已经恢复到稳态，但因为没到理论阈值而迟迟不结束”的问题。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.RefineEventStartIndex(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal)">
+             <summary>
+             向前修正事件起点。
+            
+             当前点可能只是“第一次明显被判成故障”的点，
+             但真正跌破阈值的边界可能更靠前。
+            
+             因此这里向前回看：
+             - 找到 “上一点正常、当前点故障” 的切换位置；
+             - 或者找到更早的明显跌落点。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.RefineEventEndIndex(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal,System.Nullable{System.Decimal})">
+             <summary>
+             向前修正事件终点。
+            
+             原始终点可能已经把部分恢复段带入进来，因此要从当前终点往前回看，
+             找到最后一个“仍处于故障”的点，作为更合理的事件终点。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.TrimRecoveredTail(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Int32,System.Decimal,System.Nullable{System.Decimal})">
+             <summary>
+             裁剪事件尾部已恢复的稳定区。
+            
+             这个方法非常关键，主要解决：
+             “波形最后已经回稳了，但还被算进暂降事件里”
+            
+             典型原因：
+             - RMS 是滑窗算出来的，会天然有“拖尾”；
+             - 即使原始波形已经恢复，RMS 还会在后面几个窗口里逐步抬升；
+             - 如果不做回裁，事件时长就会偏长。
+            
+             实现方式：
+             从尾部往前扫描，统计连续满足“稳定恢复”的点数；
+             一旦达到 stableRows，就把这段尾巴剪掉。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.TrimTailByRecoveryTrend(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Int32,System.Decimal,System.Decimal,System.Nullable{System.Decimal})">
+             <summary>
+             根据“恢复趋势”裁剪尾巴。
+            
+             这个方法用于解决一种特殊情况：
+             - 到序列尾部还没严格满足 recoverThreshold；
+             - 但尾段已经整体呈明显回升趋势；
+             - 且后面能看到接近稳态的点；
+            
+             这种情况下，若还把整段尾巴都算进事件，会导致事件偏长。
+             因此这里通过“连续回升 + 后续接近稳态”的组合条件进行提前截断。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.TryResolveTailStablePct(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Decimal,System.Decimal)">
+             <summary>
+             尝试从序列尾段推断“稳定恢复电平”。
+            
+             逻辑：
+             - 取最后 6 个点；
+             - 计算中位数、最小值、最大值、离散度；
+             - 若尾段整体电平足够高，且离散度足够小，则认为尾段已经进入稳定恢复状态；
+             - 返回其稳定电平（中位数）；
+            
+             否则返回 null。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveRecoverConfirmRows(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries)">
+             <summary>
+             根据点数规模决定“连续多少个恢复点才确认恢复”。
+            
+             点越少，要求越低；
+             点越多，要求越高。
+             这样可以在低采样和高采样场景下兼顾灵敏度与稳定性。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveStableTailRows(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries)">
+            <summary>
+            根据点数规模决定“尾段连续稳定点数”的门槛。
+            用于尾部恢复裁剪。
+            </summary>
+        </member>
+        <!-- Badly formed XML comment ignored for member "M:Zwav.Application.Sag.ZwavSagAnalyzer.MergeVeryCloseWindows(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow})" -->
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildSingleChannelWindow(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Int32)">
+             <summary>
+             把单通道的事件窗口转为内部事件对象。
+            
+             这里会计算：
+             - 最低残余值；
+             - 事件级参考电压；
+             - 残余电压百分比；
+             - 暂降深度、暂降百分比；
+             - 事件起止时间（通过阈值交点插值估算）；
+            
+             注意：
+             起止时间不是直接取窗口中心点，而是取“阈值交叉点插值结果”，
+             这样更接近真实故障边界。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildSingleChannelEventResult(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow)">
+             <summary>
+             把内部事件窗口转成最终输出事件对象。
+            
+             由于这版是“单通道独立输出”，所以：
+             - TriggerPhase / EndPhase / WorstPhase 都直接指向当前通道名称；
+             - Phases 集合只放 1 条当前通道记录；
+             - IsMergedStatEvent = false；
+             - RawEventCount = 1。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildSingleChannelRawRmsSeries(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavVoltageChannelContext)">
+             <summary>
+             构建单通道原始 RMS 序列。
+            
+             流程：
+             1）从上下文中取出该通道原始采样值；
+             2）按采样间隔自动分段，避免采样率变化时混算；
+             3）每段独立计算 RMS 点；
+             4）汇总后按时间排序返回。
+            
+             这里的“按段计算”很重要：
+             如果录波文件中采样间隔前后不一致，直接整段一锅算会导致 RMS 失真。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildSegmentRmsPoints(System.Collections.Generic.IReadOnlyList{Zwav.Application.Sag.ZwavSagSamplePoint},System.Nullable{System.Double}[],System.Int32,System.Int32,System.Decimal,System.Double)">
+             <summary>
+             在一个采样间隔稳定的分段内计算 RMS 点。
+            
+             两种策略：
+             1）高采样场景（每周波点数 >= 8）：
+                用“1周波窗口 + 半周波更新”的标准 RMS；
+            
+             2）低采样场景（每周波点数太少）：
+                无法支撑标准周波 RMS，只能退化成局部均方根近似。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SplitBySampleInterval(System.Collections.Generic.IReadOnlyList{Zwav.Application.Sag.ZwavSagSamplePoint},System.Decimal)">
+             <summary>
+             按采样间隔自动分段。
+            
+             当录波文件在不同阶段使用了不同采样间隔时，
+             必须按段拆开处理，否则：
+             - 周波点数估算会错；
+             - RMS 窗口大小会错；
+             - 结果会明显失真。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.GetAnalyzableSegments(System.Collections.Generic.IReadOnlyList{Zwav.Application.Sag.ZwavSagSamplePoint},System.Decimal)">
+            <summary>
+            获取可分析分段。
+            这里会过滤掉长度过短的段，因为过短段不具备可靠的 RMS 计算意义。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.CreateRawRmsWindowPoint(System.Collections.Generic.IReadOnlyList{Zwav.Application.Sag.ZwavSagSamplePoint},System.Int32,System.Int32,System.Double,System.Int32)">
+             <summary>
+             根据给定窗口创建一个 RMS 点。
+            
+             时间采用：
+             - WindowStartMs：窗口起点时间；
+             - WindowEndMs：窗口终点时间；
+             - TimeMs：窗口中心时间；
+            
+             SampleNo 也取中心点的样本号，便于和前端/原始序列对应。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.AppendRmsPointResults(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries},System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagRmsPointResult})">
+             <summary>
+             把标准化后的 RMS 序列追加到最终结果中。
+            
+             这里不做过滤，尽可能全量保留，用于：
+             - 前端完整绘图；
+             - 后续排查算法；
+             - 分析报告可追溯。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveChannelReferenceVoltage(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries,System.Nullable{System.Decimal})">
+             <summary>
+             解析通道参考电压。
+            
+             优先顺序：
+             1）先根据通道自身数据推断出 inferredReference；
+             2）如果前端传入 forcedReferenceVoltage 且量级兼容，则采用外部值；
+             3）否则使用 inferredReference。
+            
+             这样可以避免外部统一参考值把不同电压等级的通道“拉偏”。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.InferChannelReferenceVoltage(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries)">
+             <summary>
+             从通道自身 RMS 序列中推断参考电压。
+            
+             思路：
+             - 优先看前 30% 区域，因为那里更可能是故障前稳态；
+             - 再优先取偏高且稳定的部分；
+             - 若仍不够，再退回全局高分位范围；
+             - 最后兜底用中位数。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.IsCompatibleDeclaredReference(System.Decimal,System.Decimal)">
+             <summary>
+             判断外部声明参考值与通道推断参考值是否量级兼容。
+            
+             兼容条件：
+             - 最大/最小比值不能太离谱；
+             - 相对差异不能太大。
+            
+             用于防止把高压侧参考误套到中压/低压侧。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.UseSlidingReference(Zwav.Application.Sag.ZwavSagAnalyzeContext)">
+             <summary>
+             是否使用滑动参考。
+            
+             规则：
+             - ReferenceType == Declared：固定参考；
+             - 其他情况：滑动参考。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildDetectReferenceSeries(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint},System.Decimal,System.Boolean)">
+             <summary>
+             构建检测参考值序列。
+            
+             固定参考模式：
+             - 全部点使用 anchorReferenceVoltage。
+            
+             滑动参考模式：
+             - 每个点都根据前序局部窗口估算候选参考值；
+             - 允许慢速跟踪稳态漂移；
+             - 但禁止参考值在故障期跟着一起塌陷。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveRollingReferenceCandidate(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint},System.Int32,System.Decimal)">
+             <summary>
+             解析滑动参考候选值。
+            
+             从当前点之前最多 24 个点中提取 RMS：
+             - 若点数太少，直接取中位数或 fallback；
+             - 若点数足够，则优先选“偏高且稳定”的局部稳态；
+             - 再退回高分位范围；
+             - 最后兜底取中位数。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveEventReferenceVoltage(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Int32)">
+             <summary>
+             解析事件级参考电压。
+            
+             规则：
+             1）如果上下文强制传入了 ReferenceVoltage，则直接用；
+             2）若不是滑动参考模式，则使用通道统一参考值；
+             3）若是滑动参考模式，则优先取故障前局部稳态值；
+            
+             这样做的好处是：
+             同一通道不同时间段若有慢漂移，事件级参考更贴近故障前真实电平。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.EstimateEventStartMs(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32)">
+             <summary>
+             估算事件起始时间。
+            
+             不是直接用窗口中心点，而是在：
+             - 前一个正常点
+             - 当前故障点
+             之间做阈值交点插值。
+            
+             这样得到的起点更接近真实故障发生时间。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.EstimateEventEndMs(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32)">
+             <summary>
+             估算事件结束时间。
+            
+             取“最后一个故障点”和“后一个恢复点”之间的恢复阈值交点插值。
+             这样得到的结束时间比直接用窗口中心点更贴近真实恢复边界。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.InterpolateCrossingTime(System.Double,System.Decimal,System.Double,System.Decimal,System.Decimal)">
+            <summary>
+            线性插值计算两个点之间到达 targetValue 的时间。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SelectStableHighValues(System.Collections.Generic.List{System.Decimal})">
+             <summary>
+             从一批值中选出“偏高且稳定”的部分。
+            
+             用途：
+             参考值不应该从低谷点里取，因此优先取中位数附近偏上的稳定区。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.MedianOfPercentileRange(System.Collections.Generic.List{System.Decimal},System.Double,System.Double)">
+            <summary>
+            取有序值列表在某个分位范围内的中位数。
+            例如 70%~95% 区间，用于提取偏高稳态区域。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.IsUsableVoltageSeriesRelaxed(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries)">
+             <summary>
+             判断通道序列是否可用于暂降分析。
+            
+             宽松判断标准：
+             - 至少有 3 个点；
+             - 参考值有效；
+             - 正值点比例不能太低；
+             - 最大 RMS 不能长期过低；
+            
+             目的是过滤掉明显无效或不具备分析意义的序列。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ValidateContext(Zwav.Application.Sag.ZwavSagAnalyzeContext)">
+            <summary>
+            分析前的上下文校验。
+            尽量在入口阶段把参数错误拦住，避免后续在算法深处抛异常。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SortEvents(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagEventResult})">
+            <summary>
+            对事件结果排序：
+            组 -> 相序 -> 开始时间 -> 通道顺序 -> 通道索引。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SortRmsPoints(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagRmsPointResult})">
+            <summary>
+            对 RMS 点排序：
+            组 -> 相序 -> 通道 -> 时间 -> SampleNo。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.GroupSortOrder(System.String)">
+            <summary>
+            组排序优先级：
+            高压 -> 中压 -> 低压 -> 其他。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.PhaseSortOrder(System.String)">
+            <summary>
+            相序排序优先级。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelSortOrder(System.String,System.Int32)">
+            <summary>
+            通道排序优先级。
+            尽量把 A/B/C 相按人类习惯顺序排列。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.NormalizeGroupName(System.String)">
+            <summary>
+            标准化组名，空值时返回“未分组”。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.NormalizeChannelName(System.String,System.Int32)">
+            <summary>
+            标准化通道名，空值时按 CH{index} 兜底。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.NormalizePhase(System.String)">
+            <summary>
+            标准化相序名，统一转大写。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ContainsAny(System.String,System.String[])">
+            <summary>
+            判断字符串中是否包含任一关键字。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveRecoverThresholdPct(Zwav.Application.Sag.ZwavSagAnalyzeContext)">
+             <summary>
+             解析恢复阈值。
+            
+             规则：
+             1）如果前端/请求显式传入 RecoverThresholdPct，则优先使用；
+             2）否则退回 SagThresholdPct + HysteresisPct；
+             3）最终保证结果位于 [SagThresholdPct, 100] 范围内。
+            
+             这是你前端“恢复阈值可配置”需求对应的关键接入点。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolvePhaseName(Zwav.Application.Sag.ZwavVoltageChannelContext,Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.RuleItem[])">
+             <summary>
+             解析通道相序名称。
+            
+             优先级：
+             1）如果 channel.Phase 已经是标准相序（A/B/C/AB/BC/CA），直接用；
+             2）否则尝试根据规则匹配器从通道名称/编码/单位中识别；
+             3）再不行则退回 CH{index}。
+             </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SafePositiveDiff(System.Double)">
+            <summary>
+            获取安全正差值。
+            非法值一律按 0 处理。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.Clamp(System.Double,System.Double,System.Double)">
+            <summary>
+            把数值限制在 [min, max] 范围内。
+            非法值时返回 min。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SafeDuration(System.Double)">
+            <summary>
+            生成安全时长值。
+            非法或负值时返回 0。
+            超过上限时裁到 MaxSupportedDurationMs。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.IsUsableAnalogValue(System.Double)">
+            <summary>
+            判断模拟量是否可参与计算。
+            排除 NaN/Infinity/极端异常值。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.SafeMagnitudeFromSquareAverage(System.Double,System.Int32)">
+            <summary>
+            根据平方和与有效点数，计算 RMS。
+            内部做了多层安全防护，防止出现异常值、NaN、Infinity、decimal 溢出。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ConvertToUtc(Zwav.Application.Sag.ZwavSagAnalyzeContext,System.Double)">
+            <summary>
+            把相对毫秒时间转换为绝对 UTC 时间。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.Median(System.Collections.Generic.List{System.Decimal})">
+            <summary>
+            计算中位数。
+            要求输入最好为已排序列表；未排序也能算，但语义上建议传有序值。
+            </summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow">
+            <summary>
+            单通道事件窗口内部结构。
+            对应一段已经识别出的暂降区间。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.ChannelIndex">
+            <summary>通道索引。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.GroupName">
+            <summary>分组名，例如高压侧/中压侧/低压侧。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.ChannelName">
+            <summary>通道名称。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.Phase">
+            <summary>相序。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.StartMs">
+            <summary>事件开始时间（相对 ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.EndMs">
+            <summary>事件结束时间（相对 ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.DurationMs">
+            <summary>时长 ms。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.ReferenceVoltage">
+            <summary>参考电压。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.ResidualVoltage">
+            <summary>残余电压。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.ResidualVoltagePct">
+            <summary>残余电压百分比。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.SagDepth">
+            <summary>暂降深度（参考值 - 残余值）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.SagPercent">
+            <summary>暂降百分比（100 - 残余百分比）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.MinPointIndex">
+            <summary>故障最严重点在 RMS 序列中的索引。</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries">
+            <summary>
+            单通道原始 RMS 序列。
+            此时还未生成 DetectPct / RmsPct。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries.ChannelIndex">
+            <summary>通道索引。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries.GroupName">
+            <summary>分组名。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries.Phase">
+            <summary>相序。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries.ChannelName">
+            <summary>通道名称。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries.Points">
+            <summary>原始 RMS 点集合。</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries">
+            <summary>
+            标准化后的通道 RMS 序列。
+            在原始 RMS 基础上增加：
+            - ReferenceVoltage
+            - DetectPct
+            - RmsPct
+            - DetectReferenceVoltage
+            - OutputReferenceVoltage
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.ChannelIndex">
+            <summary>通道索引。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.GroupName">
+            <summary>分组名。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.Phase">
+            <summary>相序。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.ChannelName">
+            <summary>通道名称。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.ReferenceVoltage">
+            <summary>通道锚定参考电压。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.UseSlidingReference">
+            <summary>是否使用滑动参考。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries.Points">
+            <summary>标准化后的 RMS 点集合。</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint">
+            <summary>
+            原始 RMS 点。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint.SampleNo">
+            <summary>窗口中心点对应的样本号。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint.TimeMs">
+            <summary>窗口中心时间（ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint.WindowStartMs">
+            <summary>窗口起始时间（ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint.WindowEndMs">
+            <summary>窗口结束时间（ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RawRmsWindowPoint.Rms">
+            <summary>窗口 RMS 值。</summary>
+        </member>
+        <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint">
+            <summary>
+            标准化 RMS 点。
+            在原始 RMS 点基础上，增加各种百分比和参考值信息。
+            </summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.SampleNo">
+            <summary>样本号。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.TimeMs">
+            <summary>中心时间（ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.WindowStartMs">
+            <summary>窗口起始时间（ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.WindowEndMs">
+            <summary>窗口结束时间（ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.Rms">
+            <summary>RMS 实际值。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.RmsPct">
+            <summary>输出用 RMS 百分比（相对于锚定参考电压）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.DetectPct">
+            <summary>检测用百分比（相对于检测参考值，可能被平滑）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.DetectReferenceVoltage">
+            <summary>当前点参与检测的参考电压。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.RmsWindowPoint.OutputReferenceVoltage">
+            <summary>当前点输出到前端/结果中的参考电压。</summary>
         </member>
         <member name="T:Video.Application.Dto.AlgoParams">
             <summary>

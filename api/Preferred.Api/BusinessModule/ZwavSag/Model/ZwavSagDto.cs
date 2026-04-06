@@ -27,24 +27,6 @@ namespace Zwav.Application.Sag
         /// <summary>结果类型：Normal/Sag/Interruption</summary>
         public string EventType { get; set; }
 
-        /// <summary>事件数量</summary>
-        public int EventCount { get; set; }
-
-        /// <summary>分析开始时间（UTC）</summary>
-        public DateTime? StartTime { get; set; }
-
-        /// <summary>分析结束时间（UTC）</summary>
-        public DateTime? FinishTime { get; set; }
-
-        /// <summary>分析耗时（毫秒）</summary>
-        public long? CostMs { get; set; }
-
-        /// <summary>触发相</summary>
-        public string TriggerPhase { get; set; }
-
-        /// <summary>终止相</summary>
-        public string EndPhase { get; set; }
-
         /// <summary>最严重相</summary>
         public string WorstPhase { get; set; }
         
@@ -127,6 +109,9 @@ namespace Zwav.Application.Sag
         /// <summary>参考电压类型（Declared/Sliding）</summary>
         public string ReferenceType { get; set; }
 
+        /// <summary>恢复阈值（%）</summary>
+        public decimal? RecoverThresholdPct { get; set; }
+
         /// <summary>参考电压（单位同通道单位）</summary>
         public decimal? ReferenceVoltage { get; set; }
 
@@ -176,6 +161,15 @@ namespace Zwav.Application.Sag
     /// <summary>暂降事件相别明细（用于详情展示）</summary>
     public class ZwavSagPhaseDto
     {
+        /// <summary>通道索引（CFG 中的通道索引）</summary>
+        public int? ChannelIndex { get; set; }
+
+        /// <summary>通道分组名称（例如：高压侧/中压侧/低压侧等）</summary>
+        public string GroupName { get; set; }
+
+        /// <summary>通道名称（例如：高压侧A相电压）</summary>
+        public string ChannelName { get; set; }
+
         /// <summary>相别（A/B/C 等）</summary>
         public string Phase { get; set; }
 
@@ -220,7 +214,9 @@ namespace Zwav.Application.Sag
         public string Remark { get; set; }
     }
 
-    /// <summary>发起暂降分析请求</summary>
+    /// <summary>
+    /// 发起暂降分析请求
+    /// </summary>
     public class AnalyzeZwavSagRequest
     {
         /// <summary>录波文件ID集合（推荐）</summary>
@@ -228,27 +224,55 @@ namespace Zwav.Application.Sag
 
         /// <summary>解析任务 GUID 集合（兼容输入，会反查 FileId）</summary>
         public string[] AnalysisGuids { get; set; }
-        
-        /// <summary>是否强制重建（会先删除该文件旧结果再生成新结果）</summary>
-        public bool ForceRebuild { get; set; }
 
-        /// <summary>参考电压类型（Declared/Sliding）</summary>
-        public string ReferenceType { get; set; }
+        /// <summary>
+        /// 参考值类型：
+        /// Declared=固定参考值
+        /// Sliding=滑动参考值
+        /// </summary>
+        public string ReferenceType { get; set; } = "Declared";
 
-        /// <summary>参考电压（可选）</summary>
+        /// <summary>
+        /// 固定参考电压（可选）
+        /// 若为空，则由算法自动推断
+        /// </summary>
         public decimal? ReferenceVoltage { get; set; }
 
-        /// <summary>暂降阈值（%）</summary>
+        /// <summary>
+        /// 暂降阈值（百分比）
+        /// 例如 90 表示低于参考值的 90% 进入暂降判断
+        /// </summary>
         public decimal SagThresholdPct { get; set; } = 90m;
 
-        /// <summary>中断阈值（%）</summary>
+        /// <summary>
+        /// 恢复阈值（百分比，可选）
+        /// 若有值，则优先使用该值作为恢复阈值；
+        /// 若为空，则退回到 SagThresholdPct + HysteresisPct
+        /// </summary>
+        public decimal? RecoverThresholdPct { get; set; }
+
+        /// <summary>
+        /// 中断阈值（百分比）
+        /// 例如 10 表示低于参考值 10% 可判为中断
+        /// </summary>
         public decimal InterruptThresholdPct { get; set; } = 10m;
 
-        /// <summary>迟滞（%）</summary>
+        /// <summary>
+        /// 迟滞阈值（百分比）
+        /// 当 RecoverThresholdPct 未传时，恢复阈值 = SagThresholdPct + HysteresisPct
+        /// </summary>
         public decimal HysteresisPct { get; set; } = 2m;
 
-        /// <summary>最小持续时间（毫秒）</summary>
-        public decimal MinDurationMs { get; set; } = 10m;
+        /// <summary>
+        /// 最小时长（毫秒）
+        /// 小于该时长的事件将被过滤
+        /// </summary>
+        public decimal MinDurationMs { get; set; } = 0m;
+
+        /// <summary>
+        /// 是否强制重建
+        /// </summary>
+        public bool ForceRebuild { get; set; }
     }
 
     /// <summary>暂降分析响应</summary>
@@ -286,9 +310,6 @@ namespace Zwav.Application.Sag
 
         /// <summary>创建时间（UTC）</summary>
         public DateTime CrtTime { get; set; }
-
-        /// <summary>更新时间（UTC）</summary>
-        public DateTime UpdTime { get; set; }
     }
 
     /// <summary>
@@ -318,6 +339,28 @@ namespace Zwav.Application.Sag
         public string PhaseName { get; set; }
 
         /// <summary>排序号</summary>
+        public int? SeqNo { get; set; }
+    }
+    public class ZwavSagGroupRuleDto
+    {
+        public int Id { get; set; }
+        public string RuleName { get; set; }
+        public string GroupName { get; set; }
+        public int SeqNo { get; set; }
+        public DateTime CrtTime { get; set; }
+    }
+
+    public class CreateZwavSagGroupRuleRequest
+    {
+        public string RuleName { get; set; }
+        public string GroupName { get; set; }
+        public int SeqNo { get; set; }
+    }
+
+    public class UpdateZwavSagGroupRuleRequest
+    {
+        public string RuleName { get; set; }
+        public string GroupName { get; set; }
         public int? SeqNo { get; set; }
     }
 }

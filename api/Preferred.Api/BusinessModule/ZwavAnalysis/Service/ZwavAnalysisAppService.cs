@@ -519,7 +519,7 @@ namespace Preferred.Api.Services
                 ch = new[] { 1 };
 
             int take = limit.GetValueOrDefault(2000);
-            take = Math.Clamp(take, 1, 20000);
+            take = Math.Clamp(take, 1, 50000);
 
             int from, to;
             if (fromSample.HasValue && toSample.HasValue)

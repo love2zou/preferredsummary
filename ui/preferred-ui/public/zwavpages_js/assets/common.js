@@ -1,4 +1,5 @@
-const DEFAULT_API_BASE = 'http://159.75.184.108:8080'
+const DEFAULT_API_BASE_PROD = 'http://159.75.184.108:8080'
+const DEFAULT_API_BASE_DEV = 'http://localhost:5000'
 let resolvedBaseUrl = ''
 let resolvingBaseUrlPromise = null
 
@@ -8,13 +9,27 @@ function normalizeBaseUrl(v) {
   return s.replace(/\/+$/, '')
 }
 
+function isLocalHostName(hostname) {
+  const h = String(hostname || '').trim().toLowerCase()
+  return h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0'
+}
+
+function getDefaultApiBaseUrl() {
+  try {
+    if (window.location.protocol === 'file:' || isLocalHostName(window.location.hostname)) {
+      return DEFAULT_API_BASE_DEV
+    }
+  } catch { }
+  return DEFAULT_API_BASE_PROD
+}
+
 export function getApiBaseUrl() {
   if (resolvedBaseUrl) return resolvedBaseUrl
   const qp = new URL(window.location.href).searchParams.get('apiBase')
   if (qp) return normalizeBaseUrl(qp)
   const saved = localStorage.getItem('zwav_api_base')
   if (saved) return normalizeBaseUrl(saved)
-  return DEFAULT_API_BASE
+  return getDefaultApiBaseUrl()
 }
 
 export function setApiBaseUrl(url) {
@@ -64,7 +79,8 @@ async function resolveApiBaseUrl() {
     const qp = normalizeBaseUrl(new URL(window.location.href).searchParams.get('apiBase'))
     const saved = normalizeBaseUrl(localStorage.getItem('zwav_api_base'))
     const origin = window.location.origin === 'null' ? '' : normalizeBaseUrl(window.location.origin)
-    const candidates = [qp, saved, origin, DEFAULT_API_BASE].filter(Boolean)
+    const devDefault = normalizeBaseUrl(getDefaultApiBaseUrl())
+    const candidates = [qp, saved, origin, devDefault, DEFAULT_API_BASE_PROD].filter(Boolean)
 
     for (const c of candidates) {
       const ok = await probeBaseUrl(c)
@@ -74,7 +90,7 @@ async function resolveApiBaseUrl() {
       }
     }
 
-    resolvedBaseUrl = qp || saved || origin || DEFAULT_API_BASE
+    resolvedBaseUrl = qp || saved || origin || devDefault || DEFAULT_API_BASE_PROD
     return resolvedBaseUrl
   })()
 

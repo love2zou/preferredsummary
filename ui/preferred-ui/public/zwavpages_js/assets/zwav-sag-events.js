@@ -13,6 +13,19 @@ import {
 } from './common.js'
 import { zwavApi } from './zwav-api.js'
 
+const RULE_TAB_PHASE = 'phase'
+const RULE_TAB_GROUP = 'group'
+
+function createRuleListState() {
+  return {
+    loading: false,
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    data: []
+  }
+}
+
 const state = {
   loading: false,
   selected: new Set(),
@@ -31,17 +44,20 @@ const state = {
   },
 
   rules: {
-    loading: false,
-    page: 1,
-    pageSize: 10,
-    total: 0,
-    data: []
+    activeTab: RULE_TAB_PHASE,
+    tabs: {
+      [RULE_TAB_PHASE]: createRuleListState(),
+      [RULE_TAB_GROUP]: createRuleListState()
+    }
   },
 
   ruleEditing: {
     id: 0,
-    isEdit: false
-  }
+    isEdit: false,
+    tab: RULE_TAB_PHASE
+  },
+
+  analyzeRecoverAuto: true
 }
 
 const ANALYZE_STATUS_MAP = {
@@ -64,6 +80,33 @@ const TASK_STATUS_MAP = {
   ParsingChannel: { type: 'primary', text: '解析通道' },
   ParsingDat: { type: 'primary', text: '解析DAT数据' },
   ParsingDAT: { type: 'primary', text: '解析DAT数据' }
+}
+
+const RULE_TAB_META = {
+  [RULE_TAB_PHASE]: {
+    buttonId: 'btnRuleTabPhase',
+    listApi: 'sagChannelRuleList',
+    deleteApi: 'sagChannelRuleDelete',
+    updateApi: 'sagChannelRuleUpdate',
+    createApi: 'sagChannelRuleCreate',
+    valueHeader: '相别',
+    valueProp: 'phaseName',
+    addTitle: '新增相别识别规则',
+    editTitle: '编辑相别识别规则',
+    deleteConfirmText: '确定要删除该相别识别规则吗？'
+  },
+  [RULE_TAB_GROUP]: {
+    buttonId: 'btnRuleTabGroup',
+    listApi: 'sagGroupRuleList',
+    deleteApi: 'sagGroupRuleDelete',
+    updateApi: 'sagGroupRuleUpdate',
+    createApi: 'sagGroupRuleCreate',
+    valueHeader: '分组名称',
+    valueProp: 'groupName',
+    addTitle: '新增分组识别规则',
+    editTitle: '编辑分组识别规则',
+    deleteConfirmText: '确定要删除该分组识别规则吗？'
+  }
 }
 
 function on(id, event, handler) {
@@ -160,6 +203,44 @@ function updatePagination(total, page, pageSize, totalTextId, pageTextId, prevBt
   byId(nextBtnId).disabled = page >= totalPages
 }
 
+function getRuleTabMeta(tab = state.rules.activeTab) {
+  return RULE_TAB_META[tab] || RULE_TAB_META[RULE_TAB_PHASE]
+}
+
+function getRuleListState(tab = state.rules.activeTab) {
+  return state.rules.tabs[tab] || state.rules.tabs[RULE_TAB_PHASE]
+}
+
+function syncRuleEditUi(tab = state.ruleEditing.tab || state.rules.activeTab) {
+  const isPhase = tab === RULE_TAB_PHASE
+  byId('phaseFieldWrap').style.display = isPhase ? '' : 'none'
+  byId('groupFieldWrap').style.display = isPhase ? 'none' : ''
+}
+
+function syncRuleTabUi() {
+  const meta = getRuleTabMeta()
+  const activeTab = state.rules.activeTab
+
+  Object.values(RULE_TAB_META).forEach((item) => {
+    const btn = byId(item.buttonId)
+    if (!btn) return
+    btn.classList.toggle('is-active', item === meta)
+  })
+
+  setText('ruleValueHeader', meta.valueHeader)
+  syncRuleEditUi(activeTab)
+}
+
+async function switchRuleTab(tab) {
+  if (!RULE_TAB_META[tab] || state.rules.activeTab === tab) return
+
+  state.rules.activeTab = tab
+  const ruleState = getRuleListState(tab)
+  byId('rulePageSize').value = String(ruleState.pageSize)
+  syncRuleTabUi()
+  await loadRules()
+}
+
 function render() {
   updatePagination(state.total, state.page, state.pageSize, 'totalText', 'pageText', 'btnPrev', 'btnNext')
   byId('btnBatchDelete').disabled = state.selected.size === 0
@@ -176,12 +257,14 @@ function render() {
     const statusType = getAnalyzeStatusType(row.status)
     const statusText = getAnalyzeStatusText(row.status)
     const hasSag = !!row.hasSag
-    const occur = row.occurTimeUtc ? formatDateTime(row.occurTimeUtc) : '-'
+    const occur = row.occurTimeUtc ? formatDateTimeMs(row.occurTimeUtc) : '-'
     const errorRaw = row.errorMessage ? String(row.errorMessage) : ''
     const errorText = errorRaw
       ? `<span class="error-text" title="${escapeHtml(errorRaw)}">${escapeHtml(errorRaw)}</span>`
       : '-'
     const eventTypeText = formatEventType(row.eventType)
+    const worstRaw = row.worstPhase ? String(row.worstPhase) : ''
+    const worstText = worstRaw ? worstRaw : '-'
 
     return `
       <tr>
@@ -193,7 +276,7 @@ function render() {
           <span class="el-tag ${hasSag ? 'el-tag--danger' : 'el-tag--success'}">${hasSag ? '有' : '无'}</span>
         </td>
         <td>${escapeHtml(eventTypeText)}</td>
-        <td class="cell-center">${escapeHtml(row.worstPhase || '-')}</td>
+        <td class="cell-center" title="${escapeHtml(worstRaw)}">${escapeHtml(worstText)}</td>
         <td>${escapeHtml(occur)}</td>
         <td>${escapeHtml(formatMs(row.durationMs))}</td>
         <td>${escapeHtml(formatPercent(row.sagPercent))}</td>
@@ -451,6 +534,22 @@ function renderAnalyses() {
   setHtml('analysisTbody', tbody)
 }
 
+function computeRecoverThresholdPct(sagThresholdPct, hysteresisPct) {
+  const sag = Number(sagThresholdPct)
+  const h = Number(hysteresisPct)
+  if (!Number.isFinite(sag) || !Number.isFinite(h)) return ''
+  const v = Math.min(100, sag + h)
+  return String(Math.max(sag, v))
+}
+
+function syncAnalyzeRecoverThresholdIfAuto() {
+  if (!state.analyzeRecoverAuto) return
+  const v = computeRecoverThresholdPct(byId('sagThresholdPct')?.value, byId('hysteresisPct')?.value)
+  if (v === '') return
+  const el = byId('recoverThresholdPct')
+  if (el) el.value = v
+}
+
 async function startAnalyze() {
   const ids = Array.from(state.analysis.selected)
   if (ids.length === 0) {
@@ -462,6 +561,7 @@ async function startAnalyze() {
   const sagThresholdPct = Number(byId('sagThresholdPct').value || 90)
   const interruptThresholdPct = Number(byId('interruptThresholdPct').value || 10)
   const hysteresisPct = Number(byId('hysteresisPct').value || 2)
+  const recoverThresholdPct = Number(byId('recoverThresholdPct').value || 0)
   const minDurationMs = Number(byId('minDurationMs').value || 10)
 
   if (referenceVoltage <= 0) {
@@ -480,6 +580,12 @@ async function startAnalyze() {
     showAlert('warning', '迟滞必须在0-20之间')
     return
   }
+  if (recoverThresholdPct > 0) {
+    if (recoverThresholdPct < sagThresholdPct || recoverThresholdPct > 100) {
+      showAlert('warning', '恢复阈值必须在 暂降阈值~100 之间')
+      return
+    }
+  }
   if (minDurationMs < 0) {
     showAlert('warning', '最小持续时间不能为负数')
     return
@@ -488,9 +594,10 @@ async function startAnalyze() {
   const body = {
     fileIds: [],
     analysisGuids: ids,
-    referenceType: 'Config',
+    referenceType: 'Declared',
     referenceVoltage,
     sagThresholdPct,
+    recoverThresholdPct: recoverThresholdPct > 0 ? recoverThresholdPct : null,
     interruptThresholdPct,
     hysteresisPct,
     minDurationMs
@@ -513,48 +620,53 @@ async function startAnalyze() {
 }
 
 async function loadRules() {
-  state.rules.loading = true
+  const meta = getRuleTabMeta()
+  const ruleState = getRuleListState()
+  ruleState.loading = true
   try {
     const params = {
       keyword: (byId('ruleKeyword').value || '').trim() || undefined,
-      page: state.rules.page,
-      pageSize: state.rules.pageSize
+      page: ruleState.page,
+      pageSize: ruleState.pageSize
     }
 
-    const res = await zwavApi.sagChannelRuleList(params)
+    const res = await zwavApi[meta.listApi](params)
     if (!res?.success) {
       showAlert('error', res?.message || '获取词库失败')
       return
     }
 
-    state.rules.data = res.data?.data || []
-    state.rules.total = res.data?.total || 0
+    ruleState.data = res.data?.data || []
+    ruleState.total = res.data?.total || 0
     renderRules()
   } catch (e) {
     showAlert('error', e.message || '获取词库失败')
   } finally {
-    state.rules.loading = false
+    ruleState.loading = false
   }
 }
 
 function renderRules() {
+  const meta = getRuleTabMeta()
+  const ruleState = getRuleListState()
   updatePagination(
-    state.rules.total,
-    state.rules.page,
-    state.rules.pageSize,
+    ruleState.total,
+    ruleState.page,
+    ruleState.pageSize,
     'ruleTotalText',
     'rulePageText',
     'rulePrev',
     'ruleNext'
   )
 
-  const tbody = state.rules.data.map((row, idx) => {
+  const tbody = ruleState.data.map((row, idx) => {
     const name = row.ruleName || '-'
+    const valueText = row[meta.valueProp] || '-'
     return `
       <tr>
-        <td class="cell-center">${idx + 1 + (state.rules.page - 1) * state.rules.pageSize}</td>
+        <td class="cell-center">${idx + 1 + (ruleState.page - 1) * ruleState.pageSize}</td>
         <td class="file-name-cell" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
-        <td class="cell-center">${escapeHtml(row.phaseName || '-')}</td>
+        <td class="cell-center">${escapeHtml(valueText)}</td>
         <td class="cell-center">${escapeHtml(String(row.seqNo ?? 0))}</td>
         <td>${escapeHtml(row.crtTime ? formatDateTime(row.crtTime) : '-')}</td>
         <td class="cell-actions">
@@ -569,11 +681,12 @@ function renderRules() {
 }
 
 async function handleRuleDelete(id) {
-  const confirmed = await showConfirmDialog('确认删除', '确定要删除该规则吗？', '此操作不可恢复')
+  const meta = getRuleTabMeta()
+  const confirmed = await showConfirmDialog('确认删除', meta.deleteConfirmText, '此操作不可恢复')
   if (!confirmed) return
 
   try {
-    const res = await zwavApi.sagChannelRuleDelete(id)
+    const res = await zwavApi[meta.deleteApi](id)
     if (res?.success) {
       showAlert('success', '删除成功')
       await loadRules()
@@ -586,7 +699,7 @@ async function handleRuleDelete(id) {
 }
 
 function computeLocalNextRuleSeqNo() {
-  const items = Array.isArray(state.rules.data) ? state.rules.data : []
+  const items = Array.isArray(getRuleListState().data) ? getRuleListState().data : []
   let max = 0
   for (let i = 0; i < items.length; i++) {
     const v = Number(items[i]?.seqNo)
@@ -596,26 +709,38 @@ function computeLocalNextRuleSeqNo() {
 }
 
 function openRuleEdit(row) {
+  const tab = state.rules.activeTab
+  const meta = getRuleTabMeta(tab)
   state.ruleEditing.isEdit = !!row
   state.ruleEditing.id = row ? Number(row.id) : 0
-  setText('ruleEditTitle', row ? '编辑规则' : '新增规则')
+  state.ruleEditing.tab = tab
+  setText('ruleEditTitle', row ? meta.editTitle : meta.addTitle)
   byId('ruleNameInput').value = row ? (row.ruleName || '') : ''
   byId('phaseNameSelect').value = row ? (row.phaseName || 'A') : 'A'
+  byId('groupNameInput').value = row ? (row.groupName || '') : ''
   byId('seqNoInput').value = row ? String(row.seqNo ?? 0) : String(computeLocalNextRuleSeqNo())
+  syncRuleEditUi(tab)
   openDialog('channelRuleEditModal')
 }
 
 async function saveRule() {
+  const tab = state.ruleEditing.tab || state.rules.activeTab
+  const meta = getRuleTabMeta(tab)
   const ruleName = String(byId('ruleNameInput').value || '').trim()
   const phaseName = String(byId('phaseNameSelect').value || '').trim()
+  const groupName = String(byId('groupNameInput').value || '').trim()
   const seqNo = Number(byId('seqNoInput').value || 0)
 
   if (!ruleName) {
     showAlert('warning', '规则名称不能为空')
     return
   }
-  if (!phaseName) {
+  if (tab === RULE_TAB_PHASE && !phaseName) {
     showAlert('warning', '相别不能为空')
+    return
+  }
+  if (tab === RULE_TAB_GROUP && !groupName) {
+    showAlert('warning', '分组名称不能为空')
     return
   }
   if (seqNo < 0) {
@@ -624,11 +749,15 @@ async function saveRule() {
   }
 
   try {
+    const body = tab === RULE_TAB_PHASE
+      ? { ruleName, phaseName, seqNo }
+      : { ruleName, groupName, seqNo }
+
     let res
     if (state.ruleEditing.isEdit) {
-      res = await zwavApi.sagChannelRuleUpdate(state.ruleEditing.id, { ruleName, phaseName, seqNo })
+      res = await zwavApi[meta.updateApi](state.ruleEditing.id, body)
     } else {
-      res = await zwavApi.sagChannelRuleCreate({ ruleName, phaseName, seqNo })
+      res = await zwavApi[meta.createApi](body)
     }
 
     if (res?.success) {
@@ -705,36 +834,24 @@ function bindRuleDelegation() {
     return
   }
 
-  console.log('规则表事件绑定成功', tbody)
-
   tbody.addEventListener('click', async (e) => {
-    console.log('规则表点击事件触发', e.target)
-
     const editBtn = e.target.closest('.action-edit-rule')
     const delBtn = e.target.closest('.action-del-rule')
 
     if (editBtn) {
       const id = Number(editBtn.getAttribute('data-id'))
-      console.log('点击编辑规则，id=', id)
-
-      const row = state.rules.data.find(x => Number(x.id) === id)
+      const row = getRuleListState().data.find(x => Number(x.id) === id)
       openRuleEdit(row)
       return
     }
 
     if (delBtn) {
       const id = Number(delBtn.getAttribute('data-id'))
-      console.log('点击删除规则，id=', id)
-
       if (id) {
         await handleRuleDelete(id)
-      } else {
-        console.warn('删除按钮未取到 data-id')
       }
       return
     }
-
-    console.log('点击了规则表，但不是操作按钮')
   })
 }
 
@@ -800,6 +917,8 @@ function bindEvents() {
     state.analysis.selected.clear()
     byId('analysisKeyword').value = ''
     byId('analysisPageSize').value = String(state.analysis.pageSize)
+    state.analyzeRecoverAuto = true
+    syncAnalyzeRecoverThresholdIfAuto()
     openDialog('analyzeModal')
     await loadAnalyses()
   })
@@ -835,33 +954,52 @@ function bindEvents() {
 
   on('btnStartAnalyze', 'click', startAnalyze)
 
+  on('sagThresholdPct', 'input', () => syncAnalyzeRecoverThresholdIfAuto())
+  on('hysteresisPct', 'input', () => syncAnalyzeRecoverThresholdIfAuto())
+  on('recoverThresholdPct', 'input', () => {
+    state.analyzeRecoverAuto = false
+  })
+
   on('btnOpenChannelRules', 'click', async () => {
-    state.rules.page = 1
+    state.rules.activeTab = RULE_TAB_PHASE
+    getRuleListState(RULE_TAB_PHASE).page = 1
     byId('ruleKeyword').value = ''
-    byId('rulePageSize').value = String(state.rules.pageSize)
+    byId('rulePageSize').value = String(getRuleListState(RULE_TAB_PHASE).pageSize)
+    syncRuleTabUi()
     openDialog('channelRuleModal')
     await loadRules()
   })
 
+  on('btnRuleTabPhase', 'click', async () => {
+    await switchRuleTab(RULE_TAB_PHASE)
+  })
+
+  on('btnRuleTabGroup', 'click', async () => {
+    await switchRuleTab(RULE_TAB_GROUP)
+  })
+
   on('btnRuleSearch', 'click', () => {
-    state.rules.page = 1
+    getRuleListState().page = 1
     loadRules()
   })
 
   on('rulePageSize', 'change', () => {
-    state.rules.pageSize = Number(byId('rulePageSize').value || 10)
-    state.rules.page = 1
+    const ruleState = getRuleListState()
+    ruleState.pageSize = Number(byId('rulePageSize').value || 10)
+    ruleState.page = 1
     loadRules()
   })
 
   on('rulePrev', 'click', () => {
-    if (state.rules.page > 1) state.rules.page--
+    const ruleState = getRuleListState()
+    if (ruleState.page > 1) ruleState.page--
     loadRules()
   })
 
   on('ruleNext', 'click', () => {
-    const totalPages = Math.max(1, Math.ceil(state.rules.total / state.rules.pageSize))
-    if (state.rules.page < totalPages) state.rules.page++
+    const ruleState = getRuleListState()
+    const totalPages = Math.max(1, Math.ceil(ruleState.total / ruleState.pageSize))
+    if (ruleState.page < totalPages) ruleState.page++
     loadRules()
   })
 
@@ -874,6 +1012,7 @@ function bindEvents() {
 
 async function init() {
   bindEvents()
+  syncRuleTabUi()
 
   state.pageSize = Number(byId('pageSize').value || 10)
   byId('referenceVoltage').value = '57.74'

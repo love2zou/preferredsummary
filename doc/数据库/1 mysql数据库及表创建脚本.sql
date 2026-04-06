@@ -470,6 +470,9 @@ COMMENT='电压暂降分析结果表（文件级主表）';
 CREATE TABLE IF NOT EXISTS Tb_ZwavSagEventPhase (
    Id                        INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
    SagEventId                INT                 NOT NULL COMMENT '所属暂降事件ID，对应 Tb_ZwavSagEvent.Id',
+   ChannelIndex              INT                 NULL COMMENT '通道序号（CFG 中的通道索引）',
+   GroupName                 VARCHAR(100)        NULL COMMENT '通道分组名称（例如：高压侧/中压侧/低压侧等）',
+   ChannelName               VARCHAR(200)        NULL COMMENT '通道名称（例如：高压侧A相电压）',
    Phase                     VARCHAR(16)         NOT NULL COMMENT '相别（A/B/C/AB/BC/CA）',
 
    StartTimeUtc              DATETIME(3)         NOT NULL COMMENT '该相暂降开始时间(UTC)',
@@ -527,6 +530,14 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagChannelRule (
    CrtTime              DATETIME NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME NOT NULL COMMENT '最后修改时间'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='电压暂降通道词库规则表';
+CREATE TABLE IF NOT EXISTS Tb_ZwavSagGroupRule (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+   RuleName             VARCHAR(100) NOT NULL COMMENT '规则名称（匹配关键词，如高压、HV、低压侧1等）',
+   GroupName            VARCHAR(100) NOT NULL COMMENT '目标分组名称（高压侧/中压侧/低压侧/低压侧1分支等）',
+   SeqNo                INT DEFAULT 0 NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME NOT NULL COMMENT '最后修改时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='电压暂降通道分组规则表';
 /*==============================================================*/
 /* 视频分析: Tb_VideoAnalysisJob  视频智能分析任务表             */
 /*==============================================================*/

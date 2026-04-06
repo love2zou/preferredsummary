@@ -160,6 +160,10 @@
             <label>迟滞(%)</label>
             <input id="hysteresisPct" type="number" step="0.5" class="el-input" min="0" max="20" />
           </div>
+          <div class="search-item">
+            <label>恢复阈值(%)</label>
+            <input id="recoverThresholdPct" type="number" step="0.5" class="el-input" min="0" max="100" />
+          </div>
         </div>
 
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
@@ -207,6 +211,10 @@
         <button class="el-dialog__close" data-dialog-close>×</button>
       </div>
       <div class="el-dialog__body">
+        <div class="rule-tabs">
+          <button class="rule-tab is-active" id="btnRuleTabPhase" type="button">暂降通道相别识别词库</button>
+          <button class="rule-tab" id="btnRuleTabGroup" type="button">暂降通道分组分析识别词库</button>
+        </div>
         <div class="inner-search-bar">
           <div class="inner-search-left">
             <span class="search-label">规则名称</span>
@@ -222,7 +230,7 @@
             <tr>
               <th class="cell-center" style="width: 60px">序号</th>
               <th style="width: 220px">规则名称</th>
-              <th style="width: 60px">相别</th>
+              <th style="width: 120px" id="ruleValueHeader">相别</th>
               <th style="width: 70px">排序号</th>
               <th style="width: 120px">创建时间</th>
               <th class="cell-center" style="width: 120px">操作</th>
@@ -244,9 +252,9 @@
           <button class="el-button" id="ruleNext">下一页</button>
         </div>
       </div>
-      <div class="el-dialog__footer">
-        <button class="el-button" data-dialog-close>关闭</button>
-      </div>
+    </div>
+    <div class="el-dialog__footer">
+      <button class="el-button" data-dialog-close>关闭</button>
     </div>
   </div>
 
@@ -262,8 +270,8 @@
             <label>规则名称</label>
             <input id="ruleNameInput" class="el-input" placeholder="例如：UA, UB, A相电压" />
           </div>
-          <div class="search-item">
-            <label>相别</label>
+          <div class="search-item" id="phaseFieldWrap">
+            <label id="ruleValueLabel">相别</label>
             <select id="phaseNameSelect" class="el-select">
               <option value="A">A相</option>
               <option value="B">B相</option>
@@ -272,6 +280,10 @@
               <option value="BC">BC</option>
               <option value="CA">CA</option>
             </select>
+          </div>
+          <div class="search-item" id="groupFieldWrap" style="display: none;">
+            <label>分组名称</label>
+            <input id="groupNameInput" class="el-input" placeholder="例如：高压侧、低压侧1分支" />
           </div>
           <div class="search-item">
             <label>排序号</label>
@@ -325,6 +337,34 @@
     .search-label {
       color: var(--el-text-color-regular);
       white-space: nowrap;
+    }
+
+    .rule-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .rule-tab {
+      border: 1px solid var(--el-border-color);
+      background: #fff;
+      color: var(--el-text-color-regular);
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .rule-tab:hover {
+      border-color: var(--el-color-primary-light-5);
+      color: var(--el-color-primary);
+    }
+
+    .rule-tab.is-active {
+      background: var(--el-color-primary);
+      border-color: var(--el-color-primary);
+      color: #fff;
     }
 
     .el-button--success {

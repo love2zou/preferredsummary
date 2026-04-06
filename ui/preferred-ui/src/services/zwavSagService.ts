@@ -209,6 +209,48 @@ export type ZwavSagComputedEventDto = {
   isWorstPhase?: boolean
 }
 
+export type ZwavSagProcessEventDto = {
+  id: number
+  fileId: number
+  originalName: string
+  status: number
+  errorMessage?: string
+  hasSag: boolean
+  eventType?: string
+  eventCount: number
+  costMs?: number | null
+  worstPhase?: string
+  triggerPhase?: string
+  endPhase?: string
+  startTimeUtc?: string | null
+  endTimeUtc?: string | null
+  occurTimeUtc?: string | null
+  durationMs?: number | null
+  referenceVoltage?: number | null
+  residualVoltage?: number | null
+  residualVoltagePct?: number | null
+  sagPercent?: number | null
+  sagThresholdPct?: number | null
+  interruptThresholdPct?: number | null
+  hysteresisPct?: number | null
+  minDurationMs?: number | null
+}
+
+export type ZwavSagProcessPhaseDto = {
+  phase: string
+  startTimeUtc: string
+  endTimeUtc: string
+  durationMs: number
+  referenceVoltage: number
+  residualVoltage: number
+  residualVoltagePct: number
+  sagDepth: number
+  sagPercent: number
+  isTriggerPhase: boolean
+  isEndPhase: boolean
+  isWorstPhase: boolean
+}
+
 /**
  * 暂降分析过程 DTO
  */
@@ -216,12 +258,12 @@ export type ZwavSagProcessDto = {
   /**
    * 当前主事件
    */
-  event: ZwavSagDetailDto
+  event: ZwavSagProcessEventDto
 
   /**
    * 相别明细
    */
-  phases: ZwavSagPhaseDto[]
+  phases: ZwavSagProcessPhaseDto[]
 
   /**
    * 关联的解析任务
@@ -303,7 +345,6 @@ export type ZwavSagChannelRuleDto = {
   phaseName: string
   seqNo: number
   crtTime: string
-  updTime: string
 }
 
 export type CreateZwavSagChannelRuleRequest = {
@@ -330,15 +371,6 @@ export const zwavSagService = {
     return api.get<any, ApiResponse<PagedResult<ZwavSagChannelRuleDto>>>(
       '/api/ZwavSagEvents/channel-rules',
       { params }
-    )
-  },
-
-  /**
-   * 获取暂降通道词库详情
-   */
-  async getChannelRuleDetail(id: number) {
-    return api.get<any, ApiResponse<ZwavSagChannelRuleDto>>(
-      `/api/ZwavSagEvents/channel-rules/${id}`
     )
   },
 
@@ -385,31 +417,6 @@ export const zwavSagService = {
   },
 
   /**
-   * 获取事件详情
-   */
-  async getDetail(id: number) {
-    return api.get<any, ApiResponse<ZwavSagDetailDto>>(`/api/ZwavSagEvents/${id}`)
-  },
-
-  /**
-   * 获取相别明细
-   */
-  async getPhases(id: number) {
-    return api.get<any, ApiResponse<ZwavSagPhaseDto[]>>(
-      `/api/ZwavSagEvents/${id}/phases`
-    )
-  },
-
-  /**
-   * 按 FileId 查询暂降结果
-   */
-  async getByFile(fileId: number) {
-    return api.get<any, ApiResponse<ZwavSagDetailDto[]>>(
-      `/api/ZwavSagEvents/by-file/${fileId}`
-    )
-  },
-
-  /**
    * 发起分析
    */
   async analyze(body: AnalyzeZwavSagRequest) {
@@ -420,35 +427,10 @@ export const zwavSagService = {
   },
 
   /**
-   * 重新分析
-   */
-  async reanalyze(body: AnalyzeZwavSagRequest) {
-    return api.post<any, ApiResponse<AnalyzeZwavSagResponse>>(
-      '/api/ZwavSagEvents/reanalyze',
-      body
-    )
-  },
-
-  /**
-   * 更新事件（当前主要用于备注）
-   * 后端是 PATCH，不是 PUT
-   */
-  async update(id: number, body: UpdateZwavSagEventRequest) {
-    return api.patch<any, ApiResponse<any>>(`/api/ZwavSagEvents/${id}`, body)
-  },
-
-  /**
    * 删除单个事件
    */
   async delete(id: number) {
     return api.delete<any, ApiResponse<any>>(`/api/ZwavSagEvents/${id}`)
-  },
-
-  /**
-   * 按录波文件删除全部暂降结果
-   */
-  async deleteByFile(fileId: number) {
-    return api.delete<any, ApiResponse<any>>(`/api/ZwavSagEvents/by-file/${fileId}`)
   },
 
   /**

@@ -1,4 +1,4 @@
-import { bindDialog, byId, closeDialog, escapeHtml, getApiBaseUrl, openDialog, qs, setApiBaseUrl, setHtml, setText } from './common.js'
+import { bindDialog, byId, closeDialog, downloadBlob, escapeHtml, getApiBaseUrl, openDialog, qs, setApiBaseUrl, setHtml, setText } from './common.js'
 import { zwavApi } from './zwav-api.js'
 
 const RAW_COLORS = ['#1677ff', '#52c41a', '#faad14', '#ff4d4f', '#13c2c2', '#722ed1', '#eb2f96', '#2f54eb']
@@ -17,12 +17,11 @@ const toleranceStandardLegacy = [
 ]
 
 const toleranceStandard = [
-  [0, 0],
-  [0.2, 0],
+  [0, 50],
   [0.2, 50],
-  [0.5, 50],
+  [0.2, 70],
   [0.5, 70],
-  [1, 70],
+  [0.5, 80],
   [1, 80],
   [10, 80]
 ]
@@ -35,10 +34,14 @@ const state = {
   eventId: 0,
   process: null,
   analysisGuid: '',
+  totalSamples: 0,
   voltageChannels: [],
   selected: new Set(),
   hidden: new Set(),
   rmsHidden: new Set(),
+  rawZoomApplied: false,
+  rawZoomState: null,
+  rawUserZoomed: false,
   hasPickedSag: false,
   sagSelectedKeys: new Set(),
   toleranceHidden: { legacy: false, current: false },
@@ -46,23 +49,23 @@ const state = {
   toleranceChart: null,
   lastWaveData: null,
   isFullScreen: false,
-  markerLeftXPixel: 0,
-  markerRightXPixel: 0,
+  markerLeftXPixel: null,
+  markerRightXPixel: null,
   rawSubBaseText: '',
   markerRenderRetry: 0,
-  searchFromSample: 0,
-  searchToSample: 10000,
+  searchFromSample: 1,
+  searchToSample: 20000,
   searchLimit: 50000,
   searchDownSample: 1,
-  rmsWindowCycles: 1,
-  rmsHopCycles: 0.5,
   params: {
     referenceVoltage: 0,
     sagThresholdPct: 90,
+    recoverThresholdPct: null,
     interruptThresholdPct: 10,
     hysteresisPct: 2,
     minDurationMs: 10
-  }
+  },
+  recalcRecoverAuto: true
 }
 
 function on(id, event, handler) {
@@ -79,6 +82,12 @@ function setInputValue(id, v) {
   const el = byId(id)
   if (!el) return
   el.value = String(v ?? '')
+}
+
+function showAlert(type, text) {
+  const msg = String(text || '')
+  if (!msg) return
+  alert(msg)
 }
 
 let markerRenderRaf = 0
@@ -121,6 +130,179 @@ function formatUtcMs(str) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
 }
 
+function formatAbsTimeFromOffsetMs(offsetMs) {
+  const n = Number(offsetMs)
+  if (!Number.isFinite(n)) return '-'
+  const base = state.process?.waveStartTimeUtc
+  const bd = base ? new Date(base) : null
+  const bms = bd && !Number.isNaN(bd.getTime()) ? bd.getTime() : NaN
+  if (!Number.isFinite(bms)) return `${n.toFixed(3)} ms`
+  const d = new Date(bms + n)
+  if (Number.isNaN(d.getTime())) return `${n.toFixed(3)} ms`
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mi = String(d.getMinutes()).padStart(2, '0')
+  const ss = String(d.getSeconds()).padStart(2, '0')
+  const ms = String(d.getMilliseconds()).padStart(3, '0')
+  return `${hh}:${mi}:${ss}.${ms}`
+}
+
+function getSagRowKey(evt) {
+  const phase = String(evt?.phase || '')
+  const startMs = Number(evt?.startMs ?? 0)
+  const endMs = Number(evt?.endMs ?? 0)
+  const kind = String(evt?.eventType || '')
+  return `${phase}-${kind}-${startMs}-${endMs}`
+}
+
+function pickFocusEvent() {
+  const events = Array.isArray(state.process?.computedEvents) ? state.process.computedEvents.slice() : []
+  if (!events.length) return null
+
+  const picked = events.filter((evt) => state.sagSelectedKeys.has(getSagRowKey(evt)))
+  const source = picked.length ? picked : events
+
+  return source
+    .filter((evt) => Number.isFinite(Number(evt?.startMs)) && Number.isFinite(Number(evt?.endMs)))
+    .sort((a, b) => {
+      const magA = Number(a?.sagMagnitudePct ?? -Infinity)
+      const magB = Number(b?.sagMagnitudePct ?? -Infinity)
+      if (magB !== magA) return magB - magA
+
+      const durA = Number(a?.durationMs ?? -Infinity)
+      const durB = Number(b?.durationMs ?? -Infinity)
+      if (durB !== durA) return durB - durA
+
+      const resA = Number(a?.residualVoltagePct ?? Infinity)
+      const resB = Number(b?.residualVoltagePct ?? Infinity)
+      return resA - resB
+    })[0] || null
+}
+
+function getDefaultZoomRangeMs(xTimes) {
+  const xs = (xTimes || []).filter((x) => Number.isFinite(Number(x))).map((x) => Number(x))
+  if (xs.length === 0) return null
+
+  const minX = xs[0]
+  const maxX = xs[xs.length - 1]
+  if (!(maxX > minX)) return null
+
+  const totalSpan = maxX - minX
+  const focusEvt = pickFocusEvent()
+
+  if (!focusEvt) {
+    const defaultSpan = Math.min(totalSpan, Math.max(500, totalSpan * 0.2))
+    return { start: minX, end: minX + defaultSpan }
+  }
+
+  const s = Number(focusEvt.startMs)
+  const e = Number(focusEvt.endMs)
+  if (!Number.isFinite(s) || !Number.isFinite(e) || e < s) return null
+
+  const evtSpan = Math.max(1, e - s)
+  const center = (s + e) / 2
+
+  let windowSpan = Math.max(
+    evtSpan * 12,
+    400,
+    totalSpan * 0.03
+  )
+
+  windowSpan = Math.min(windowSpan, Math.max(1500, totalSpan * 0.25), totalSpan)
+
+  let start = center - windowSpan / 2
+  let end = center + windowSpan / 2
+
+  if (start < minX) {
+    end += (minX - start)
+    start = minX
+  }
+  if (end > maxX) {
+    start -= (end - maxX)
+    end = maxX
+  }
+
+  start = Math.max(minX, start)
+  end = Math.min(maxX, end)
+
+  if (!(end > start)) return { start: minX, end: maxX }
+  return { start, end }
+}
+
+function getCurrentZoomRangeMs() {
+  if (!state.rawChart) return state.rawZoomState || null
+
+  try {
+    const opt = state.rawChart.getOption()
+    const dz = opt && opt.dataZoom
+    if (!Array.isArray(dz) || dz.length === 0) return state.rawZoomState || null
+
+    const first = dz.find((x) => Number.isFinite(Number(x?.startValue)) && Number.isFinite(Number(x?.endValue)))
+    if (!first) return state.rawZoomState || null
+
+    const start = Number(first.startValue)
+    const end = Number(first.endValue)
+    if (Number.isFinite(start) && Number.isFinite(end) && end > start) {
+      return { start, end }
+    }
+
+    return state.rawZoomState || null
+  } catch {
+    return state.rawZoomState || null
+  }
+}
+
+function saveRawZoomState() {
+  const zoom = getCurrentZoomRangeMs()
+  if (zoom && Number.isFinite(zoom.start) && Number.isFinite(zoom.end) && zoom.end > zoom.start) {
+    state.rawZoomState = { ...zoom }
+  }
+}
+
+function restoreRawZoom() {
+  const data = state.lastWaveData
+  if (!state.rawChart || !data || !Array.isArray(data.rows) || data.rows.length === 0) return
+
+  const times = data.rows.map((r) => Number(r?.timeMs)).filter((x) => Number.isFinite(x))
+  if (times.length === 0) return
+
+  const minX = times[0]
+  const maxX = times[times.length - 1]
+  if (!(maxX > minX)) return
+
+  const opt = state.rawChart.getOption()
+  const xAxisLen = Array.isArray(opt?.xAxis) ? opt.xAxis.length : 1
+  const xAxisIndex = Array.from({ length: Math.max(1, xAxisLen) }, (_v, i) => i)
+
+  state.rawZoomApplied = true
+  state.rawUserZoomed = false
+  state.rawZoomState = { start: minX, end: maxX }
+
+  state.rawChart.setOption({
+    dataZoom: [
+      {
+        id: 'rawInsideZoom',
+        type: 'inside',
+        xAxisIndex,
+        filterMode: 'none',
+        startValue: minX,
+        endValue: maxX
+      },
+      {
+        id: 'rawSliderZoom',
+        type: 'slider',
+        xAxisIndex,
+        filterMode: 'none',
+        height: 20,
+        bottom: 22,
+        startValue: minX,
+        endValue: maxX
+      }
+    ]
+  }, false)
+
+  scheduleMarkerRender()
+}
+
 function getRefVoltage() {
   const v = Number(state.params.referenceVoltage || state.process?.event?.referenceVoltage)
   if (Number.isFinite(v) && v > 0) return v
@@ -159,7 +341,6 @@ function getGridRects() {
     }
   }
   if (rects.length) return rects
-
   const r0 = getGridRect0()
   return r0 ? [r0] : []
 }
@@ -208,6 +389,24 @@ function initMarkersIfNeeded() {
   }
 }
 
+function findNearestIndex(times, target) {
+  if (!times.length) return 0
+  let lo = 0
+  let hi = times.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const v = times[mid]
+    if (v === target) return mid
+    if (v < target) lo = mid + 1
+    else hi = mid - 1
+  }
+  if (lo <= 0) return 0
+  if (lo >= times.length) return times.length - 1
+  const a = times[lo - 1]
+  const b = times[lo]
+  return Math.abs(a - target) <= Math.abs(b - target) ? lo - 1 : lo
+}
+
 function getWaveAtXPixel(xPixel) {
   const data = state.lastWaveData
   if (!state.rawChart || !data || !Array.isArray(data.rows) || data.rows.length === 0) return null
@@ -231,6 +430,7 @@ function getWaveAtXPixel(xPixel) {
     const ratio = clamp((Number(xPixel) - xr.minX) / w, 0, 1)
     nearestIdx = clamp(Math.round(ratio * (times.length - 1)), 0, times.length - 1)
   }
+
   const timeMs = Number(times[nearestIdx])
   if (!Number.isFinite(timeMs)) return null
   return { timeMs, nearestIdx }
@@ -242,8 +442,6 @@ function refreshMarkerSummary() {
   if (lx === null || rx === null) {
     const rawSub = byId('rawSub')
     if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
-    const markerSub = byId('markerSub')
-    if (markerSub) markerSub.textContent = 'LeftLine：[-][第-个点] | RightLine：[-][第-个点] | RightLine - LeftLine：-'
     const footer = byId('markerFooter')
     const textEl = byId('markerFooterText')
     if (footer) footer.style.display = 'none'
@@ -256,8 +454,6 @@ function refreshMarkerSummary() {
   if (!leftWave || !rightWave) {
     const rawSub = byId('rawSub')
     if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
-    const markerSub = byId('markerSub')
-    if (markerSub) markerSub.textContent = 'LeftLine：[-][第-个点] | RightLine：[-][第-个点] | RightLine - LeftLine：-'
     const footer = byId('markerFooter')
     const textEl = byId('markerFooterText')
     if (footer) footer.style.display = 'none'
@@ -276,8 +472,6 @@ function refreshMarkerSummary() {
 
   const rawSub = byId('rawSub')
   if (rawSub && state.rawSubBaseText) rawSub.textContent = state.rawSubBaseText
-  const markerSub = byId('markerSub')
-  if (markerSub) markerSub.textContent = summary
 
   const footer = byId('markerFooter')
   const textEl = byId('markerFooterText')
@@ -443,85 +637,44 @@ function renderChannelList() {
       const rawName = String(c.channelName || '')
       const cleanName = rawName.replace(/[\(\（\[].*[\)\）\]]\s*$/, '').trim()
       const title = `${c.channelIndex}. ${cleanName}`
-      const phase = String(c.phase || '').toUpperCase()
-      return `<div class="channel-item" ${hidden}>
+      return `<div class="channel-item" data-idx="${escapeHtml(c.channelIndex)}" ${hidden}>
         <input class="analog-check" type="checkbox" id="${id}" data-idx="${escapeHtml(c.channelIndex)}" ${checked}/>
-        <label>${escapeHtml(title)}</label>
+        <label for="${id}">${escapeHtml(title)}</label>
       </div>`
     })
     .join('')
   setHtml('analogList', html)
 
-  byId('analogList').querySelectorAll('.analog-check').forEach((el) => {
+  const listEl = byId('analogList')
+  listEl.querySelectorAll('.analog-check').forEach((el) => {
     el.addEventListener('change', () => {
       const idx = Number(el.getAttribute('data-idx'))
       if (el.checked) state.selected.add(idx)
       else state.selected.delete(idx)
       setText('analogCount', String(state.selected.size))
+      setTimeout(() => renderChannelList(), 0)
+    })
+  })
+
+  listEl.querySelectorAll('.channel-item').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      const t = e.target
+      if (t && (t.tagName === 'INPUT' || t.closest?.('input'))) return
+      if (t && (t.tagName === 'LABEL' || t.closest?.('label'))) return
+      const idx = Number(el.getAttribute('data-idx'))
+      const input = el.querySelector('input.analog-check')
+      if (!Number.isFinite(idx) || !input) return
+      input.checked = !input.checked
+      if (input.checked) state.selected.add(idx)
+      else state.selected.delete(idx)
+      setText('analogCount', String(state.selected.size))
+      setTimeout(() => renderChannelList(), 0)
     })
   })
 }
 
-function buildToleranceCurve(xLen, y) {
-  const arr = new Array(xLen)
-  for (let i = 0; i < xLen; i++) arr[i] = y
-  return arr
-}
-
-function findNearestIndex(times, target) {
-  if (!times.length) return 0
-  let lo = 0
-  let hi = times.length - 1
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    const v = times[mid]
-    if (v === target) return mid
-    if (v < target) lo = mid + 1
-    else hi = mid - 1
-  }
-  if (lo <= 0) return 0
-  if (lo >= times.length) return times.length - 1
-  const a = times[lo - 1]
-  const b = times[lo]
-  return Math.abs(a - target) <= Math.abs(b - target) ? lo - 1 : lo
-}
-
-function getRmsWindowN(times, freqHz, windowCycles) {
-  if (!Array.isArray(times) || times.length < 2) return 0
-  const dt = (times[times.length - 1] - times[0]) / Math.max(1, times.length - 1)
-  if (!Number.isFinite(dt) || dt <= 0) return 0
-  const f = Number.isFinite(freqHz) && freqHz > 0 ? freqHz : 50
-  const periodMs = 1000 / f
-  const cycles = Number.isFinite(windowCycles) && windowCycles > 0 ? windowCycles : 1
-  const n = Math.round((periodMs / dt) * cycles)
-  return clamp(n, 3, 5000)
-}
-
-function computeRollingRms(values, windowN, hopN) {
-  const n = Array.isArray(values) ? values.length : 0
-  if (n === 0 || windowN <= 0) return []
-
-  const sumSq = new Array(n + 1).fill(0)
-  const cnt = new Array(n + 1).fill(0)
-  for (let i = 0; i < n; i++) {
-    const v = Number(values[i])
-    const ok = Number.isFinite(v)
-    sumSq[i + 1] = sumSq[i] + (ok ? v * v : 0)
-    cnt[i + 1] = cnt[i] + (ok ? 1 : 0)
-  }
-
-  const out = new Array(n).fill(null)
-  const hop = clamp(Math.round(hopN || 0), 1, windowN)
-  for (let i = windowN - 1; i < n; i += hop) {
-    const s = sumSq[i + 1] - sumSq[i + 1 - windowN]
-    const c = cnt[i + 1] - cnt[i + 1 - windowN]
-    if (c < Math.max(3, Math.floor(windowN * 0.9))) {
-      out[i] = null
-      continue
-    }
-    out[i] = Math.sqrt(s / c)
-  }
-  return out
+function buildHorizontalLineData(times, y) {
+  return (times || []).map((t) => [Number(t), y])
 }
 
 function getDefaultSagRows() {
@@ -534,14 +687,6 @@ function getDefaultSagRows() {
   }
   if (!Number.isFinite(maxMag)) return []
   return list.filter((evt) => Number(evt?.sagMagnitudePct) === maxMag)
-}
-
-function getSagRowKey(evt) {
-  const phase = String(evt?.phase || '')
-  const startMs = Number(evt?.startMs ?? 0)
-  const endMs = Number(evt?.endMs ?? 0)
-  const kind = String(evt?.eventType || '')
-  return `${phase}-${kind}-${startMs}-${endMs}`
 }
 
 function mapToleranceX(seconds) {
@@ -636,7 +781,29 @@ function findNearestToleranceTick(axisValue, ticks) {
 }
 
 function renderSagTable() {
-  const rows = (state.process?.computedEvents || []).slice().sort((a, b) => Number(a.startMs) - Number(b.startMs))
+  const phaseRank = (p) => {
+    const x = String(p || '').trim().toUpperCase()
+    if (x === 'A') return 0
+    if (x === 'B') return 1
+    if (x === 'C') return 2
+    if (x === 'AB') return 3
+    if (x === 'BC') return 4
+    if (x === 'CA') return 5
+    return 9
+  }
+
+  const rows = (state.process?.computedEvents || []).slice().sort((a, b) => {
+    const pa = phaseRank(a?.phase)
+    const pb = phaseRank(b?.phase)
+    if (pa !== pb) return pa - pb
+
+    const ca = String(a?.channelName || '').trim()
+    const cb = String(b?.channelName || '').trim()
+    const cc = ca.localeCompare(cb, 'zh-Hans-CN-u-co-pinyin')
+    if (cc !== 0) return cc
+
+    return Number(a?.startMs) - Number(b?.startMs)
+  })
   setText('sagCountText', `共 ${rows.length} 条`)
 
   if (!state.hasPickedSag && state.sagSelectedKeys.size === 0) {
@@ -649,10 +816,12 @@ function renderSagTable() {
       const checked = state.sagSelectedKeys.has(key) ? 'checked' : ''
       const occur = evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-')
       const typeText = evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : String(evt.eventType || '-')
+      const chText = evt.channelName ? String(evt.channelName) : '-'
       return `
         <tr>
           <td class="cell-center"><input type="checkbox" class="sag-check" data-key="${escapeHtml(key)}" ${checked}></td>
           <td class="cell-center">${idx + 1}</td>
+          <td title="${escapeHtml(chText)}">${escapeHtml(chText)}</td>
           <td class="cell-center">${escapeHtml(String(evt.phase || '-'))}</td>
           <td class="cell-center">${escapeHtml(typeText)}</td>
           <td>${escapeHtml(occur)}</td>
@@ -774,7 +943,7 @@ function updateToleranceChart() {
   const currentNormalAreaData = buildToleranceNormalAreaData(mappedToleranceStandardLine)
   const legacyNormalAreaData = buildToleranceNormalAreaData(mappedToleranceStandardLineLegacy)
 
-  const pointSeries = points.map((x, idx) => {
+  const pointSeries = points.map((x) => {
     const mappedPoint = mapTolerancePointData(x)
     return {
       name: x.label,
@@ -807,7 +976,6 @@ function updateToleranceChart() {
 
   const toleranceSeries = []
 
-  // Legacy standard
   if (!state.toleranceHidden?.legacy) {
     toleranceSeries.push(
       {
@@ -866,7 +1034,6 @@ function updateToleranceChart() {
     )
   }
 
-  // Current standard
   if (!state.toleranceHidden?.current) {
     toleranceSeries.push(
       {
@@ -925,7 +1092,6 @@ function updateToleranceChart() {
     )
   }
 
-  // 1-second split line
   toleranceSeries.push({
     name: '1秒分界线',
     type: 'line',
@@ -946,6 +1112,9 @@ function updateToleranceChart() {
   state.toleranceChart.setOption({
     tooltip: {
       trigger: 'item',
+      appendToBody: true,
+      confine: false,
+      extraCssText: 'z-index:99999;',
       formatter: (p) => {
         const seriesName = String(p?.seriesName || '')
         const d = p?.data
@@ -977,26 +1146,15 @@ function updateToleranceChart() {
       }
     },
     grid: { left: 32, right: 64, top: 42, bottom: 28, containLabel: true },
-    legend: {
-      show: false
-    },
+    legend: { show: false },
     graphic: [
       {
         id: 'tolerance-split-line',
         type: 'line',
         silent: true,
         z: 30,
-        shape: {
-          x1: 0,
-          y1: 0,
-          x2: 0,
-          y2: 0
-        },
-        style: {
-          stroke: '#909399',
-          lineWidth: 1,
-          lineDash: [4, 4]
-        }
+        shape: { x1: 0, y1: 0, x2: 0, y2: 0 },
+        style: { stroke: '#909399', lineWidth: 1, lineDash: [4, 4] }
       },
       {
         id: 'tolerance-text-left',
@@ -1045,16 +1203,10 @@ function updateToleranceChart() {
           return hit ? hit.label : ''
         }
       },
-      axisTick: {
-        show: true,
-        length: 4
-      },
+      axisTick: { show: true, length: 4 },
       axisLine: { show: true },
       minorTick: { show: false },
-      splitLine: {
-        show: true,
-        lineStyle: { type: 'solid', opacity: 0.15 }
-      }
+      splitLine: { show: true, lineStyle: { type: 'solid', opacity: 0.15 } }
     },
     yAxis: {
       type: 'value',
@@ -1076,10 +1228,7 @@ function updateToleranceChart() {
       },
       minorTick: { show: true, splitNumber: 4 },
       minorSplitLine: { show: true, lineStyle: { opacity: 0.12 } },
-      splitLine: {
-        show: true,
-        lineStyle: { type: 'solid', opacity: 0.35 }
-      }
+      splitLine: { show: true, lineStyle: { type: 'solid', opacity: 0.35 } }
     },
     series: [
       ...toleranceSeries,
@@ -1087,7 +1236,6 @@ function updateToleranceChart() {
     ]
   }, true)
 
-  // Update split line position
   setTimeout(() => {
     if (!state.toleranceChart) return
     const grid = state.toleranceChart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [mapToleranceX(1), 100])
@@ -1111,9 +1259,32 @@ function updateToleranceChart() {
   }, 100)
 }
 
+function getVisibleSelectedChannels(wave) {
+  return Array.from(state.selected)
+    .filter((x) => (wave?.channels || []).includes(x))
+}
+
+function buildRmsSeriesMap() {
+  const map = new Map()
+  const list = Array.isArray(state.process?.rmsPoints) ? state.process.rmsPoints : []
+  for (const p of list) {
+    const idx = Number(p?.channelIndex)
+    const t = Number(p?.timeMs)
+    const rms = Number(p?.rms)
+    if (!Number.isFinite(idx) || !Number.isFinite(t) || !Number.isFinite(rms)) continue
+    const arr = map.get(idx) || []
+    arr.push([t, rms])
+    map.set(idx, arr)
+  }
+  for (const arr of map.values()) {
+    arr.sort((a, b) => a[0] - b[0])
+  }
+  return map
+}
+
 function renderRawLegend() {
   const wave = state.lastWaveData
-  const selected = Array.from(state.selected).filter((x) => (wave?.channels || []).includes(x)).slice(0, 12)
+  const selected = getVisibleSelectedChannels(wave)
   const items = []
   selected.forEach((channelIndex, i) => {
     const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
@@ -1123,8 +1294,8 @@ function renderRawLegend() {
   })
   selected.forEach((channelIndex, i) => {
     const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
-    const phase = String(ch?.phase || '').toUpperCase()
-    const label = `${phase ? `${phase}相` : `CH${channelIndex}`} RMS`
+    const base = ch ? `${ch.channelIndex}. ${ch.channelName || ''}` : `CH${channelIndex}`
+    const label = `${base} RMS`
     const hiddenCls = state.rmsHidden.has(channelIndex) ? 'style="opacity:0.45"' : ''
     items.push(`<span class="raw-legend-item" data-kind="rms" data-idx="${escapeHtml(channelIndex)}" ${hiddenCls}><span class="legend-line rms" style="background:${RMS_COLORS[i % RMS_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
   })
@@ -1137,6 +1308,7 @@ function renderRawLegend() {
 
   byId('rawLegend').querySelectorAll('.raw-legend-item[data-kind="raw"]').forEach((el) => {
     el.addEventListener('click', () => {
+      saveRawZoomState()
       const idx = Number(el.getAttribute('data-idx'))
       if (state.hidden.has(idx)) state.hidden.delete(idx)
       else state.hidden.add(idx)
@@ -1144,8 +1316,10 @@ function renderRawLegend() {
       updateRawChart()
     })
   })
+
   byId('rawLegend').querySelectorAll('.raw-legend-item[data-kind="rms"]').forEach((el) => {
     el.addEventListener('click', () => {
+      saveRawZoomState()
       const idx = Number(el.getAttribute('data-idx'))
       if (state.rmsHidden.has(idx)) state.rmsHidden.delete(idx)
       else state.rmsHidden.add(idx)
@@ -1160,33 +1334,30 @@ function updateRawChart() {
   const wave = state.lastWaveData
   if (!wave || !wave.rows || !wave.rows.length) return
 
-  const selectedAll = Array.from(state.selected).filter((x) => (wave.channels || []).includes(x)).slice(0, 12)
+  const selectedAll = getVisibleSelectedChannels(wave)
   const selected = selectedAll.filter((x) => !state.hidden.has(x))
+  const chartEl = byId('rawChart')
+
   if (selected.length === 0) {
     state.rawChart.setOption({ series: [], xAxis: [], yAxis: [], grid: [] }, true)
+    renderRawLegend()
     initMarkersIfNeeded()
     refreshMarkerSummary()
     renderMarkerGraphics()
-    renderRawLegend()
     return
   }
 
   const rows = wave.rows
   const xTimes = rows.map((r) => Number(r.timeMs))
-  const xData = xTimes.map((t) => Number(t).toFixed(3))
-  const chartEl = byId('rawChart')
   const gridGap = 20
   const bottomPad = 60
-  const scroll = byId('rawWrap')?.querySelector('.chart-scroll-container')
-  const fullAvail = state.isFullScreen && scroll ? Number(scroll.clientHeight) : NaN
-  const desiredHeight = Number.isFinite(fullAvail) && fullAvail > 120
-    ? fullAvail
-    : clamp(selected.length * (140 + gridGap) + bottomPad, 420, 2400)
+  const baseHeight = selected.length * (140 + gridGap) + bottomPad
+  const desiredHeight = state.isFullScreen
+    ? clamp(baseHeight, 420, 20000)
+    : clamp(baseHeight, 420, 2400)
+
   if (chartEl) chartEl.style.height = `${desiredHeight}px`
   const gridHeight = Math.max(140, Math.floor((desiredHeight - gridGap * (selected.length - 1) - bottomPad) / selected.length))
-  const freqHz = Number(state.process?.frequencyHz)
-  const rmsWindowN = getRmsWindowN(xTimes, freqHz, state.rmsWindowCycles)
-  const rmsHopN = Math.max(1, Math.round(rmsWindowN * (Number(state.rmsHopCycles) / Math.max(0.0001, Number(state.rmsWindowCycles) || 1))))
 
   const grids = []
   const xAxis = []
@@ -1199,20 +1370,27 @@ function updateRawChart() {
   const interruptPct = Number(state.params.interruptThresholdPct ?? 10)
   const hysteresisPct = Number(state.params.hysteresisPct ?? 2)
   const recoverPct = sagPct + hysteresisPct
+  const rmsMap = buildRmsSeriesMap()
 
   selected.forEach((channelIndex, i) => {
     const top = topBase + i * (gridHeight + gridGap)
     grids.push({ left: 100, right: 20, top, height: gridHeight - 18, containLabel: true })
+
     xAxis.push({
-      type: 'category',
+      type: 'value',
       gridIndex: i,
-      data: xData,
-      boundaryGap: false,
       position: 'top',
-      axisLabel: { show: i === 0, fontSize: 10, margin: i === 0 ? 23 : 8, formatter: (v) => `${v}` },
+      axisLabel: {
+        show: i === 0,
+        fontSize: 10,
+        margin: i === 0 ? 23 : 8,
+        formatter: (v) => formatAbsTimeFromOffsetMs(v)
+      },
       axisTick: { show: i === 0 },
-      axisLine: { show: i === 0 }
+      axisLine: { show: i === 0 },
+      scale: true
     })
+
     yAxis.push({
       type: 'value',
       gridIndex: i,
@@ -1228,7 +1406,15 @@ function updateRawChart() {
 
     const colorIndex = Math.max(0, selectedAll.indexOf(channelIndex))
     const dataIndex = (wave.channels || []).indexOf(channelIndex)
-    const raw = dataIndex >= 0 ? rows.map((r) => (r.analog?.[dataIndex] ?? null)) : rows.map(() => null)
+    const raw = dataIndex >= 0
+      ? rows.map((r) => {
+        const t = Number(r.timeMs)
+        const v = r.analog?.[dataIndex]
+        const vv = Number(v)
+        return [t, Number.isFinite(vv) ? vv : null]
+      })
+      : rows.map((r) => [Number(r.timeMs), null])
+
     const rawColor = RAW_COLORS[colorIndex % RAW_COLORS.length]
     const rmsColor = RMS_COLORS[colorIndex % RMS_COLORS.length]
 
@@ -1239,29 +1425,34 @@ function updateRawChart() {
 
     const rawSeriesIndex = series.length
     series.push({
+      id: `raw-${channelIndex}`,
       name,
       type: 'line',
       xAxisIndex: i,
       yAxisIndex: i,
       data: raw,
       showSymbol: false,
+      connectNulls: false,
       lineStyle: { width: 1, color: rawColor, opacity: 0.9 },
       itemStyle: { color: rawColor }
     })
 
-    if (rmsWindowN > 0 && !state.rmsHidden.has(channelIndex)) {
-      const rmsData = computeRollingRms(raw, rmsWindowN, rmsHopN)
-      series.push({
-        name: `${name} RMS`,
-        type: 'line',
-        xAxisIndex: i,
-        yAxisIndex: i,
-        showSymbol: false,
-        connectNulls: true,
-        data: rmsData,
-        lineStyle: { width: 2, color: rmsColor, opacity: 0.95 },
-        itemStyle: { color: rmsColor, opacity: 0.95 }
-      })
+    if (!state.rmsHidden.has(channelIndex)) {
+      const rmsData = rmsMap.get(Number(channelIndex)) || []
+      if (rmsData.length > 0) {
+        series.push({
+          id: `rms-${channelIndex}`,
+          name: `${name} RMS`,
+          type: 'line',
+          xAxisIndex: i,
+          yAxisIndex: i,
+          showSymbol: false,
+          connectNulls: false,
+          data: rmsData,
+          lineStyle: { width: 2, color: rmsColor, opacity: 0.95 },
+          itemStyle: { color: rmsColor, opacity: 0.95 }
+        })
+      }
     }
 
     const baseSeriesIndex = rawSeriesIndex
@@ -1271,31 +1462,34 @@ function updateRawChart() {
       const recoverY = (refV * recoverPct) / 100
       const interruptY = (refV * interruptPct) / 100
       series.push({
+        id: `sag-threshold-${channelIndex}`,
         name: `暂降阈值-${channelIndex}`,
         type: 'line',
         xAxisIndex: i,
         yAxisIndex: i,
         showSymbol: false,
         lineStyle: { type: 'dashed', width: 1, color: '#1677ff' },
-        data: buildToleranceCurve(xData.length, sagY)
+        data: buildHorizontalLineData(xTimes, sagY)
       })
       series.push({
+        id: `recover-threshold-${channelIndex}`,
         name: `恢复阈值-${channelIndex}`,
         type: 'line',
         xAxisIndex: i,
         yAxisIndex: i,
         showSymbol: false,
         lineStyle: { type: 'dashed', width: 1, color: '#52c41a' },
-        data: buildToleranceCurve(xData.length, recoverY)
+        data: buildHorizontalLineData(xTimes, recoverY)
       })
       series.push({
+        id: `interrupt-threshold-${channelIndex}`,
         name: `中断阈值-${channelIndex}`,
         type: 'line',
         xAxisIndex: i,
         yAxisIndex: i,
         showSymbol: false,
         lineStyle: { type: 'dashed', width: 1, color: '#fa8c16' },
-        data: buildToleranceCurve(xData.length, interruptY)
+        data: buildHorizontalLineData(xTimes, interruptY)
       })
     }
 
@@ -1308,7 +1502,7 @@ function updateRawChart() {
       if (!Number.isFinite(s) || !Number.isFinite(e)) continue
       const si = findNearestIndex(xTimes, s)
       const ei = findNearestIndex(xTimes, e)
-      markAreas.push([{ xAxis: xData[si] }, { xAxis: xData[ei] }])
+      markAreas.push([{ xAxis: xTimes[si] }, { xAxis: xTimes[ei] }])
     }
     if (markAreas.length) {
       series[baseSeriesIndex].markArea = {
@@ -1326,7 +1520,7 @@ function updateRawChart() {
       if (!Number.isFinite(t)) continue
       const idx2 = findNearestIndex(xTimes, t)
       lines.push({
-        xAxis: xData[idx2],
+        xAxis: xTimes[idx2],
         name: String(m?.label || m?.kind || ''),
         label: { show: true, formatter: String(m?.label || ''), fontSize: 10 }
       })
@@ -1340,23 +1534,40 @@ function updateRawChart() {
     }
   })
 
+  const currentZoom = getCurrentZoomRangeMs()
+  const defaultZoom = getDefaultZoomRangeMs(xTimes)
+  const zoom = currentZoom || state.rawZoomState || (!state.rawZoomApplied ? defaultZoom : null)
+
+  if (!state.rawZoomApplied && zoom) {
+    state.rawZoomApplied = true
+    state.rawZoomState = { ...zoom }
+  }
+
+  const xAxisIndices = selected.map((_x, i) => i)
+
   state.rawChart.setOption({
+    animation: false,
+    grid: grids,
+    xAxis,
+    yAxis,
     tooltip: {
       trigger: 'axis',
       confine: true,
-      axisPointer: { type: 'cross', snap: true },
+      axisPointer: { type: 'cross', snap: false },
       formatter: (params) => {
         const list = Array.isArray(params) ? params : []
         if (!list.length) return ''
-        const axisValue = list[0]?.axisValue
-        const title = axisValue !== undefined && axisValue !== null ? `${String(axisValue)} ms` : '-'
+        const axisValue = Number(list[0]?.axisValue)
+        const title = Number.isFinite(axisValue) ? formatAbsTimeFromOffsetMs(axisValue) : '-'
 
         const lines = [`<div><b>${escapeHtml(title)}</b></div>`]
         for (const p of list) {
           const name = String(p?.seriesName || '')
           if (!name) continue
           if (name.includes('阈值-')) continue
-          const v = Number(p?.data)
+
+          const rawVal = Array.isArray(p?.data) ? p.data[1] : p?.data
+          const v = Number(rawVal)
           const valText = Number.isFinite(v) ? v.toFixed(3) : '-'
           const color = typeof p?.color === 'string' ? p.color : '#909399'
           lines.push(
@@ -1366,16 +1577,29 @@ function updateRawChart() {
         return lines.join('')
       }
     },
-    animation: false,
-    grid: grids,
-    xAxis,
-    yAxis,
     dataZoom: [
-      { type: 'inside', xAxisIndex: selected.map((_, i) => i) },
-      { type: 'slider', xAxisIndex: selected.map((_, i) => i), bottom: 15 }
+      {
+        id: 'rawInsideZoom',
+        type: 'inside',
+        xAxisIndex: xAxisIndices,
+        filterMode: 'none',
+        startValue: zoom ? zoom.start : undefined,
+        endValue: zoom ? zoom.end : undefined
+      },
+      {
+        id: 'rawSliderZoom',
+        type: 'slider',
+        xAxisIndex: xAxisIndices,
+        filterMode: 'none',
+        height: 20,
+        bottom: 22,
+        startValue: zoom ? zoom.start : undefined,
+        endValue: zoom ? zoom.end : undefined
+      }
     ],
     series
   }, true)
+
   state.rawChart.resize()
   scheduleMarkerRender()
 
@@ -1392,7 +1616,7 @@ function buildReportLines() {
   const rows = (state.process?.computedEvents || []).slice()
   const lines = []
   const refV = getRefVoltage()
-  lines.push(`本报告基于事件识别结果与RMS曲线（窗口：${state.rmsWindowCycles}周波，更新：${state.rmsHopCycles}周波）。`)
+  lines.push('本报告基于事件识别结果与RMS曲线（窗口：1周波，更新：半周波）。')
   lines.push(`参考电压：${refV ? refV.toFixed(2) : '-'} V；暂降阈值：${formatPercent(state.params.sagThresholdPct)}%；中断阈值：${formatPercent(state.params.interruptThresholdPct)}%；迟滞：${formatPercent(state.params.hysteresisPct)}%；最小持续：${formatMs(state.params.minDurationMs)} ms。`)
 
   if (rows.length === 0) {
@@ -1491,7 +1715,6 @@ function buildReportLines() {
 
   lines.push('解读建议：优先查看最严重相的RMS下降与恢复过程，并结合容忍度曲线判断是否越界。')
 
-  // Tolerance curve analysis
   if (rows.length > 0) {
     const toleranceAnalysis = analyzeToleranceCurve(rows)
     if (toleranceAnalysis) {
@@ -1610,7 +1833,6 @@ function analyzeToleranceCurve(events) {
     }
   }
 
-  // Duration-based analysis
   const shortEvents = events.filter(evt => Number(evt.durationMs) <= 1000)
   const longEvents = events.filter(evt => Number(evt.durationMs) > 1000)
 
@@ -1645,19 +1867,35 @@ function renderReport() {
 function initCharts() {
   state.rawChart = echarts.init(byId('rawChart'))
   state.toleranceChart = echarts.init(byId('toleranceChart'))
-  state.rawChart.on('click', (params) => {
-    const x = Number(params?.event?.offsetX)
-    if (!Number.isFinite(x)) return
-    if (state.markerLeftXPixel === null) state.markerLeftXPixel = x
-    else if (state.markerRightXPixel === null) state.markerRightXPixel = x
-    else state.markerRightXPixel = x
-    scheduleMarkerRender()
+
+  const zr = state.rawChart.getZr && state.rawChart.getZr()
+  if (zr) {
+    zr.on('click', (e) => {
+      const x = Number(e?.offsetX ?? e?.event?.offsetX)
+      if (!Number.isFinite(x)) return
+      state.markerLeftXPixel = x
+      scheduleMarkerRender()
+    })
+    zr.on('contextmenu', (e) => {
+      try { e?.event?.preventDefault?.() } catch { }
+      const x = Number(e?.offsetX ?? e?.event?.offsetX)
+      if (!Number.isFinite(x)) return
+      state.markerRightXPixel = x
+      scheduleMarkerRender()
+    })
+  }
+
+  state.rawChart.on('datazoom', () => {
+    state.rawUserZoomed = true
+    saveRawZoomState()
   })
+
   window.addEventListener('resize', () => {
     state.rawChart && state.rawChart.resize()
     state.toleranceChart && state.toleranceChart.resize()
     scheduleMarkerRender()
   })
+
   scheduleMarkerRender()
 }
 
@@ -1665,6 +1903,7 @@ async function loadProcess() {
   const prevSelected = Array.from(state.selected)
   const prevHidden = new Set(Array.from(state.hidden))
   const prevRmsHidden = new Set(Array.from(state.rmsHidden))
+  state.rawZoomApplied = false
 
   let res = null
   try {
@@ -1678,6 +1917,7 @@ async function loadProcess() {
     alert((res && res.message) || '获取过程失败')
     return false
   }
+
   state.process = res.data
   state.analysisGuid = res.data.analysisGuid || ''
   state.voltageChannels = res.data.voltageChannels || []
@@ -1685,11 +1925,35 @@ async function loadProcess() {
   state.params.sagThresholdPct = Number(res.data?.event?.sagThresholdPct ?? 90) || 90
   state.params.interruptThresholdPct = Number(res.data?.event?.interruptThresholdPct ?? 10) || 10
   state.params.hysteresisPct = Number(res.data?.event?.hysteresisPct ?? 2) || 2
+  state.params.recoverThresholdPct = (res.data?.event?.recoverThresholdPct !== undefined && res.data?.event?.recoverThresholdPct !== null)
+    ? Number(res.data.event.recoverThresholdPct)
+    : null
   state.params.minDurationMs = Number(res.data?.event?.minDurationMs ?? 10) || 10
   renderHeader()
 
-  if (res.data.suggestedFromSample !== undefined && res.data.suggestedFromSample !== null) state.searchFromSample = Math.max(0, Number(res.data.suggestedFromSample))
-  if (res.data.suggestedToSample !== undefined && res.data.suggestedToSample !== null) state.searchToSample = Math.min(20000, Number(res.data.suggestedToSample))
+  state.totalSamples = 0
+  if (state.analysisGuid) {
+    try {
+      const detailRes = await zwavApi.getDetail(state.analysisGuid)
+      if (detailRes && detailRes.success && detailRes.data) {
+        const total = Number(detailRes.data.totalRecords ?? 0)
+        if (Number.isFinite(total) && total > 0) {
+          state.totalSamples = total
+          state.searchFromSample = 1
+          state.searchToSample = total
+        }
+      }
+    } catch { }
+  }
+
+  if (state.totalSamples <= 0) {
+    if (res.data.suggestedFromSample !== undefined && res.data.suggestedFromSample !== null) {
+      state.searchFromSample = Math.max(1, Number(res.data.suggestedFromSample))
+    }
+    if (res.data.suggestedToSample !== undefined && res.data.suggestedToSample !== null) {
+      state.searchToSample = Math.min(50000, Number(res.data.suggestedToSample))
+    }
+  }
 
   setInputValue('fromSample', state.searchFromSample)
   setInputValue('toSample', state.searchToSample)
@@ -1701,10 +1965,17 @@ async function loadProcess() {
   state.hidden.clear()
   state.rmsHidden.clear()
 
-  prevSelected.forEach((x) => {
-    const v = Number(x)
-    if (present.has(v)) state.selected.add(v)
-  })
+  if (prevSelected.length > 0) {
+    prevSelected.forEach((x) => {
+      const v = Number(x)
+      if (present.has(v)) state.selected.add(v)
+    })
+  } else {
+    state.voltageChannels.forEach((c) => {
+      const v = Number(c.channelIndex)
+      if (present.has(v)) state.selected.add(v)
+    })
+  }
   prevHidden.forEach((x) => {
     const v = Number(x)
     if (present.has(v)) state.hidden.add(v)
@@ -1714,15 +1985,11 @@ async function loadProcess() {
     if (present.has(v)) state.rmsHidden.add(v)
   })
 
-  if (!state.selected.size) {
-    const byPhase = (p) => state.voltageChannels.find((c) => String(c.phase || '').toUpperCase() === p)
-    const initPick = [byPhase('A'), byPhase('B'), byPhase('C')].filter(Boolean).map((x) => x.channelIndex)
-    if (initPick.length) initPick.forEach((x) => state.selected.add(x))
-    if (!state.selected.size) state.voltageChannels.slice(0, 3).forEach((x) => state.selected.add(x.channelIndex))
-  }
-
   if (prevRmsHidden.size === 0 && state.rmsHidden.size === 0) {
-    Array.from(state.selected).forEach((x) => state.rmsHidden.add(Number(x)))
+    state.voltageChannels.forEach((c) => {
+      const v = Number(c.channelIndex)
+      if (present.has(v)) state.rmsHidden.add(v)
+    })
   }
 
   renderChannelList()
@@ -1738,26 +2005,80 @@ async function fetchWaveData() {
     alert('请至少选择一个通道')
     return
   }
-  const params = {
-    channels: selected.join(','),
-    fromSample: state.searchFromSample,
-    toSample: state.searchToSample,
-    limit: state.searchLimit,
-    downSample: state.searchDownSample
+
+  const from = Math.max(1, Number(state.searchFromSample || 1))
+  const to = Math.max(from, Number(state.searchToSample || 0) || state.totalSamples || from)
+  const take = Math.max(1, Math.min(50000, Number(state.searchLimit || 50000)))
+  const downSample = Math.max(1, Number(state.searchDownSample || 1))
+
+  const allRows = []
+  let waveChannels = null
+  let cursor = from
+
+  while (cursor <= to) {
+    const chunkTo = Math.min(to, cursor + take - 1)
+    const params = {
+      channels: selected.join(','),
+      fromSample: cursor,
+      toSample: chunkTo,
+      limit: take,
+      downSample
+    }
+
+    let res = null
+    try {
+      res = await zwavApi.getWaveData(state.analysisGuid, params)
+    } catch (e) {
+      const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : String(e || '')
+      alert(msg ? `获取波形失败：${msg}` : '获取波形失败')
+      return
+    }
+    if (!res || !res.success || !res.data) {
+      alert((res && res.message) || '获取波形失败')
+      return
+    }
+
+    if (!waveChannels) waveChannels = Array.isArray(res.data.channels) ? res.data.channels.slice() : []
+    const rows = Array.isArray(res.data.rows) ? res.data.rows : []
+    if (!rows.length) {
+      cursor = chunkTo + 1
+      continue
+    }
+
+    const timeMul = Number(state.process?.timeMul ?? 0.001)
+    rows.forEach((r) => {
+      const sampleNo = Number(r?.sampleNo)
+      const timeRaw = Number(r?.timeRaw)
+      let timeMs = Number(r?.timeMs)
+      if ((!Number.isFinite(timeMs) || timeMs === 0) && Number.isFinite(timeRaw) && timeRaw !== 0 && Number.isFinite(timeMul) && timeMul > 0) {
+        timeMs = timeRaw * timeMul
+      }
+      allRows.push({
+        sampleNo: Number.isFinite(sampleNo) ? sampleNo : 0,
+        timeRaw: Number.isFinite(timeRaw) ? timeRaw : 0,
+        timeMs: Number.isFinite(timeMs) ? timeMs : 0,
+        analog: r?.analog,
+        digital: r?.digital
+      })
+    })
+
+    const lastSampleNo = Number(rows[rows.length - 1]?.sampleNo)
+    if (Number.isFinite(lastSampleNo) && lastSampleNo >= cursor) cursor = lastSampleNo + 1
+    else cursor = chunkTo + 1
   }
-  let res = null
-  try {
-    res = await zwavApi.getWaveData(state.analysisGuid, params)
-  } catch (e) {
-    const msg = e && typeof e === 'object' && 'message' in e ? String(e.message || '') : String(e || '')
-    alert(msg ? `获取波形失败：${msg}` : '获取波形失败')
-    return
+
+  allRows.sort((a, b) => Number(a.sampleNo) - Number(b.sampleNo))
+  state.lastWaveData = {
+    fromSample: from,
+    toSample: to,
+    downSample,
+    channels: waveChannels || [],
+    digitals: [],
+    rows: allRows
   }
-  if (!res || !res.success || !res.data) {
-    alert((res && res.message) || '获取波形失败')
-    return
-  }
-  state.lastWaveData = res.data
+  state.rawZoomApplied = false
+  state.rawUserZoomed = false
+  state.rawZoomState = null
   resetMarkers()
   updateRawChart()
 }
@@ -1772,14 +2093,35 @@ function setRecalcConfirmValue(id, v) {
   if (el) el.value = String(v ?? '')
 }
 
+function computeRecoverThresholdPct(sagThresholdPct, hysteresisPct) {
+  const sag = Number(sagThresholdPct)
+  const h = Number(hysteresisPct)
+  if (!Number.isFinite(sag) || !Number.isFinite(h)) return ''
+  return String(Math.max(sag, Math.min(100, sag + h)))
+}
+
+function syncRecalcRecoverThresholdIfAuto() {
+  if (!state.recalcRecoverAuto) return
+  const sag = byId('recalcSagThresholdPct')?.value
+  const hyst = byId('recalcHysteresisPct')?.value
+  const v = computeRecoverThresholdPct(sag, hyst)
+  if (v !== '') setRecalcConfirmValue('recalcRecoverThresholdPct', v)
+}
+
 function openRecalcConfirm() {
+  state.recalcRecoverAuto = true
   setRecalcConfirmValue('recalcReferenceVoltage', state.params.referenceVoltage ?? 0)
   setRecalcConfirmValue('recalcMinDurationMs', state.params.minDurationMs ?? 10)
   setRecalcConfirmValue('recalcSagThresholdPct', state.params.sagThresholdPct ?? 90)
   setRecalcConfirmValue('recalcInterruptThresholdPct', state.params.interruptThresholdPct ?? 10)
   setRecalcConfirmValue('recalcHysteresisPct', state.params.hysteresisPct ?? 2)
-  setRecalcConfirmValue('recalcRmsWindowCycles', state.rmsWindowCycles ?? 1)
-  setRecalcConfirmValue('recalcRmsHopCycles', state.rmsHopCycles ?? 0.5)
+  const recover = state.params.recoverThresholdPct
+  setRecalcConfirmValue(
+    'recalcRecoverThresholdPct',
+    Number.isFinite(Number(recover)) && Number(recover) > 0
+      ? recover
+      : computeRecoverThresholdPct(state.params.sagThresholdPct, state.params.hysteresisPct)
+  )
   openDialog('recalcConfirmModal')
 }
 
@@ -1790,25 +2132,23 @@ async function confirmRecalc() {
   state.params.sagThresholdPct = Number(byId('recalcSagThresholdPct')?.value || state.params.sagThresholdPct || 90)
   state.params.interruptThresholdPct = Number(byId('recalcInterruptThresholdPct')?.value || state.params.interruptThresholdPct || 10)
   state.params.hysteresisPct = Number(byId('recalcHysteresisPct')?.value || state.params.hysteresisPct || 2)
-  state.rmsWindowCycles = Number(byId('recalcRmsWindowCycles')?.value || state.rmsWindowCycles || 1)
-  state.rmsHopCycles = Number(byId('recalcRmsHopCycles')?.value || state.rmsHopCycles || 0.5)
+  const recoverVal = Number(byId('recalcRecoverThresholdPct')?.value || 0)
+  state.params.recoverThresholdPct = Number.isFinite(recoverVal) && recoverVal > 0 ? recoverVal : null
   await previewProcess()
   await fetchWaveData()
 }
 
 async function previewProcess() {
-  // Show loading state
   setHtml('reportBody', '<div class="report-line">正在重新计算暂降事件...</div>')
 
   try {
     const body = {
       referenceVoltage: state.params.referenceVoltage,
       sagThresholdPct: state.params.sagThresholdPct,
+      recoverThresholdPct: state.params.recoverThresholdPct,
       interruptThresholdPct: state.params.interruptThresholdPct,
       hysteresisPct: state.params.hysteresisPct,
-      minDurationMs: state.params.minDurationMs,
-      rmsWindowCycles: state.rmsWindowCycles,
-      rmsHopCycles: state.rmsHopCycles
+      minDurationMs: state.params.minDurationMs
     }
 
     const res = await zwavApi.sagPreviewProcess(state.eventId, body)
@@ -1824,21 +2164,19 @@ async function previewProcess() {
     }
 
     if (res.data.suggestedFromSample !== undefined && res.data.suggestedFromSample !== null) {
-      state.searchFromSample = Number(res.data.suggestedFromSample)
+      state.searchFromSample = Math.max(1, Number(res.data.suggestedFromSample))
       byId('fromSample').value = String(state.searchFromSample)
     }
     if (res.data.suggestedToSample !== undefined && res.data.suggestedToSample !== null) {
-      state.searchToSample = Math.min(20000, Number(res.data.suggestedToSample))
+      state.searchToSample = Math.min(50000, Number(res.data.suggestedToSample))
       byId('toSample').value = String(state.searchToSample)
     }
 
-    // Clear selection and re-render
     state.sagSelectedKeys.clear()
     renderSagTable()
     renderReport()
     updateRawChart()
 
-    // Show success message
     showAlert('success', '暂降事件重新计算完成')
   } catch (e) {
     alert(e.message || '预览失败')
@@ -1851,17 +2189,16 @@ function openApiModal() {
 }
 
 function applyWaveSettings() {
-  state.searchFromSample = Math.max(0, Number(byId('fromSample').value || 0))
-  state.searchToSample = Math.min(20000, Math.max(0, Number(byId('toSample').value || 0)))
-  if (state.searchToSample < state.searchFromSample) state.searchToSample = state.searchFromSample
-  state.searchLimit = Math.min(50000, Math.max(0, Number(byId('limit').value || 50000)))
+  state.searchFromSample = Math.max(1, Number(byId('fromSample').value || 1))
+  state.searchToSample = Math.min(50000, Math.max(state.searchFromSample, Number(byId('toSample').value || 20000)))
+  state.searchLimit = Math.min(50000, Math.max(100, Number(byId('limit').value || 50000)))
   state.searchDownSample = Math.max(1, Number(byId('downSample').value || 1))
   byId('fromSample').value = String(state.searchFromSample)
   byId('toSample').value = String(state.searchToSample)
   byId('limit').value = String(state.searchLimit)
   byId('downSample').value = String(state.searchDownSample)
   closeDialog('waveModal')
-  updateRawChart()
+  fetchWaveData()
 }
 
 function getRawViewportHeight() {
@@ -1894,7 +2231,7 @@ function toggleFullScreen() {
   if (scroll) {
     if (state.isFullScreen) {
       scroll.style.height = `${Math.max(200, Math.floor(getRawViewportHeight()))}px`
-      scroll.style.overflowY = 'hidden'
+      scroll.style.overflowY = 'auto'
     } else {
       scroll.style.height = ''
       scroll.style.overflowY = ''
@@ -1913,14 +2250,119 @@ function onKeyDown(e) {
   toggleFullScreen()
 }
 
-async function exportRms() {
+async function exportSamples() {
   try {
-    const res = await zwavApi.sagGetProcess(state.eventId)
-    if (!res || !res.success || !res.data) {
-      alert((res && res.message) || '导出失败')
+    const wave = state.lastWaveData
+    const selected = Array.from(state.selected || []).map((x) => Number(x)).filter((x) => Number.isFinite(x))
+    if (!selected.length) {
+      alert('请至少选择一个通道')
       return
     }
-    const rows = res.data.rmsPoints || []
+
+    const needFetch = !wave || !Array.isArray(wave.channels) || selected.some((x) => !wave.channels.includes(x))
+    if (needFetch) {
+      await fetchWaveData()
+    }
+
+    const w = state.lastWaveData
+    if (!w || !Array.isArray(w.rows) || w.rows.length === 0) {
+      alert('没有可导出的采样点数据')
+      return
+    }
+
+    const sel = selected.filter((x) => (w.channels || []).includes(x))
+    if (!sel.length) {
+      alert('所选通道没有采样数据')
+      return
+    }
+
+    const nameMap = new Map()
+      ; (state.voltageChannels || []).forEach((c) => {
+        nameMap.set(Number(c.channelIndex), String(c.channelName || ''))
+      })
+
+    const csvCell = (v) => {
+      const s = v === null || v === undefined ? '' : String(v)
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+      return s
+    }
+
+    const header = ['采样点号', '时间(ms)', '时间'].concat(sel.map((idx) => {
+      const nm = nameMap.get(Number(idx)) || ''
+      return nm ? `${idx}. ${nm}` : `CH${idx}`
+    }))
+    const lines = [header.map(csvCell).join(',')]
+
+    for (const r of w.rows) {
+      const sampleNo = r?.sampleNo ?? ''
+      const timeMs = r?.timeMs ?? ''
+      const absTime = formatAbsTimeFromOffsetMs(timeMs)
+      const analog = Array.isArray(r?.analog) ? r.analog : []
+      const row = [sampleNo, timeMs, absTime]
+      for (const idx of sel) {
+        const dataIndex = (w.channels || []).indexOf(idx)
+        const v = dataIndex >= 0 ? analog[dataIndex] : ''
+        row.push(v === null || v === undefined ? '' : v)
+      }
+      lines.push(row.map(csvCell).join(','))
+    }
+
+    const text = '\ufeff' + lines.join('\n')
+    const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' })
+    const base = String(state.process?.event?.originalName || `event-${state.eventId}`)
+    const from = Number(w.fromSample ?? '')
+    const to = Number(w.toSample ?? '')
+    const range = Number.isFinite(from) && Number.isFinite(to) ? `-${from}-${to}` : ''
+    downloadBlob(blob, `${base}-Samples${range}.csv`)
+  } catch (e) {
+    alert(e.message || '导出失败')
+  }
+}
+
+function openExportSamplesConfirm() {
+  const selected = Array.from(state.selected || []).map((x) => Number(x)).filter((x) => Number.isFinite(x))
+  if (!selected.length) {
+    alert('请至少选择一个通道')
+    return
+  }
+
+  const nameMap = new Map()
+    ; (state.voltageChannels || []).forEach((c) => {
+      nameMap.set(Number(c.channelIndex), String(c.channelName || ''))
+    })
+
+  const list = selected
+    .slice()
+    .sort((a, b) => a - b)
+    .map((idx) => {
+      const nm = nameMap.get(Number(idx)) || ''
+      return nm ? `${idx}. ${nm}` : `CH${idx}`
+    })
+
+  const from = state.searchFromSample
+  const to = state.searchToSample
+  const body = `
+    <div style="margin-bottom:8px;">将导出当前所选通道的采样点数据，确定继续吗？</div>
+    <div style="color: var(--el-text-color-secondary); font-size:12px; line-height:18px;">
+      <div>通道数：${list.length}</div>
+      <div>采样点范围：${escapeHtml(String(from))} ~ ${escapeHtml(String(to))}</div>
+    </div>
+    <div style="margin-top:10px; max-height: 220px; overflow:auto; padding:8px 10px; border:1px solid var(--el-border-color); border-radius:6px; background: var(--el-fill-color-light); font-size:12px; line-height:18px;">
+      ${list.map((x) => `<div>${escapeHtml(x)}</div>`).join('')}
+    </div>
+  `
+  setHtml('exportSamplesConfirmBody', body)
+  openDialog('exportSamplesConfirmModal')
+}
+
+async function confirmExportSamples() {
+  closeDialog('exportSamplesConfirmModal')
+  await exportSamples()
+}
+
+async function exportRms() {
+  try {
+    const rows = Array.isArray(state.process?.rmsPoints) ? state.process.rmsPoints.slice() : []
     if (!rows.length) {
       alert('没有可导出的RMS数据')
       return
@@ -1939,7 +2381,7 @@ async function exportRms() {
     const filtered = []
     Array.from(groups.values()).forEach((list) => {
       list.sort((a, b) => Number(a?.sampleNo ?? 0) - Number(b?.sampleNo ?? 0))
-      for (let i = 1; i < list.length; i++) filtered.push(list[i])
+      for (let i = 0; i < list.length; i++) filtered.push(list[i])
     })
     filtered.sort((a, b) => Number(a?.timeMs ?? 0) - Number(b?.timeMs ?? 0))
 
@@ -1948,18 +2390,31 @@ async function exportRms() {
       return
     }
 
-    const header = ['序号', '时间(ms)', '采样点号', '相别', '通道号', '均方根值', '均方根(%)', '参考电压']
+    const nameMap = new Map()
+      ; (state.voltageChannels || []).forEach((c) => {
+        nameMap.set(Number(c.channelIndex), String(c.channelName || ''))
+      })
+
+    const csvCell = (v) => {
+      const s = v === null || v === undefined ? '' : String(v)
+      if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`
+      return s
+    }
+
+    const header = ['序号', '时间(ms)', '采样点号', '相别', '通道名称', '均方根值', '均方根(%)', '参考电压']
     const lines = [header.join(',')]
     filtered.forEach((r) => {
+      const idx = Number(r?.channelIndex)
+      const chName = nameMap.get(idx) || ''
       lines.push([
-        r?.seqNo ?? '',
-        r?.timeMs ?? '',
-        r?.sampleNo ?? '',
-        r?.phase ?? '',
-        r?.channelIndex ?? '',
-        r?.rms ?? '',
-        r?.rmsPct ?? '',
-        r?.referenceVoltage ?? ''
+        csvCell(r?.seqNo ?? ''),
+        csvCell(r?.timeMs ?? ''),
+        csvCell(r?.sampleNo ?? ''),
+        csvCell(r?.phase ?? ''),
+        csvCell(chName || (r?.channelIndex ?? '')),
+        csvCell(r?.rms ?? ''),
+        csvCell(r?.rmsPct ?? ''),
+        csvCell(r?.referenceVoltage ?? '')
       ].join(','))
     })
 
@@ -1967,7 +2422,7 @@ async function exportRms() {
     const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
-    const name = String(res.data?.event?.originalName || `event-${state.eventId}`)
+    const name = String(state.process?.event?.originalName || `event-${state.eventId}`)
     a.href = url
     a.download = `${name}-RMS.csv`
     a.click()
@@ -2117,13 +2572,36 @@ function bindEvents() {
   on('btnLoadWave', 'click', fetchWaveData)
   on('btnWaveSetting', 'click', () => openDialog('waveModal'))
   on('btnApplyWave', 'click', applyWaveSettings)
+  on('btnRestoreZoom', 'click', restoreRawZoom)
   on('btnFullScreen', 'click', toggleFullScreen)
+  on('rawChart', 'dblclick', toggleFullScreen)
+  on('rawChart', 'contextmenu', (e) => {
+    try { e.preventDefault() } catch { }
+  })
+  on('btnExportSamples', 'click', openExportSamplesConfirm)
   on('btnExportRms', 'click', openExportConfirm)
   on('btnEventDetail', 'click', showEventDetail)
   on('btnResetMarkers', 'click', resetMarkers)
   on('btnCopyReport', 'click', copyReport)
   on('btnConfirmExportRms', 'click', confirmExportRms)
-  on('btnConfirmRecalc', 'click', confirmRecalc)
+  on('btnConfirmExportSamples', 'click', confirmExportSamples)
+
+  const recalcMask = byId('recalcConfirmModal')
+  if (recalcMask) {
+    recalcMask.addEventListener('click', (e) => {
+      const t = e.target
+      if (!t) return
+      if (t.id === 'btnConfirmRecalc' || (t.closest && t.closest('#btnConfirmRecalc'))) {
+        confirmRecalc()
+      }
+    })
+  }
+
+  on('recalcSagThresholdPct', 'input', () => syncRecalcRecoverThresholdIfAuto())
+  on('recalcHysteresisPct', 'input', () => syncRecalcRecoverThresholdIfAuto())
+  on('recalcRecoverThresholdPct', 'input', () => {
+    state.recalcRecoverAuto = false
+  })
 
   on('channelSearch', 'input', renderChannelList)
   on('analogCheckAll', 'change', () => {
@@ -2138,6 +2616,7 @@ function bindEvents() {
   bindDialog('waveModal')
   bindDialog('eventModal')
   bindDialog('exportConfirmModal')
+  bindDialog('exportSamplesConfirmModal')
   bindDialog('recalcConfirmModal')
 
   window.addEventListener('keydown', onKeyDown)

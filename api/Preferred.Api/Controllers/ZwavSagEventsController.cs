@@ -1,11 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Preferred.Api.Data;
 using Preferred.Api.Models;
 using Preferred.Api.Services;
 using Zwav.Application.Parsing;
@@ -27,14 +26,11 @@ namespace Preferred.Api.Controllers
     public class ZwavSagEventsController : ControllerBase
     {
         private readonly IZwavSagEventService _svc;
-        private readonly ApplicationDbContext _context;
 
         public ZwavSagEventsController(
-            IZwavSagEventService svc,
-            ApplicationDbContext context)
+            IZwavSagEventService svc)
         {
             _svc = svc;
-            _context = context;
         }
 
         /// <summary>
@@ -95,101 +91,6 @@ namespace Preferred.Api.Controllers
         }
 
         /// <summary>
-        /// 获取暂降事件详情
-        /// </summary>
-        [HttpGet("{id:int}")]
-        [ProducesResponseType(typeof(ApiResponse<ZwavSagDetailDto>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetDetailAsync([FromRoute] int id)
-        {
-            try
-            {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                var data = await _svc.GetDetailAsync(id);
-                if (data == null)
-                    return NotFound(new ApiErrorResponse { Message = "事件不存在" });
-
-                return Ok(new ApiResponse<ZwavSagDetailDto>
-                {
-                    Success = true,
-                    Message = "查询成功",
-                    Data = data
-                });
-            }
-            catch (Exception ex)
-            {
-                return ServerError("查询暂降事件详情失败", ex);
-            }
-        }
-
-        /// <summary>
-        /// 获取暂降事件相别明细
-        /// </summary>
-        [HttpGet("{id:int}/phases")]
-        [ProducesResponseType(typeof(ApiResponse<ZwavSagPhaseDto[]>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetPhasesAsync([FromRoute] int id)
-        {
-            try
-            {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                var detail = await _svc.GetDetailAsync(id);
-                if (detail == null)
-                    return NotFound(new ApiErrorResponse { Message = "事件不存在" });
-
-                var data = await _svc.GetPhasesAsync(id);
-
-                return Ok(new ApiResponse<ZwavSagPhaseDto[]>
-                {
-                    Success = true,
-                    Message = "查询成功",
-                    Data = data
-                });
-            }
-            catch (Exception ex)
-            {
-                return ServerError("查询暂降相别明细失败", ex);
-            }
-        }
-
-        /// <summary>
-        /// 根据录波文件ID查询暂降结果
-        /// </summary>
-        [HttpGet("by-file/{fileId:int}")]
-        [ProducesResponseType(typeof(ApiResponse<ZwavSagDetailDto[]>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetByFileAsync([FromRoute] int fileId)
-        {
-            try
-            {
-                if (fileId <= 0)
-                    return BadRequestApi("fileId 必须大于 0");
-
-                var data = await _svc.GetByFileIdAsync(fileId);
-
-                return Ok(new ApiResponse<ZwavSagDetailDto[]>
-                {
-                    Success = true,
-                    Message = "查询成功",
-                    Data = data
-                });
-            }
-            catch (Exception ex)
-            {
-                return ServerError("按录波文件查询暂降结果失败", ex);
-            }
-        }
-
-        /// <summary>
         /// 发起电压暂降分析
         /// 当前算法固定采用：1周波 RMS 窗口 + 半周波更新。
         /// 控制器层不再暴露 RMS 模式切换。
@@ -202,70 +103,6 @@ namespace Preferred.Api.Controllers
         public Task<IActionResult> AnalyzeAsync([FromBody] AnalyzeZwavSagRequest req)
         {
             return ExecuteAnalyzeAsync(req, "暂降分析完成");
-        }
-
-        /// <summary>
-        /// 重新分析指定录波文件的暂降结果
-        /// 当前算法固定采用：1周波 RMS 窗口 + 半周波更新。
-        /// 一般由前端显式传 ForceRebuild = true。
-        /// </summary>
-        [HttpPost("reanalyze")]
-        [Consumes("application/json")]
-        [ProducesResponseType(typeof(ApiResponse<AnalyzeZwavSagResponse>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public Task<IActionResult> ReAnalyzeAsync([FromBody] AnalyzeZwavSagRequest req)
-        {
-            if (req != null)
-                req.ForceRebuild = true;
-
-            return ExecuteAnalyzeAsync(req, "重新分析完成");
-        }
-
-        /// <summary>
-        /// 更新暂降事件（仅建议用于备注等有限字段修正）
-        /// </summary>
-        [HttpPatch("{id:int}")]
-        [Consumes("application/json")]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> UpdateAsync(
-            [FromRoute] int id,
-            [FromBody] UpdateZwavSagEventRequest req)
-        {
-            try
-            {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                if (req == null)
-                    return BadRequestApi("请求体不能为空");
-
-                var ok = await _svc.UpdateAsync(id, req);
-                if (!ok)
-                    return NotFound(new ApiErrorResponse { Message = "事件不存在" });
-
-                return Ok(new ApiResponse<object>
-                {
-                    Success = true,
-                    Message = "更新成功",
-                    Data = null
-                });
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequestApi(ex.Message);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return BadRequestApi(ex.Message);
-            }
-            catch (Exception ex)
-            {
-                return ServerError("更新暂降事件失败", ex);
-            }
         }
 
         /// <summary>
@@ -300,35 +137,6 @@ namespace Preferred.Api.Controllers
             }
         }
 
-        /// <summary>
-        /// 按录波文件删除全部暂降结果
-        /// </summary>
-        [HttpDelete("by-file/{fileId:int}")]
-        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> DeleteByFileAsync([FromRoute] int fileId)
-        {
-            try
-            {
-                if (fileId <= 0)
-                    return BadRequestApi("fileId 必须大于 0");
-
-                var deletedCount = await _svc.DeleteByFileIdAsync(fileId);
-
-                return Ok(new ApiResponse<object>
-                {
-                    Success = true,
-                    Message = $"删除成功，共删除 {deletedCount} 条事件",
-                    Data = null
-                });
-            }
-            catch (Exception ex)
-            {
-                return ServerError("按录波文件删除暂降结果失败", ex);
-            }
-        }
-
         [HttpGet("{id:int}/process")]
         [ProducesResponseType(typeof(ApiResponse<ZwavSagProcessDto>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
@@ -338,90 +146,7 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                var detail = await _svc.GetDetailAsync(id);
-                if (detail == null)
-                    return NotFound(new ApiErrorResponse { Message = "事件不存在" });
-
-                var phases = await _svc.GetPhasesAsync(id);
-
-                var analysis = await _context.ZwavAnalyses
-                    .AsNoTracking()
-                    .Where(x => x.FileId == detail.FileId)
-                    .OrderByDescending(x => x.Id)
-                    .FirstOrDefaultAsync();
-
-                if (analysis == null)
-                    return NotFound(new ApiErrorResponse { Message = "未找到对应解析任务" });
-
-                var cfg = await _context.ZwavCfgs
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.AnalysisId == analysis.Id);
-
-                decimal frequencyHz = 50m;
-                if (cfg?.FrequencyHz.HasValue == true && cfg.FrequencyHz.Value > 0)
-                    frequencyHz = cfg.FrequencyHz.Value;
-
-                decimal timeMul = 0.001m;
-                if (cfg?.TimeMul.HasValue == true && cfg.TimeMul.Value > 0)
-                    timeMul = cfg.TimeMul.Value;
-
-                var waveStartTimeUtc = analysis.StartTime ?? analysis.CrtTime;
-
-                var voltageChannels = await ResolveVoltageChannelsAsync(analysis.Id);
-
-                var rmsPoints = await _context.ZwavSagRmsPoints
-                    .AsNoTracking()
-                    .Where(x => x.SagEventId == id)
-                    .OrderBy(x => x.ChannelIndex)
-                    .ThenBy(x => x.SeqNo)
-                    .Select(x => new ZwavSagRmsPointDto
-                    {
-                        ChannelIndex = x.ChannelIndex,
-                        Phase = x.Phase,
-                        SampleNo = x.SampleNo,
-                        TimeMs = x.TimeMs,
-                        Rms = x.Rms,
-                        RmsPct = x.RmsPct,
-                        ReferenceVoltage = x.ReferenceVoltage,
-                        SeqNo = x.SeqNo
-                    })
-                    .ToListAsync();
-
-                decimal sagThreshold = detail.SagThresholdPct ?? 90m;
-                decimal interruptThreshold = detail.InterruptThresholdPct ?? 10m;
-                decimal hysteresis = detail.HysteresisPct ?? 2m;
-                decimal minDuration = 10m;
-
-                var computed = DetectPhaseEventsFromRms(
-                    rmsPoints.ToArray(),
-                    waveStartTimeUtc,
-                    sagThreshold,
-                    interruptThreshold,
-                    hysteresis,
-                    minDuration);
-
-                var markers = BuildMarkers(detail, phases, waveStartTimeUtc, rmsPoints, computed);
-                var suggested = SuggestSampleRange(computed, rmsPoints.ToArray());
-
-                var data = new ZwavSagProcessDto
-                {
-                    Event = detail,
-                    Phases = phases,
-                    AnalysisId = analysis.Id,
-                    AnalysisGuid = analysis.AnalysisGuid,
-                    WaveStartTimeUtc = waveStartTimeUtc,
-                    FrequencyHz = frequencyHz,
-                    TimeMul = timeMul,
-                    VoltageChannels = voltageChannels,
-                    RmsPoints = rmsPoints.ToArray(),
-                    Markers = markers,
-                    ComputedEvents = computed,
-                    SuggestedFromSample = suggested.fromSample,
-                    SuggestedToSample = suggested.toSample
-                };
+                var data = await _svc.GetProcessAsync(id);
 
                 return Ok(new ApiResponse<ZwavSagProcessDto>
                 {
@@ -429,6 +154,14 @@ namespace Preferred.Api.Controllers
                     Message = "查询成功",
                     Data = data
                 });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiErrorResponse { Message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
             }
             catch (Exception ex)
             {
@@ -448,81 +181,7 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                var detail = await _svc.GetDetailAsync(id);
-                if (detail == null)
-                    return NotFound(new ApiErrorResponse { Message = "事件不存在" });
-
-                var phases = await _svc.GetPhasesAsync(id);
-
-                var analysis = await _context.ZwavAnalyses
-                    .AsNoTracking()
-                    .Where(x => x.FileId == detail.FileId)
-                    .OrderByDescending(x => x.Id)
-                    .FirstOrDefaultAsync();
-
-                if (analysis == null)
-                    return NotFound(new ApiErrorResponse { Message = "未找到对应解析任务" });
-
-                var waveStartTimeUtc = analysis.StartTime ?? analysis.CrtTime;
-
-                decimal sagThreshold = req?.SagThresholdPct ?? detail.SagThresholdPct ?? 90m;
-                decimal interruptThreshold = req?.InterruptThresholdPct ?? detail.InterruptThresholdPct ?? 10m;
-                decimal hysteresis = req?.HysteresisPct ?? detail.HysteresisPct ?? 2m;
-                decimal minDuration = req?.MinDurationMs ?? 10m;
-
-                decimal? overrideRef = req?.ReferenceVoltage;
-                if (overrideRef.HasValue && overrideRef.Value <= 0)
-                    overrideRef = null;
-
-                var raw = await _context.ZwavSagRmsPoints
-                    .AsNoTracking()
-                    .Where(x => x.SagEventId == id)
-                    .OrderBy(x => x.SampleNo)
-                    .ThenBy(x => x.ChannelIndex)
-                    .ThenBy(x => x.SeqNo)
-                    .ToListAsync();
-
-                var rmsPoints = raw
-                    .Select(x =>
-                    {
-                        var refV = overrideRef ?? x.ReferenceVoltage;
-                        var pct = refV > 0 ? decimal.Round(x.Rms / refV * 100m, 3) : x.RmsPct;
-
-                        return new ZwavSagRmsPointDto
-                        {
-                            ChannelIndex = x.ChannelIndex,
-                            Phase = x.Phase,
-                            SampleNo = x.SampleNo,
-                            TimeMs = x.TimeMs,
-                            Rms = x.Rms,
-                            RmsPct = pct,
-                            ReferenceVoltage = refV,
-                            SeqNo = x.SeqNo
-                        };
-                    })
-                    .ToArray();
-
-                var computed = DetectPhaseEventsFromRms(
-                    rmsPoints,
-                    waveStartTimeUtc,
-                    sagThreshold,
-                    interruptThreshold,
-                    hysteresis,
-                    minDuration);
-                var markers = BuildMarkers(detail, phases, waveStartTimeUtc, rmsPoints.ToList(), computed);
-                var suggested = SuggestSampleRange(computed, rmsPoints);
-
-                var data = new ZwavSagProcessPreviewResponse
-                {
-                    RmsPoints = rmsPoints,
-                    Markers = markers,
-                    ComputedEvents = computed,
-                    SuggestedFromSample = suggested.fromSample,
-                    SuggestedToSample = suggested.toSample
-                };
+                var data = await _svc.PreviewProcessAsync(id, req);
 
                 return Ok(new ApiResponse<ZwavSagProcessPreviewResponse>
                 {
@@ -530,6 +189,14 @@ namespace Preferred.Api.Controllers
                     Message = "预览成功",
                     Data = data
                 });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiErrorResponse { Message = ex.Message });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
             }
             catch (Exception ex)
             {
@@ -551,45 +218,7 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                if (page <= 0)
-                    return BadRequestApi("page 必须大于 0");
-
-                if (pageSize <= 0 || pageSize > 200)
-                    return BadRequestApi("pageSize 必须在 1~200 之间");
-
-                var query = _context.ZwavSagChannelRules.AsNoTracking().AsQueryable();
-
-                if (!string.IsNullOrWhiteSpace(keyword))
-                {
-                    query = query.Where(x => x.RuleName.Contains(keyword));
-                }
-
-                var total = await query.CountAsync();
-
-                var items = await query
-                    .OrderBy(x => x.SeqNo)
-                    .ThenBy(x => x.Id)
-                    .Skip((page - 1) * pageSize)
-                    .Take(pageSize)
-                    .Select(x => new ZwavSagChannelRuleDto
-                    {
-                        Id = x.Id,
-                        RuleName = x.RuleName,
-                        PhaseName = x.PhaseName,
-                        SeqNo = x.SeqNo,
-                        CrtTime = x.CrtTime,
-                        UpdTime = x.UpdTime
-                    })
-                    .ToListAsync();
-
-                var data = new PagedResult<ZwavSagChannelRuleDto>
-                {
-                    Data = items,
-                    Total = total,
-                    Page = page,
-                    PageSize = pageSize,
-                    TotalPages = (int)Math.Ceiling(total / (double)pageSize)
-                };
+                var data = await _svc.QueryChannelRuleAsync(keyword, page, pageSize);
 
                 return Ok(new ApiResponse<PagedResult<ZwavSagChannelRuleDto>>
                 {
@@ -598,54 +227,17 @@ namespace Preferred.Api.Controllers
                     Data = data
                 });
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
             catch (Exception ex)
             {
                 return ServerError("查询暂降通道词库失败", ex);
-            }
-        }
-
-        /// <summary>
-        /// 获取暂降通道词库详情
-        /// </summary>
-        [HttpGet("channel-rules/{id:int}")]
-        [ProducesResponseType(typeof(ApiResponse<ZwavSagChannelRuleDto>), StatusCodes.Status200OK)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
-        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
-        public async Task<IActionResult> GetChannelRuleDetailAsync([FromRoute] int id)
-        {
-            try
-            {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                var entity = await _context.ZwavSagChannelRules
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.Id == id);
-
-                if (entity == null)
-                    return NotFound(new ApiErrorResponse { Message = "词库规则不存在" });
-
-                var data = new ZwavSagChannelRuleDto
-                {
-                    Id = entity.Id,
-                    RuleName = entity.RuleName,
-                    PhaseName = entity.PhaseName,
-                    SeqNo = entity.SeqNo,
-                    CrtTime = entity.CrtTime,
-                    UpdTime = entity.UpdTime
-                };
-
-                return Ok(new ApiResponse<ZwavSagChannelRuleDto>
-                {
-                    Success = true,
-                    Message = "查询成功",
-                    Data = data
-                });
-            }
-            catch (Exception ex)
-            {
-                return ServerError("查询暂降通道词库详情失败", ex);
             }
         }
 
@@ -661,49 +253,7 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                if (req == null)
-                    return BadRequestApi("请求体不能为空");
-
-                if (string.IsNullOrWhiteSpace(req.RuleName))
-                    return BadRequestApi("RuleName 不能为空");
-
-                if (string.IsNullOrWhiteSpace(req.PhaseName))
-                    return BadRequestApi("PhaseName 不能为空");
-
-                var ruleName = req.RuleName.Trim();
-                var phaseName = NormalizePhaseName(req.PhaseName);
-                if (string.IsNullOrWhiteSpace(phaseName))
-                    return BadRequestApi("PhaseName 必须为 A/B/C/AB/BC/CA");
-
-                var exists = await _context.ZwavSagChannelRules
-                    .AnyAsync(x => x.RuleName == ruleName);
-
-                if (exists)
-                    return BadRequestApi("词库规则已存在");
-
-                var now = DateTime.UtcNow;
-
-                var entity = new ZwavSagChannelRule
-                {
-                    RuleName = ruleName,
-                    PhaseName = phaseName,
-                    SeqNo = req.SeqNo,
-                    CrtTime = now,
-                    UpdTime = now
-                };
-
-                _context.ZwavSagChannelRules.Add(entity);
-                await _context.SaveChangesAsync();
-
-                var data = new ZwavSagChannelRuleDto
-                {
-                    Id = entity.Id,
-                    RuleName = entity.RuleName,
-                    PhaseName = entity.PhaseName,
-                    SeqNo = entity.SeqNo,
-                    CrtTime = entity.CrtTime,
-                    UpdTime = entity.UpdTime
-                };
+                var data = await _svc.CreateChannelRuleAsync(req);
 
                 return Ok(new ApiResponse<ZwavSagChannelRuleDto>
                 {
@@ -711,6 +261,14 @@ namespace Preferred.Api.Controllers
                     Message = "新增成功",
                     Data = data
                 });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
             }
             catch (Exception ex)
             {
@@ -733,47 +291,9 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                if (req == null)
-                    return BadRequestApi("请求体不能为空");
-
-                var entity = await _context.ZwavSagChannelRules
-                    .FirstOrDefaultAsync(x => x.Id == id);
-
-                if (entity == null)
+                var ok = await _svc.UpdateChannelRuleAsync(id, req);
+                if (!ok)
                     return NotFound(new ApiErrorResponse { Message = "词库规则不存在" });
-
-                if (!string.IsNullOrWhiteSpace(req.RuleName))
-                {
-                    var ruleName = req.RuleName.Trim();
-
-                    var exists = await _context.ZwavSagChannelRules
-                        .AnyAsync(x => x.Id != id && x.RuleName == ruleName);
-
-                    if (exists)
-                        return BadRequestApi("词库规则已存在");
-
-                    entity.RuleName = ruleName;
-                }
-
-                if (!string.IsNullOrWhiteSpace(req.PhaseName))
-                {
-                    var phaseName = NormalizePhaseName(req.PhaseName);
-                    if (string.IsNullOrWhiteSpace(phaseName))
-                        return BadRequestApi("PhaseName 必须为 A/B/C/AB/BC/CA");
-                    entity.PhaseName = phaseName;
-                }
-
-                if (req.SeqNo.HasValue)
-                {
-                    entity.SeqNo = req.SeqNo.Value;
-                }
-
-                entity.UpdTime = DateTime.UtcNow;
-
-                await _context.SaveChangesAsync();
 
                 return Ok(new ApiResponse<object>
                 {
@@ -781,6 +301,14 @@ namespace Preferred.Api.Controllers
                     Message = "更新成功",
                     Data = null
                 });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
             }
             catch (Exception ex)
             {
@@ -800,17 +328,9 @@ namespace Preferred.Api.Controllers
         {
             try
             {
-                if (id <= 0)
-                    return BadRequestApi("id 必须大于 0");
-
-                var entity = await _context.ZwavSagChannelRules
-                    .FirstOrDefaultAsync(x => x.Id == id);
-
-                if (entity == null)
+                var ok = await _svc.DeleteChannelRuleAsync(id);
+                if (!ok)
                     return NotFound(new ApiErrorResponse { Message = "词库规则不存在" });
-
-                _context.ZwavSagChannelRules.Remove(entity);
-                await _context.SaveChangesAsync();
 
                 return Ok(new ApiResponse<object>
                 {
@@ -819,9 +339,146 @@ namespace Preferred.Api.Controllers
                     Data = null
                 });
             }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
             catch (Exception ex)
             {
                 return ServerError("删除暂降通道词库失败", ex);
+            }
+        }
+
+        [HttpGet("group-rules")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResult<ZwavSagGroupRuleDto>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetGroupRuleListAsync(
+            [FromQuery] string keyword,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                var data = await _svc.QueryGroupRuleAsync(keyword, page, pageSize);
+
+                return Ok(new ApiResponse<PagedResult<ZwavSagGroupRuleDto>>
+                {
+                    Success = true,
+                    Message = "查询成功",
+                    Data = data
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("查询暂降分组词库失败", ex);
+            }
+        }
+
+        [HttpPost("group-rules")]
+        [Consumes("application/json")]
+        [ProducesResponseType(typeof(ApiResponse<ZwavSagGroupRuleDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CreateGroupRuleAsync([FromBody] CreateZwavSagGroupRuleRequest req)
+        {
+            try
+            {
+                var data = await _svc.CreateGroupRuleAsync(req);
+
+                return Ok(new ApiResponse<ZwavSagGroupRuleDto>
+                {
+                    Success = true,
+                    Message = "新增成功",
+                    Data = data
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("新增暂降分组词库失败", ex);
+            }
+        }
+
+        [HttpPut("group-rules/{id:int}")]
+        [Consumes("application/json")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateGroupRuleAsync(
+            [FromRoute] int id,
+            [FromBody] UpdateZwavSagGroupRuleRequest req)
+        {
+            try
+            {
+                var ok = await _svc.UpdateGroupRuleAsync(id, req);
+                if (!ok)
+                    return NotFound(new ApiErrorResponse { Message = "分组规则不存在" });
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "更新成功",
+                    Data = null
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("更新暂降分组词库失败", ex);
+            }
+        }
+
+        [HttpDelete("group-rules/{id:int}")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteGroupRuleAsync([FromRoute] int id)
+        {
+            try
+            {
+                var ok = await _svc.DeleteGroupRuleAsync(id);
+                if (!ok)
+                    return NotFound(new ApiErrorResponse { Message = "分组规则不存在" });
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "删除成功",
+                    Data = null
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("删除暂降分组词库失败", ex);
             }
         }
 
@@ -877,308 +534,6 @@ namespace Preferred.Api.Controllers
                     Message = message,
                     Details = ex.Message
                 });
-        }
-
-        private async Task<ZwavSagVoltageChannelDto[]> ResolveVoltageChannelsAsync(int analysisId)
-        {
-            var rules = await Services.ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context);
-            if (rules.Length == 0)
-                return Array.Empty<ZwavSagVoltageChannelDto>();
-
-            var channels = await _context.ZwavChannels
-                .AsNoTracking()
-                .Where(x => x.AnalysisId == analysisId)
-                .Where(x => x.IsEnable == 1)
-                .Where(x => x.ChannelType == "Analog")
-                .OrderBy(x => x.ChannelIndex)
-                .ToListAsync();
-
-            var result = channels
-                .Select(ch =>
-                {
-                    var name = (ch.ChannelName ?? string.Empty).Trim();
-                    var code = (ch.ChannelCode ?? string.Empty).Trim();
-                    var unit = (ch.Unit ?? string.Empty).Trim();
-
-                    var phase = Services.ZwavSagVoltageChannelRuleMatcher.MatchPhase(name, code, unit, rules);
-                    if (string.IsNullOrWhiteSpace(phase))
-                        return null;
-
-                    return new ZwavSagVoltageChannelDto
-                    {
-                        ChannelIndex = ch.ChannelIndex,
-                        Phase = phase,
-                        ChannelCode = code,
-                        ChannelName = name,
-                        Unit = unit
-                    };
-                })
-                .Where(x => x != null)
-                .ToArray();
-
-            return result;
-        }
-
-        private static string NormalizePhaseName(string phaseName)
-        {
-            var p = (phaseName ?? string.Empty).Trim().ToUpperInvariant();
-            if (p == "A" || p == "B" || p == "C" || p == "AB" || p == "BC" || p == "CA")
-                return p;
-            return string.Empty;
-        }
-
-        private static ZwavSagMarkerDto[] BuildMarkers(
-            ZwavSagDetailDto detail,
-            ZwavSagPhaseDto[] phases,
-            DateTime waveStartTimeUtc,
-            System.Collections.Generic.List<ZwavSagRmsPointDto> rmsPoints,
-            ZwavSagComputedEventDto[] computedEvents = null)
-        {
-            var list = new System.Collections.Generic.List<ZwavSagMarkerDto>();
-
-            if (computedEvents != null && computedEvents.Length > 0)
-            {
-                foreach (var evt in computedEvents)
-                {
-                    list.Add(new ZwavSagMarkerDto { Kind = "EventStart", Phase = evt.Phase, TimeMs = evt.StartMs, Label = $"{evt.Phase} 开始" });
-                    list.Add(new ZwavSagMarkerDto { Kind = "EventEnd", Phase = evt.Phase, TimeMs = evt.EndMs, Label = $"{evt.Phase} 结束" });
-                }
-            }
-            else if (detail != null)
-            {
-                if (detail.StartTimeUtc.HasValue)
-                {
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "EventStart",
-                        Phase = detail.TriggerPhase,
-                        TimeMs = (detail.StartTimeUtc.Value - waveStartTimeUtc).TotalMilliseconds,
-                        Label = "事件开始"
-                    });
-                }
-
-                if (detail.EndTimeUtc.HasValue)
-                {
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "EventEnd",
-                        Phase = detail.EndPhase,
-                        TimeMs = (detail.EndTimeUtc.Value - waveStartTimeUtc).TotalMilliseconds,
-                        Label = "事件结束"
-                    });
-                }
-            }
-
-            if (phases != null && phases.Length > 0)
-            {
-                foreach (var p in phases)
-                {
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "PhaseStart",
-                        Phase = p.Phase,
-                        TimeMs = (p.StartTimeUtc - waveStartTimeUtc).TotalMilliseconds,
-                        Label = $"{p.Phase} 相开始"
-                    });
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "PhaseEnd",
-                        Phase = p.Phase,
-                        TimeMs = (p.EndTimeUtc - waveStartTimeUtc).TotalMilliseconds,
-                        Label = $"{p.Phase} 相结束"
-                    });
-                }
-            }
-
-            if (rmsPoints != null && rmsPoints.Count > 0)
-            {
-                System.Collections.Generic.IEnumerable<ZwavSagRmsPointDto> scope = rmsPoints.Where(x => x != null);
-                var worst = scope
-                    .OrderBy(x => x.RmsPct)
-                    .FirstOrDefault();
-
-                if (worst != null)
-                {
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "Worst",
-                        Phase = worst.Phase,
-                        TimeMs = worst.TimeMs,
-                        Label = "最小RMS%",
-                        Value = worst.RmsPct
-                    });
-                }
-            }
-
-            return list
-                .Where(x => x != null)
-                .Where(x => !double.IsNaN(x.TimeMs) && !double.IsInfinity(x.TimeMs))
-                .OrderBy(x => x.TimeMs)
-                .ToArray();
-        }
-
-        private static (int? fromSample, int? toSample) SuggestSampleRange(
-            ZwavSagComputedEventDto[] computedEvents,
-            ZwavSagRmsPointDto[] rmsPoints)
-        {
-            if (computedEvents == null || computedEvents.Length == 0)
-                return (null, null);
-
-            if (rmsPoints == null || rmsPoints.Length == 0)
-                return (null, null);
-
-            var startMs = computedEvents.Min(x => x.StartMs);
-            var endMs = computedEvents.Max(x => x.EndMs);
-            var fromMs = startMs - 1000;
-            var toMs = endMs + 1000;
-
-            var hits = rmsPoints
-                .Where(x => x != null)
-                .Where(x => x.TimeMs >= fromMs && x.TimeMs <= toMs)
-                .ToList();
-
-            if (hits.Count == 0)
-                return (null, null);
-
-            return (hits.Min(x => x.SampleNo), hits.Max(x => x.SampleNo));
-        }
-
-        private static ZwavSagComputedEventDto[] DetectPhaseEventsFromRms(
-            ZwavSagRmsPointDto[] rmsPoints,
-            DateTime waveStartTimeUtc,
-            decimal sagThresholdPct,
-            decimal interruptThresholdPct,
-            decimal hysteresisPct,
-            decimal minDurationMs)
-        {
-            if (rmsPoints == null || rmsPoints.Length == 0)
-                return Array.Empty<ZwavSagComputedEventDto>();
-
-            var phases = rmsPoints
-                .Where(x => x != null)
-                .Select(x => (x.Phase ?? string.Empty).Trim().ToUpperInvariant())
-                .Where(x => !string.IsNullOrWhiteSpace(x))
-                .Distinct()
-                .ToList();
-
-            if (phases.Count == 0)
-                return Array.Empty<ZwavSagComputedEventDto>();
-
-            decimal recoverThreshold = sagThresholdPct + hysteresisPct;
-            var results = new System.Collections.Generic.List<ZwavSagComputedEventDto>();
-
-            foreach (var phase in phases)
-            {
-                var rows = rmsPoints
-                    .Where(x => x != null)
-                    .Where(x => string.Equals((x.Phase ?? string.Empty).Trim(), phase, StringComparison.OrdinalIgnoreCase))
-                    .GroupBy(x => x.SampleNo)
-                    .Select(g => new PhaseRmsRow
-                    {
-                        SampleNo = g.Key,
-                        TimeMs = g.Min(x => x.TimeMs),
-                        RmsPct = g.Min(x => x.RmsPct)
-                    })
-                    .OrderBy(x => x.TimeMs)
-                    .ToList();
-
-                if (rows.Count == 0)
-                    continue;
-
-                bool inEvent = false;
-                int startIndex = -1;
-                decimal worstPct = decimal.MaxValue;
-
-                for (int i = 0; i < rows.Count; i++)
-                {
-                    var r = rows[i];
-                    bool below = r.RmsPct <= sagThresholdPct;
-                    bool recovered = r.RmsPct >= recoverThreshold;
-
-                    if (!inEvent && below)
-                    {
-                        inEvent = true;
-                        startIndex = i;
-                        worstPct = r.RmsPct;
-                        continue;
-                    }
-
-                    if (inEvent)
-                    {
-                        if (r.RmsPct < worstPct)
-                            worstPct = r.RmsPct;
-
-                        if (recovered)
-                        {
-                            int endIndex = System.Math.Max(startIndex, i - 1);
-                            var evt = BuildPhaseEvent(rows, startIndex, endIndex, phase, waveStartTimeUtc, worstPct, interruptThresholdPct);
-                            if (evt != null && evt.DurationMs >= minDurationMs)
-                                results.Add(evt);
-
-                            inEvent = false;
-                            startIndex = -1;
-                        }
-                    }
-                }
-
-                if (inEvent && startIndex >= 0)
-                {
-                    var evt = BuildPhaseEvent(rows, startIndex, rows.Count - 1, phase, waveStartTimeUtc, worstPct, interruptThresholdPct);
-                    if (evt != null && evt.DurationMs >= minDurationMs)
-                        results.Add(evt);
-                }
-            }
-
-            return results
-                .OrderBy(x => x.StartMs)
-                .ThenBy(x => x.Phase)
-                .ToArray();
-        }
-
-        private static ZwavSagComputedEventDto BuildPhaseEvent(
-            System.Collections.Generic.List<PhaseRmsRow> rows,
-            int startIndex,
-            int endIndex,
-            string phase,
-            DateTime waveStartTimeUtc,
-            decimal worstPct,
-            decimal interruptThresholdPct)
-        {
-            if (startIndex < 0 || endIndex < startIndex || endIndex >= rows.Count)
-                return null;
-
-            var start = rows[startIndex];
-            var end = rows[endIndex];
-
-            double startMs = start.TimeMs;
-            double endMs = end.TimeMs;
-            decimal duration = decimal.Round((decimal)System.Math.Max(0, endMs - startMs), 3);
-
-            var startTimeUtc = waveStartTimeUtc.AddMilliseconds(startMs);
-            var endTimeUtc = waveStartTimeUtc.AddMilliseconds(endMs);
-            var eventType = worstPct <= interruptThresholdPct ? "Interruption" : "Sag";
-            var sagMagnitude = decimal.Round(100m - worstPct, 3);
-
-            return new ZwavSagComputedEventDto
-            {
-                EventType = eventType,
-                Phase = phase,
-                OccurTimeUtc = startTimeUtc,
-                StartTimeUtc = startTimeUtc,
-                EndTimeUtc = endTimeUtc,
-                StartMs = startMs,
-                EndMs = endMs,
-                DurationMs = duration,
-                ResidualVoltagePct = decimal.Round(worstPct, 3),
-                SagMagnitudePct = sagMagnitude
-            };
-        }
-
-        private class PhaseRmsRow
-        {
-            public int SampleNo { get; set; }
-            public double TimeMs { get; set; }
-            public decimal RmsPct { get; set; }
         }
     }
 }

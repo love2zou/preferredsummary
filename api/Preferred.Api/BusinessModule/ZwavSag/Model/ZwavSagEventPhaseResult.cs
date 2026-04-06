@@ -7,6 +7,11 @@ namespace Zwav.Application.Sag
     /// </summary>
     public class ZwavSagEventPhaseResult
     {
+        /// <summary>通道索引</summary>
+        public int ChannelIndex { get; set; }
+        public string GroupName { get; set; }
+        /// <summary>通道名称</summary>
+        public string ChannelName { get; set; }
         /// <summary>相别（A/B/C 等）</summary>
         public string Phase { get; set; }
 

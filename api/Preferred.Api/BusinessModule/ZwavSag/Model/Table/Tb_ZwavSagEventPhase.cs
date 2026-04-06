@@ -14,6 +14,15 @@ namespace Preferred.Api.Models
         /// <summary>所属事件ID（关联 Tb_ZwavSagEvent）</summary>
         public int SagEventId { get; set; }
 
+        /// <summary>通道索引（CFG 中的通道索引）</summary>
+        public int? ChannelIndex { get; set; }
+
+        /// <summary>通道分组名称（例如：高压侧/中压侧/低压侧等）</summary>
+        public string GroupName { get; set; }
+
+        /// <summary>通道名称（例如：高压侧A相电压）</summary>
+        public string ChannelName { get; set; }
+
         /// <summary>相别（A/B/C 等）</summary>
         public string Phase { get; set; }
 

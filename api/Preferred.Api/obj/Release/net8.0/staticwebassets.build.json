@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "fwx00D4RLWO73Y4cCVXxb4Bq0Q1URBa1YboCsT1qx3g=",
+  "Hash": "PhhFRyh6Spdpnl6yPExxV3njMBxTU+m/jnXxDIK0qE8=",
   "Source": "Preferred.Api",
   "BasePath": "_content/Preferred.Api",
   "Mode": "Default",
@@ -10,7 +10,7 @@
     {
       "Name": "Preferred.Api\\wwwroot",
       "Source": "Preferred.Api",
-      "ContentRoot": "D:\\github\\preferredsummary\\api\\Preferred.Api\\wwwroot\\",
+      "ContentRoot": "d:\\github\\preferredsummary\\api\\Preferred.Api\\wwwroot\\",
       "BasePath": "_content/Preferred.Api",
       "Pattern": "**"
     }

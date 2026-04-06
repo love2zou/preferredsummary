@@ -9,6 +9,11 @@ namespace Zwav.Application.Sag
     /// </summary>
     public class ZwavSagEventResult
     {
+        /// <summary>通道索引</summary>
+        public int ChannelIndex { get; set; }
+        public string GroupName { get; set; }
+        /// <summary>通道名称</summary>
+        public string ChannelName { get; set; }
         /// <summary>事件类型：Sag/Interruption</summary>
         public string EventType { get; set; }
 

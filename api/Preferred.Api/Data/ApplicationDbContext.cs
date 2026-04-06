@@ -35,6 +35,7 @@ namespace Preferred.Api.Data
         public DbSet<ZwavSagEventPhase> ZwavSagEventPhases { get; set; }
         public DbSet<ZwavSagRmsPoint> ZwavSagRmsPoints { get; set; }
         public DbSet<ZwavSagChannelRule> ZwavSagChannelRules { get; set; }
+        public DbSet<ZwavSagGroupRule> ZwavSagGroupRules { get; set; }
         // ====================== ZWAV 电压暂降分析表映射 - End ======================
 
         // ====================== 视频分析表映射- Start======================
@@ -639,6 +640,17 @@ namespace Preferred.Api.Data
 
                 entity.Property(e => e.SagEventId).IsRequired();
 
+                entity.Property(e => e.ChannelIndex)
+                    .HasComment("通道序号（CFG 中的通道索引）");
+
+                entity.Property(e => e.GroupName)
+                    .HasMaxLength(100)
+                    .HasComment("通道分组名称（例如：高压侧/中压侧/低压侧等）");
+
+                entity.Property(e => e.ChannelName)
+                    .HasMaxLength(200)
+                    .HasComment("通道名称（例如：高压侧A相电压）");
+
                 entity.Property(e => e.Phase)
                     .HasMaxLength(16)
                     .HasComment("相别（A/B/C/AB/BC/CA）");
@@ -781,6 +793,16 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
             });   
+            modelBuilder.Entity<ZwavSagGroupRule>(entity =>
+            {
+                entity.ToTable("Tb_ZwavSagGroupRule");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.RuleName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.GroupName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+            });
             // ====================== 视频分析表映射 ======================
             modelBuilder.Entity<VideoAnalysisJob>(entity =>
             {

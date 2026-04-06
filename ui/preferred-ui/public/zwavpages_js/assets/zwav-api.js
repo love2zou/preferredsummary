@@ -123,6 +123,30 @@ export const zwavApi = {
     })
   },
 
+  sagGroupRuleList(params) {
+    return apiJson('/api/ZwavSagEvents/group-rules', { params })
+  },
+
+  sagGroupRuleDelete(id) {
+    return apiJson(`/api/ZwavSagEvents/group-rules/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    })
+  },
+
+  sagGroupRuleUpdate(id, body) {
+    return apiJson(`/api/ZwavSagEvents/group-rules/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body
+    })
+  },
+
+  sagGroupRuleCreate(body) {
+    return apiJson('/api/ZwavSagEvents/group-rules', {
+      method: 'POST',
+      body
+    })
+  },
+
   // Sag process API endpoints
   sagGetProcess(eventId) {
     return apiJson(`/api/ZwavSagEvents/${encodeURIComponent(eventId)}/process`)
@@ -131,13 +155,5 @@ export const zwavApi = {
   sagPreviewProcess(eventId, body) {
     return apiJson(`/api/ZwavSagEvents/${encodeURIComponent(eventId)}/process/preview`, { method: 'POST', body })
   },
-
-  sagGetWaveData(eventId, params) {
-    return apiJson(`/api/ZwavSagEvents/${encodeURIComponent(eventId)}/wavedata`, { params })
-  },
-
-  sagExportRms(eventId, params) {
-    return apiBlob(`/api/ZwavSagEvents/${encodeURIComponent(eventId)}/export-rms`, { params })
-  }
 }
 
