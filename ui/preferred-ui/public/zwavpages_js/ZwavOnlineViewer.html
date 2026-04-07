@@ -30,7 +30,7 @@
           <button class="el-button el-button--primary" id="btnFetch">加载/刷新波形</button>
           <span class="tip">提示：数据量大时请减少通道数</span>
           <div style="flex:1"></div>
-          <button class="icon-btn" id="btnExport" title="导出CSV">
+          <button class="icon-btn" id="btnExport" title="&#23548;&#20986;&#37319;&#26679;&#28857;&#25968;&#25454;">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path fill="currentColor" d="M5 20h14v-2H5v2zm7-18l-5 5h3v6h4V7h3l-5-5z" />
             </svg>
@@ -92,7 +92,7 @@
             </div>
           </div>
 
-          <div class="chart-wrapper">
+          <div class="chart-wrapper" id="chartWrapper">
             <div class="chart-scroll-container">
               <div id="zwavChart" class="chart-content"></div>
             </div>
@@ -258,6 +258,20 @@
           <button class="el-button" id="btnPickPrev">上一页</button>
           <button class="el-button" id="btnPickNext">下一页</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="exportConfirmModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">&#23548;&#20986;&#37319;&#26679;&#28857;&#25968;&#25454;</div>
+        <button class="el-dialog__close" data-dialog-close>脳</button>
+      </div>
+      <div class="el-dialog__body" id="exportConfirmBody"></div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>&#21462;&#28040;</button>
+        <button class="el-button el-button--primary" id="btnConfirmExport">&#30830;&#23450;&#23548;&#20986;</button>
       </div>
     </div>
   </div>

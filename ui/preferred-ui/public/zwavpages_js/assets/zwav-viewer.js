@@ -1,8 +1,12 @@
-import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, getApiBaseUrl, openDialog, parseFileNameFromContentDisposition, qs, setApiBaseUrl, setHtml, setText } from './common.js'
+import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, getApiBaseUrl, openDialog, qs, setApiBaseUrl, setHtml, setText } from './common.js'
 import { renderFileCheckboxList, renderSequence } from './sequence.js'
 import { zwavApi } from './zwav-api.js'
 
 const SERIES_COLORS = ['#1677ff', '#b56be6', '#f6a04b', '#52c41a', '#ff4d4f']
+const CURRENT_NAME_HINTS = ['电流', 'current']
+const VOLTAGE_NAME_HINTS = ['电压', 'voltage']
+const CURRENT_UNIT_HINTS = ['a', 'ka', 'ma']
+const VOLTAGE_UNIT_HINTS = ['v', 'kv', 'mv']
 
 const state = {
   guid: '',
@@ -42,6 +46,78 @@ function openApiModal() {
   openDialog('apiModal')
 }
 
+function normalizeChannelIndex(value) {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : value
+}
+
+function normalizeChannelText(channel) {
+  return String(channel?.channelName || '').trim().toLowerCase()
+}
+
+function normalizeChannelUnit(channel) {
+  return String(channel?.unit || '').trim().toLowerCase()
+}
+
+function isCurrentLikeChannel(channel) {
+  const name = normalizeChannelText(channel)
+  const unit = normalizeChannelUnit(channel)
+  if (CURRENT_NAME_HINTS.some((hint) => name.includes(hint))) return true
+  if (CURRENT_UNIT_HINTS.includes(unit)) return true
+  return /\bi[abc0n]\b/i.test(String(channel?.channelName || ''))
+}
+
+function isVoltageLikeChannel(channel) {
+  const name = normalizeChannelText(channel)
+  const unit = normalizeChannelUnit(channel)
+  if (VOLTAGE_NAME_HINTS.some((hint) => name.includes(hint))) return true
+  if (VOLTAGE_UNIT_HINTS.includes(unit)) return true
+  return /\bu[abc0n]\b/i.test(String(channel?.channelName || ''))
+}
+
+function getDefaultAnalogSelection(channels) {
+  const selected = []
+  const seen = new Set()
+  ; (channels || []).forEach((channel) => {
+    const idx = normalizeChannelIndex(channel?.channelIndex)
+    if (!Number.isFinite(Number(idx)) && typeof idx !== 'string') return
+    if (seen.has(idx)) return
+    if (!isCurrentLikeChannel(channel) && !isVoltageLikeChannel(channel)) return
+    seen.add(idx)
+    selected.push(idx)
+  })
+  if (selected.length > 0) return selected
+  return (channels || []).slice(0, 3).map((channel) => normalizeChannelIndex(channel?.channelIndex))
+}
+
+function getOrderedSelectedIndices(channels, selectedSet) {
+  return (channels || [])
+    .map((channel) => normalizeChannelIndex(channel?.channelIndex))
+    .filter((idx) => selectedSet.has(idx))
+}
+
+function getCurrentWaveSelection() {
+  return {
+    analog: getOrderedSelectedIndices(state.analogChannels, state.selectedAnalog),
+    digital: getOrderedSelectedIndices(state.digitalChannels, state.selectedDigital)
+  }
+}
+
+function buildWaveParams(analogChannels, digitalChannels) {
+  return {
+    channels: analogChannels.join(','),
+    digitals: digitalChannels.join(','),
+    fromSample: state.searchFromSample,
+    toSample: state.searchToSample,
+    limit: state.searchLimit,
+    downSample: state.searchDownSample
+  }
+}
+
+async function requestWaveData(analogChannels, digitalChannels) {
+  return zwavApi.getWaveData(state.guid, buildWaveParams(analogChannels, digitalChannels))
+}
+
 async function init() {
   state.guid = String(qs('guid') || '').trim()
   if (!state.guid) {
@@ -75,7 +151,8 @@ async function loadAll() {
     const fileName = state.detail?.file?.originalName || ''
     setText('fileNameText', fileName ? `| ${fileName}` : '')
 
-    if (state.analogChannels.length) state.analogChannels.slice(0, 3).forEach((c) => state.selectedAnalog.add(c.channelIndex))
+    state.selectedAnalog.clear()
+    getDefaultAnalogSelection(state.analogChannels).forEach((channelIndex) => state.selectedAnalog.add(channelIndex))
     renderChannelLists()
     renderRightPanel()
 
@@ -108,38 +185,40 @@ function renderChannelLists() {
 
   const analogAllEl = byId('analogCheckAll')
   if (analogAllEl) {
-    const checkedCount = analog.filter((c) => state.selectedAnalog.has(c.channelIndex)).length
+    const checkedCount = analog.filter((c) => state.selectedAnalog.has(normalizeChannelIndex(c.channelIndex))).length
     analogAllEl.checked = analog.length > 0 && checkedCount === analog.length
     analogAllEl.indeterminate = checkedCount > 0 && checkedCount < analog.length
   }
   const digitalAllEl = byId('digitalCheckAll')
   if (digitalAllEl) {
-    const checkedCount = digital.filter((c) => state.selectedDigital.has(c.channelIndex)).length
+    const checkedCount = digital.filter((c) => state.selectedDigital.has(normalizeChannelIndex(c.channelIndex))).length
     digitalAllEl.checked = digital.length > 0 && checkedCount === digital.length
     digitalAllEl.indeterminate = checkedCount > 0 && checkedCount < digital.length
   }
 
   byId('analogList').innerHTML = analog
     .map((c) => {
-      const id = `a_${c.channelIndex}`
-      const checked = state.selectedAnalog.has(c.channelIndex) ? 'checked' : ''
-      const name = `${c.channelIndex}. ${c.channelName || ''}`
-      return `<div class="channel-item"><input class="analog-check" type="checkbox" id="${id}" data-idx="${c.channelIndex}" ${checked}/><label for="${id}" title="${escapeHtml(name)}">${escapeHtml(name)}</label></div>`
+      const idx = normalizeChannelIndex(c.channelIndex)
+      const id = `a_${idx}`
+      const checked = state.selectedAnalog.has(idx) ? 'checked' : ''
+      const name = `${idx}. ${c.channelName || ''}`
+      return `<div class="channel-item"><input class="analog-check" type="checkbox" id="${id}" data-idx="${escapeHtml(idx)}" ${checked}/><label for="${id}" title="${escapeHtml(name)}">${escapeHtml(name)}</label></div>`
     })
     .join('')
 
   byId('digitalList').innerHTML = digital
     .map((c) => {
-      const id = `d_${c.channelIndex}`
-      const checked = state.selectedDigital.has(c.channelIndex) ? 'checked' : ''
-      const name = `${c.channelIndex}. ${c.channelName || ''}`
-      return `<div class="channel-item"><input class="digital-check" type="checkbox" id="${id}" data-idx="${c.channelIndex}" ${checked}/><label for="${id}" title="${escapeHtml(name)}">${escapeHtml(name)}</label></div>`
+      const idx = normalizeChannelIndex(c.channelIndex)
+      const id = `d_${idx}`
+      const checked = state.selectedDigital.has(idx) ? 'checked' : ''
+      const name = `${idx}. ${c.channelName || ''}`
+      return `<div class="channel-item"><input class="digital-check" type="checkbox" id="${id}" data-idx="${escapeHtml(idx)}" ${checked}/><label for="${id}" title="${escapeHtml(name)}">${escapeHtml(name)}</label></div>`
     })
     .join('')
 
   byId('analogList').querySelectorAll('.analog-check').forEach((el) => {
     el.addEventListener('change', () => {
-      const idx = Number(el.getAttribute('data-idx'))
+      const idx = normalizeChannelIndex(el.getAttribute('data-idx'))
       if (el.checked) state.selectedAnalog.add(idx)
       else state.selectedAnalog.delete(idx)
       setText('analogCount', String(state.selectedAnalog.size))
@@ -148,7 +227,7 @@ function renderChannelLists() {
 
   byId('digitalList').querySelectorAll('.digital-check').forEach((el) => {
     el.addEventListener('change', () => {
-      const idx = Number(el.getAttribute('data-idx'))
+      const idx = normalizeChannelIndex(el.getAttribute('data-idx'))
       if (el.checked) state.selectedDigital.add(idx)
       else state.selectedDigital.delete(idx)
       setText('digitalCount', String(state.selectedDigital.size))
@@ -157,7 +236,7 @@ function renderChannelLists() {
 }
 
 function toggleFullScreen() {
-  const el = document.querySelector('.left-panel')
+  const el = byId('chartWrapper') || document.querySelector('.chart-wrapper')
   if (!el) return
   if (!document.fullscreenElement) {
     el.requestFullscreen().catch(() => { })
@@ -463,11 +542,59 @@ function initChart() {
     refreshMarkerSummary()
     renderMarkerGraphics()
   })
-  window.addEventListener('resize', () => {
-    if (!state.chart) return
-    state.chart.resize()
-    refreshMarkerSummary()
-    renderMarkerGraphics()
+  bindChartCanvasInteractions()
+  window.addEventListener('resize', resizeChartAndMarkers)
+  document.addEventListener('fullscreenchange', resizeChartAndMarkers)
+}
+
+function resizeChartAndMarkers() {
+  if (!state.chart) return
+  state.chart.resize()
+  refreshMarkerSummary()
+  renderMarkerGraphics()
+}
+
+function getPointerPosition(evt) {
+  const nativeEvent = evt?.event || evt
+  const x = Number(nativeEvent?.offsetX ?? nativeEvent?.zrX)
+  const y = Number(nativeEvent?.offsetY ?? nativeEvent?.zrY)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null
+  return { x, y, nativeEvent }
+}
+
+function isWaveAreaPoint(x, y) {
+  const data = state.lastWaveData
+  const rect = getGridRect()
+  if (!data || !Array.isArray(data.rows) || data.rows.length === 0 || !rect) return false
+  const { minY, maxY } = getAllGridYRange()
+  return x >= rect.x && x <= rect.x + rect.width && y >= minY && y <= maxY
+}
+
+function handleMarkerCanvasPointer(side, evt) {
+  const point = getPointerPosition(evt)
+  if (!point || !isWaveAreaPoint(point.x, point.y)) return false
+  if (side === 'right') {
+    point.nativeEvent?.preventDefault?.()
+    point.nativeEvent?.stopPropagation?.()
+  }
+  updateMarkerByPixelX(side, point.x)
+  renderMarkerGraphics()
+  return true
+}
+
+function bindChartCanvasInteractions() {
+  if (!state.chart || !state.chart.getZr) return
+  const zr = state.chart.getZr()
+  zr.on('click', (evt) => {
+    handleMarkerCanvasPointer('left', evt)
+  })
+  zr.on('contextmenu', (evt) => {
+    handleMarkerCanvasPointer('right', evt)
+  })
+  zr.on('dblclick', (evt) => {
+    const point = getPointerPosition(evt)
+    if (!point || !isWaveAreaPoint(point.x, point.y)) return
+    toggleFullScreen()
   })
 }
 
@@ -699,22 +826,15 @@ function resetMarkers() {
 }
 
 async function fetchWaveData() {
-  if (state.selectedAnalog.size === 0 && state.selectedDigital.size === 0) {
+  const selection = getCurrentWaveSelection()
+  if (selection.analog.length === 0 && selection.digital.length === 0) {
     alert('请至少选择一个通道')
     return
   }
 
   state.chart.showLoading()
   try {
-    const params = {
-      channels: Array.from(state.selectedAnalog).join(','),
-      digitals: Array.from(state.selectedDigital).join(','),
-      fromSample: state.searchFromSample,
-      toSample: state.searchToSample,
-      limit: state.searchLimit,
-      downSample: state.searchDownSample
-    }
-    const res = await zwavApi.getWaveData(state.guid, params)
+    const res = await requestWaveData(selection.analog, selection.digital)
     if (res && res.success && res.data) {
       state.lastWaveData = res.data
       updateChart(res.data)
@@ -736,14 +856,15 @@ function updateChart(data) {
   const digitalRawMap = new Map()
   const seriesItems = []
 
-  const analogSel = Array.from(state.selectedAnalog)
-  const digitalSel = Array.from(state.selectedDigital)
+  const selection = getCurrentWaveSelection()
+  const analogSel = selection.analog
+  const digitalSel = selection.digital
 
   analogSel.forEach((chIdx) => {
-    const chInfo = state.analogChannels.find((c) => c.channelIndex === chIdx)
+    const chInfo = state.analogChannels.find((c) => normalizeChannelIndex(c.channelIndex) === chIdx)
     const name = chInfo ? `${chInfo.channelIndex}. ${chInfo.channelName}` : `${chIdx}. CH${chIdx}`
     const unit = (chInfo && chInfo.unit) || 'A'
-    const dataIndex = data.channels ? data.channels.indexOf(chIdx) : -1
+    const dataIndex = Array.isArray(data.channels) ? data.channels.map((idx) => normalizeChannelIndex(idx)).indexOf(chIdx) : -1
     if (dataIndex === -1) return
     const channelData = data.rows.map((r) => r.analog[dataIndex])
     let max = -Infinity
@@ -757,9 +878,9 @@ function updateChart(data) {
   })
 
   digitalSel.forEach((chIdx) => {
-    const chInfo = state.digitalChannels.find((c) => c.channelIndex === chIdx)
+    const chInfo = state.digitalChannels.find((c) => normalizeChannelIndex(c.channelIndex) === chIdx)
     const name = chInfo ? `${chInfo.channelIndex}. ${chInfo.channelName}` : `D${chIdx}`
-    const dataIndex = data.digitals ? data.digitals.indexOf(chIdx) : -1
+    const dataIndex = Array.isArray(data.digitals) ? data.digitals.map((idx) => normalizeChannelIndex(idx)).indexOf(chIdx) : -1
     if (dataIndex === -1) return
     const raw = data.rows.map((r) => {
       const v = r.digital && r.digital[dataIndex] !== undefined ? r.digital[dataIndex] : 0
@@ -871,6 +992,7 @@ function updateChart(data) {
         symbol: 'none',
         sampling: 'lttb',
         data: item.analogData || [],
+        lineStyle: { width: 1 },
         markLine: { symbol: 'none', silent: true, data: [{ yAxis: 0 }], lineStyle: { color: '#ccc', type: 'solid', width: 1 } }
       })
       return
@@ -884,7 +1006,7 @@ function updateChart(data) {
       data: item.digitalLine0 || [],
       step: 'start',
       symbol: 'none',
-      lineStyle: { color: DIGITAL_GREEN, width: 2 },
+      lineStyle: { color: DIGITAL_GREEN, width: 1 },
       tooltip: { show: true },
       emphasis: { disabled: true }
     })
@@ -948,25 +1070,186 @@ function openStatsModal() {
       ${stats
       .map((s, i) => `<tr><td>${i + 1}</td><td>${escapeHtml(s.name)}</td><td style="color: var(--el-color-danger)">${Number(s.max).toFixed(3)}</td><td style="color: var(--el-color-primary)">${Number(s.min).toFixed(3)}</td></tr>`)
       .join('')}
-    </tbody></table>`
+  </tbody></table>`
   openDialog('statsModal')
 }
 
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value)
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`
+  return text
+}
+
+function getSelectedChannelMetas(channels, selectedSet) {
+  return (channels || []).filter((channel) => selectedSet.has(normalizeChannelIndex(channel?.channelIndex)))
+}
+
+function formatChannelDisplayName(channel, fallbackPrefix) {
+  const idx = normalizeChannelIndex(channel?.channelIndex)
+  const name = String(channel?.channelName || '').trim()
+  const unit = String(channel?.unit || '').trim()
+  const label = name ? `${idx}. ${name}` : `${fallbackPrefix}${idx}`
+  return unit ? `${label} (${unit})` : label
+}
+
+function buildExportConfirmSection(title, items) {
+  if (!items.length) {
+    return `
+      <div style="margin-top:10px;">
+        <div style="font-weight:700; margin-bottom:6px;">${escapeHtml(title)}</div>
+        <div style="padding:8px 10px; border:1px solid var(--el-border-color); border-radius:6px; background: var(--el-fill-color-light); color: var(--el-text-color-secondary); font-size:12px;">未选择</div>
+      </div>
+    `
+  }
+  return `
+    <div style="margin-top:10px;">
+      <div style="font-weight:700; margin-bottom:6px;">${escapeHtml(title)}（${items.length}）</div>
+      <div style="max-height:160px; overflow:auto; padding:8px 10px; border:1px solid var(--el-border-color); border-radius:6px; background: var(--el-fill-color-light); font-size:12px; line-height:18px;">
+        ${items.map((item) => `<div>${escapeHtml(item)}</div>`).join('')}
+      </div>
+    </div>
+  `
+}
+
+function openExportConfirmModal() {
+  const analogChannels = getSelectedChannelMetas(state.analogChannels, state.selectedAnalog)
+  const digitalChannels = getSelectedChannelMetas(state.digitalChannels, state.selectedDigital)
+  if (analogChannels.length === 0 && digitalChannels.length === 0) {
+    alert('请至少选择一个通道')
+    return
+  }
+
+  const analogNames = analogChannels.map((channel) => formatChannelDisplayName(channel, 'CH'))
+  const digitalNames = digitalChannels.map((channel) => formatChannelDisplayName(channel, 'D'))
+  const body = `
+    <div style="margin-bottom:8px;">将根据当前勾选的模拟通道、数字通道导出对应采样点数据，确认继续吗？</div>
+    <div style="color: var(--el-text-color-secondary); font-size:12px; line-height:18px;">
+      <div>采样范围：${escapeHtml(String(state.searchFromSample))} ~ ${escapeHtml(String(state.searchToSample))}</div>
+      <div>模拟通道：${analogNames.length} 个，数字通道：${digitalNames.length} 个</div>
+    </div>
+    ${buildExportConfirmSection('模拟通道', analogNames)}
+    ${buildExportConfirmSection('数字通道', digitalNames)}
+  `
+  setHtml('exportConfirmBody', body)
+  openDialog('exportConfirmModal')
+}
+
+function buildExportConfirmSectionFixed(title, items) {
+  if (!items.length) {
+    return `
+      <div style="margin-top:10px;">
+        <div style="font-weight:700; margin-bottom:6px;">${escapeHtml(title)}</div>
+        <div style="padding:8px 10px; border:1px solid var(--el-border-color); border-radius:6px; background: var(--el-fill-color-light); color: var(--el-text-color-secondary); font-size:12px;">${'\u672a\u9009\u62e9'}</div>
+      </div>
+    `
+  }
+  return `
+    <div style="margin-top:10px;">
+      <div style="font-weight:700; margin-bottom:6px;">${escapeHtml(title)}${'\uff08'}${items.length}${'\uff09'}</div>
+      <div style="max-height:160px; overflow:auto; padding:8px 10px; border:1px solid var(--el-border-color); border-radius:6px; background: var(--el-fill-color-light); font-size:12px; line-height:18px;">
+        ${items.map((item) => `<div>${escapeHtml(item)}</div>`).join('')}
+      </div>
+    </div>
+  `
+}
+
+function openExportConfirmModalFixed() {
+  const analogChannels = getSelectedChannelMetas(state.analogChannels, state.selectedAnalog)
+  const digitalChannels = getSelectedChannelMetas(state.digitalChannels, state.selectedDigital)
+  if (analogChannels.length === 0 && digitalChannels.length === 0) {
+    alert('请至少选择一个通道')
+    return
+  }
+
+  const analogNames = analogChannels.map((channel) => formatChannelDisplayName(channel, 'CH'))
+  const digitalNames = digitalChannels.map((channel) => formatChannelDisplayName(channel, 'D'))
+  const body = `
+    <div style="margin-bottom:8px;">${'\u5c06\u6839\u636e\u5f53\u524d\u52fe\u9009\u7684\u6a21\u62df\u901a\u9053\u3001\u6570\u5b57\u901a\u9053\u5bfc\u51fa\u5bf9\u5e94\u91c7\u6837\u70b9\u6570\u636e\uff0c\u786e\u8ba4\u7ee7\u7eed\u5417\uff1f'}</div>
+    <div style="color: var(--el-text-color-secondary); font-size:12px; line-height:18px;">
+      <div>${'\u91c7\u6837\u8303\u56f4\uff1a'}${escapeHtml(String(state.searchFromSample))} ~ ${escapeHtml(String(state.searchToSample))}</div>
+      <div>${'\u6a21\u62df\u901a\u9053\uff1a'}${analogNames.length}${'\u4e2a\uff0c\u6570\u5b57\u901a\u9053\uff1a'}${digitalNames.length}${'\u4e2a'}</div>
+    </div>
+    ${buildExportConfirmSectionFixed('\u6a21\u62df\u901a\u9053', analogNames)}
+    ${buildExportConfirmSectionFixed('\u6570\u5b57\u901a\u9053', digitalNames)}
+  `
+  setHtml('exportConfirmBody', body)
+  openDialog('exportConfirmModal')
+}
+
+function buildWaveCsv(data, analogChannels, digitalChannels) {
+  const analogIndices = analogChannels.map((channel) => normalizeChannelIndex(channel?.channelIndex))
+  const digitalIndices = digitalChannels.map((channel) => normalizeChannelIndex(channel?.channelIndex))
+  const waveAnalogIndices = Array.isArray(data?.channels) ? data.channels.map((idx) => normalizeChannelIndex(idx)) : []
+  const waveDigitalIndices = Array.isArray(data?.digitals) ? data.digitals.map((idx) => normalizeChannelIndex(idx)) : []
+  const header = ['采样点号', '时间(ms)']
+    .concat(analogChannels.map((channel) => formatChannelDisplayName(channel, 'CH')))
+    .concat(digitalChannels.map((channel) => formatChannelDisplayName(channel, 'D')))
+  const lines = [header.map(csvCell).join(',')]
+
+  ; (data?.rows || []).forEach((row, index) => {
+    const analogData = Array.isArray(row?.analog) ? row.analog : []
+    const digitalData = Array.isArray(row?.digital) ? row.digital : []
+    const record = [row?.sampleNo ?? index + 1, row?.timeMs ?? '']
+
+    analogIndices.forEach((channelIndex) => {
+      const dataIndex = waveAnalogIndices.indexOf(channelIndex)
+      const value = dataIndex >= 0 ? analogData[dataIndex] : ''
+      record.push(value ?? '')
+    })
+
+    digitalIndices.forEach((channelIndex) => {
+      const dataIndex = waveDigitalIndices.indexOf(channelIndex)
+      const value = dataIndex >= 0 ? digitalData[dataIndex] : ''
+      record.push(value ?? '')
+    })
+
+    lines.push(record.map(csvCell).join(','))
+  })
+
+  return '\ufeff' + lines.join('\n')
+}
+
+async function confirmExport() {
+  closeDialog('exportConfirmModal')
+  await handleExport()
+}
+
 async function handleExport() {
+  const analogChannels = getSelectedChannelMetas(state.analogChannels, state.selectedAnalog)
+  const digitalChannels = getSelectedChannelMetas(state.digitalChannels, state.selectedDigital)
+  if (analogChannels.length === 0 && digitalChannels.length === 0) {
+    alert('请至少选择一个通道')
+    return
+  }
+
+  state.chart?.showLoading()
   try {
-    const res = await zwavApi.exportWaveData(state.guid, true)
-    const nameFromHeader = parseFileNameFromContentDisposition(res.contentDisposition)
-    const name = nameFromHeader || ((state.detail?.file?.originalName || 'wave_data') + '.csv')
-    const url = window.URL.createObjectURL(res.blob)
+    const res = await requestWaveData(
+      analogChannels.map((channel) => normalizeChannelIndex(channel?.channelIndex)),
+      digitalChannels.map((channel) => normalizeChannelIndex(channel?.channelIndex))
+    )
+    if (!res || !res.success || !res.data) {
+      throw new Error((res && res.message) || '导出失败')
+    }
+
+    const csv = buildWaveCsv(res.data, analogChannels, digitalChannels)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const fileBase = String(state.detail?.file?.originalName || 'wave_data').replace(/\.[^.]+$/, '')
+    const from = res.data?.fromSample ?? state.searchFromSample
+    const to = res.data?.toSample ?? state.searchToSample
+    const fileName = `${fileBase}-Samples-${from}-${to}.csv`
+    const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = name
+    a.download = fileName
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
     window.URL.revokeObjectURL(url)
   } catch (e) {
     alert(e.message || '导出失败')
+  } finally {
+    state.chart?.hideLoading()
   }
 }
 
@@ -1200,6 +1483,7 @@ function bindEvents() {
   bindDialog('statsModal')
   bindDialog('seqModal')
   bindDialog('filePickModal')
+  bindDialog('exportConfirmModal')
 
   on('btnOpenApiConfig', 'click', openApiModal)
   on('btnSaveApiBase', 'click', () => {
@@ -1216,8 +1500,9 @@ function bindEvents() {
     const kw = byId('channelSearch').value
     const list = filterChannels(state.analogChannels, kw)
     list.forEach((c) => {
-      if (checked) state.selectedAnalog.add(c.channelIndex)
-      else state.selectedAnalog.delete(c.channelIndex)
+      const idx = normalizeChannelIndex(c.channelIndex)
+      if (checked) state.selectedAnalog.add(idx)
+      else state.selectedAnalog.delete(idx)
     })
     renderChannelLists()
   })
@@ -1226,8 +1511,9 @@ function bindEvents() {
     const kw = byId('channelSearch').value
     const list = filterChannels(state.digitalChannels, kw)
     list.forEach((c) => {
-      if (checked) state.selectedDigital.add(c.channelIndex)
-      else state.selectedDigital.delete(c.channelIndex)
+      const idx = normalizeChannelIndex(c.channelIndex)
+      if (checked) state.selectedDigital.add(idx)
+      else state.selectedDigital.delete(idx)
     })
     renderChannelLists()
   })
@@ -1236,7 +1522,8 @@ function bindEvents() {
   on('btnAxis', 'click', openAxisModal)
   on('btnApplyAxis', 'click', applyAxisSettings)
   on('btnStats', 'click', openStatsModal)
-  on('btnExport', 'click', handleExport)
+  on('btnExport', 'click', openExportConfirmModalFixed)
+  on('btnConfirmExport', 'click', confirmExport)
   on('btnSequence', 'click', openSequenceModal)
   on('btnFullScreen', 'click', toggleFullScreen)
   on('btnMarkerReset', 'click', resetMarkers)
