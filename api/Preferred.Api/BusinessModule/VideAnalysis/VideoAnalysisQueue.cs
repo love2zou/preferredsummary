@@ -1,4 +1,3 @@
-using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
@@ -9,12 +8,12 @@ namespace Video.Application.Processing
         /// <summary>
         /// 入队：fileId
         /// </summary>
-        ValueTask EnqueueAsync(int fileId, CancellationToken ct = default);
+        ValueTask EnqueueAsync(int fileId);
 
         /// <summary>
         /// 出队：阻塞等待下一个 fileId
         /// </summary>
-        ValueTask<int> DequeueAsync(CancellationToken ct = default);
+        ValueTask<int> DequeueAsync();
     }
 
     /// <summary>
@@ -35,14 +34,14 @@ namespace Video.Application.Processing
             _ch = Channel.CreateBounded<int>(opt);
         }
 
-        public async ValueTask EnqueueAsync(int fileId, CancellationToken ct = default)
+        public async ValueTask EnqueueAsync(int fileId)
         {
-            await _ch.Writer.WriteAsync(fileId, ct);
+            await _ch.Writer.WriteAsync(fileId);
         }
 
-        public async ValueTask<int> DequeueAsync(CancellationToken ct = default)
+        public async ValueTask<int> DequeueAsync()
         {
-            return await _ch.Reader.ReadAsync(ct);
+            return await _ch.Reader.ReadAsync();
         }
     }
 }

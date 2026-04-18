@@ -433,25 +433,5 @@ namespace Preferred.Api.Services
                 ? string.Empty
                 : value.Trim();
         }
-
-        /// <summary>
-        /// 仅保留给调试或后续扩展使用，不参与默认 MatchGroup fallback。
-        /// </summary>
-        private static string ExtractTidyGroupText(string channelName, string channelCode, string unit)
-        {
-            string raw = string.IsNullOrWhiteSpace(channelName)
-                ? channelCode ?? string.Empty
-                : channelName;
-
-            raw = (raw ?? string.Empty).Trim();
-            if (raw.Length == 0)
-                raw = BuildMatchText(channelName, channelCode, unit);
-
-            string normalized = VoltageDecorRegex.Replace(raw, " ");
-            normalized = normalized.Replace("-", " ").Replace("_", " ").Replace("/", " ");
-            normalized = MultiSpaceRegex.Replace(normalized, " ").Trim();
-
-            return normalized;
-        }
     }
 }

@@ -93,8 +93,8 @@
                   <el-table-column label="火/闪" width="110">
                     <template #default="{ row }">
                       <span class="mini-kpi">
-                        <span class="kpi kpi-danger">火 {{ row.stats.spark }}</span>
-                        <span class="kpi kpi-warning">闪 {{ row.stats.flash }}</span>
+                        <span class="kpi kpi-danger">火花 {{ row.stats.spark }}</span>
+                        <span class="kpi kpi-warning">闪光 {{ row.stats.flash }}</span>
                       </span>
                     </template>
                   </el-table-column>
@@ -266,10 +266,10 @@
                       <!-- 左侧：火/闪/置信度（同一块） -->
                       <div class="vc-kpi-left">
                         <el-tag v-if="vid.stats.spark > 0" type="danger" size="small" effect="dark">
-                          火 {{ vid.stats.spark }}
+                          火花 {{ vid.stats.spark }}
                         </el-tag>
                         <el-tag v-if="vid.stats.flash > 0" type="warning" size="small" effect="dark">
-                          闪 {{ vid.stats.flash }}
+                          闪光 {{ vid.stats.flash }}
                         </el-tag>
 
                         <span v-if="vid.stats.total === 0" class="text-gray">无异常事件</span>
@@ -315,8 +315,8 @@
                       </div>
 
                       <div class="gh-right">
-                        <el-tag v-if="g.spark > 0" type="danger" size="small" effect="dark">火 {{ g.spark }}</el-tag>
-                        <el-tag v-if="g.flash > 0" type="warning" size="small" effect="dark">闪 {{ g.flash }}</el-tag>
+                        <el-tag v-if="g.spark > 0" type="danger" size="small" effect="dark">火花  {{ g.spark }}</el-tag>
+                        <el-tag v-if="g.flash > 0" type="warning" size="small" effect="dark">闪光 {{ g.flash }}</el-tag>
                         <span class="gh-meta">事件 {{ g.total }}</span>
                         <span v-if="g.maxConf > 0" class="gh-meta strong">置信度 {{ (g.maxConf * 100).toFixed(0) }}%</span>
                       </div>
@@ -356,7 +356,7 @@
                         <div class="ec-info">
                           <div class="ec-row">
                             <el-tag size="small" :type="evt.eventType === 2 ? 'danger' : 'warning'" effect="dark">
-                              {{ evt.eventType === 2 ? 'Spark' : 'Flash' }}
+                              {{ evt.eventType === 2 ? '火花' : '闪光' }}
                             </el-tag>
                             <span class="ec-conf">{{ (Number(evt.confidence) * 100).toFixed(1) }}%</span>
                           </div>

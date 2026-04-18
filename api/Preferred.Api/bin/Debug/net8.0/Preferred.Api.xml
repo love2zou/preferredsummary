@@ -31,19 +31,308 @@
         </member>
         <member name="T:Preferred.Api.Services.SparkDetectionService">
             <summary>
-            闪光/火花检测服务（高召回稳健基线版 + Top5强约束 + 落盘可靠性）
+            闪光/火花检测服务（高召回稳健基线版 + 事件Top5强约束 + 每事件唯一截图）
+            主流程：
+            1. 根据 fileId 读取视频文件和所属任务，判断任务/文件当前状态是否允许分析。
+            2. 逐帧采样视频，计算灰度均值、亮点比例、帧间差异等统计量。
+            3. 用稳健基线过滤环境亮度缓慢变化，只把短时间突增的亮度变化作为候选事件。
+            4. 通过短脉冲确认、持续高亮抑制、移动光源抑制，降低常亮灯、移动光源的误报。
+            5. 将事件、截图和聚合进度写回数据库，并强制每个视频最多保留 5 个高置信事件，且每个事件固定绑定 1 张截图。
             </summary>
         </member>
-        <member name="M:Preferred.Api.Services.SparkDetectionService.ConfirmPulse(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},Video.Application.Dto.AlgoParams,System.Int32,System.Boolean@,System.Double@,OpenCvSharp.Rect@,System.Int32@,System.Boolean@,System.Boolean@)">
+        <member name="F:Preferred.Api.Services.SparkDetectionService._db">
             <summary>
-            短脉冲确认（召回优先稳健基线版）
-            - rise：峰值相对基线抬升（MeanRise/BrightRise）达标，或窗口内出现一次强 delta
-            - fall：峰值后 (pulseMaxMs + 400ms) 内回落到 baseline 附近
-            - 持续短：高亮跨度不超过 MaxPulseSec
-            抑制：
-            - 持续高亮 >= SustainRejectSec
-            - 移动光源（bbox 中心位移过大，仅对 bbox 足够的候选生效）
+            EF Core 数据库上下文。
+            负责读写任务、视频文件、检测事件、截图等业务表。
             </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.SparkDetectionService._root">
+            <summary>
+            视频及截图的根存储目录。
+            从 FileStorageConfig.VideoRootPath 注入，后续会在该目录下按任务号创建子目录。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.SparkDetectionService._logger">
+            <summary>
+            日志对象。
+            用于记录分析过程中的错误、警告以及关键运行信息，便于排查问题。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.SparkDetectionService.MaxKeepEvents">
+            <summary>
+            单个视频最终最多保留的事件数。
+            处理完成后会按事件置信度从高到低排序，仅保留前 MaxKeepEvents 个事件。
+            每个保留事件只绑定 1 张代表截图。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.ProcessFileAsync(System.Int32)">
+            <summary>
+            处理单个视频文件。
+            该方法是 Worker 调用检测服务的入口：负责更新文件状态、调用核心视频分析逻辑、
+            成功后写入视频元数据，失败时记录错误并刷新任务聚合信息。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.UpdateJobAggregateAsync(System.Int32)">
+            <summary>
+            汇总任务进度。
+            每次文件成功或失败后重新统计同一任务下的文件状态和事件数量，保证列表页/详情页展示一致。
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.FrameBufferItem.TimeMs">
+            <summary>采样点对应的视频时间（毫秒）。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.FrameBufferItem.FrameIndex">
+            <summary>采样点对应的视频帧索引。</summary>
+        </member>
+        <member name="T:Preferred.Api.Services.SparkDetectionService.SamplePoint">
+             <summary>
+             单个采样点的统计结果对象。
+            
+             注意：
+             - 它不是最终事件；
+             - 它只是视频某个采样时刻的亮度统计快照；
+             - 后续候选检测、窗口确认、峰值选择都基于这一结构进行。
+             </summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.FrameIndex">
+            <summary>采样点对应的视频帧索引。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.TimeMs">
+            <summary>采样点对应的视频时间（毫秒）。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.Mean">
+            <summary>当前帧灰度均值，反映整体亮度水平。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.Std">
+            <summary>当前帧灰度标准差，反映亮度分布离散程度。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.MeanDelta">
+            <summary>当前帧相对于前一采样帧的亮度变化量。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.BrightRatio">
+            <summary>高亮像素占比。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.BrightDelta">
+            <summary>高亮像素占比相对前一采样帧的变化量。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.MeanRise">
+            <summary>相对于稳健基线的亮度抬升量。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.BrightRise">
+            <summary>相对于稳健基线的高亮占比抬升量。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.Candidate">
+            <summary>当前采样点是否被标记为候选点。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.BBox">
+            <summary>候选目标框，使用原图坐标系。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.AreaRatio">
+            <summary>候选区域面积占整帧面积的比例。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.Confidence">
+            <summary>候选点或事件置信度。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.SamplePoint.Center">
+            <summary>候选目标中心点，使用原图坐标系。</summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.DeleteEventWithSnapshotsHardAsync(System.Int32)">
+             <summary>
+             物理删除指定事件及其关联截图。
+            
+             使用场景：
+             1. 单个视频检测完成后，只保留前 N 个高置信事件；
+             2. 被淘汰的事件需要连同截图记录和磁盘文件一并删除，避免数据库和文件系统残留脏数据。
+            
+             删除顺序：
+             - 先删截图文件与 VideoAnalysisSnapshots 记录；
+             - 再删 VideoAnalysisEvents 事件记录。
+             这样做是为了保证事件被删后，不会留下悬空截图记录。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.SafeDeleteFile(System.String)">
+             <summary>
+             安全删除文件。
+            
+             删除失败时只记日志，不向上抛异常，避免“清理失败”影响主流程。
+             常用于截图替换后的旧文件删除、异常回滚删除等辅助场景。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.UpsertEventSnapshotAsync(Preferred.Api.Models.VideoAnalysisFile,System.Int32,System.Int32,System.Int32,System.Double,Preferred.Api.Services.SparkDetectionService.FrameBufferItem,OpenCvSharp.Mat,System.String,System.Int32)">
+             <summary>
+             为指定事件插入或更新唯一截图。
+            
+             当前版本的策略是“每个事件只保留 1 张截图”：
+             - 如果该事件还没有截图，则新建一条截图记录；
+             - 如果该事件已经有截图，则用当前更优的截图覆盖旧截图，并删除旧文件。
+            
+             截图来源优先级：
+             1. 优先使用环形帧缓存中与峰值时间最接近的 JPEG；
+             2. 如果缓存帧不存在，则退化为当前帧 curr。
+            
+             这样可以尽量保证截图更接近真正峰值时刻，而不是事件确认时的滞后帧。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.EnforceTop6EventsHardAsync(System.Int32,System.Int32)">
+             <summary>
+             对单个视频执行“事件 TopN 硬裁剪”。
+            
+             按事件置信度从高到低排序，只保留前 k 个事件；
+             排在后面的事件会被连同截图一起物理删除。
+            
+             说明：
+             - 这里裁剪的是“事件”，不是“截图”；
+             - 因为当前业务目标是“最多保留 N 个事件，且每个事件一张截图”。
+             </summary>
+        </member>
+        <member name="T:Preferred.Api.Services.SparkDetectionService.RobustBaseline">
+             <summary>
+             稳健亮度基线。
+            
+             这里不是简单记录最近一帧亮度，而是结合：
+             - EWMA（指数滑动平均）
+             - 历史样本中位数
+             来构造一个对异常亮点不敏感的环境基线。
+            
+             目的：
+             防止一次瞬时闪光把“正常亮度”抬高，从而影响后续 rise/fall 判断。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.ProcessSingleVideoAsync(Preferred.Api.Models.VideoAnalysisJob,Preferred.Api.Models.VideoAnalysisFile,Video.Application.Dto.AlgoParams)">
+             <summary>
+             核心视频分析流程。
+             这里不再接收取消标记参数，分析一旦开始就按完整视频跑完，避免 OpenCV 读帧、
+             截图落盘、数据库写入在中途被取消后留下半截状态。
+             </summary>
+             <summary>
+             单个视频的核心分析流程。
+            
+             整体步骤：
+             1. 打开视频并读取 FPS、分辨率等基础信息；
+             2. 按目标采样率跳帧采样，降低计算量；
+             3. 对每个采样点计算亮度均值、亮点比例、帧差等统计特征；
+             4. 结合稳健基线识别“亮度突增”的候选点；
+             5. 使用时间窗口确认短脉冲，并过滤持续高亮、移动光源等误报；
+             6. 将确认结果生成事件，或合并到当前 openEvent；
+             7. 为每个事件维护唯一截图；
+             8. 全部处理结束后，只保留前 MaxKeepEvents 个高置信事件。
+            
+             这里不接收取消令牌，目的是避免 OpenCV 读帧、截图落盘、数据库写入进行到一半时被中断，
+             导致文件状态、事件记录、截图文件之间出现不一致。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.CalcSampleEveryFrames(System.Int32,Video.Application.Dto.AlgoParams,Microsoft.Extensions.Logging.ILogger)">
+             <summary>
+             根据视频原始 FPS 和算法配置计算采样间隔。
+             例如原视频 25fps、目标采样 5fps，则每 5 帧分析一次；这样能保留短脉冲特征，
+             又能显著减少每帧灰度化、差分、轮廓查找带来的 CPU 消耗。
+             </summary>
+             <summary>
+             根据原始视频 FPS 和算法配置，计算“每隔多少帧采样一次”。
+            
+             例如：
+             - 原视频 25fps，目标采样率 5fps，则每 5 帧采样 1 次；
+             - 原视频 30fps，目标采样率 10fps，则每 3 帧采样 1 次。
+            
+             目的：
+             在尽量不漏掉短时脉冲的前提下，减少 OpenCV 图像处理成本。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.BuildStatsPoint(OpenCvSharp.Mat,OpenCvSharp.Mat,Video.Application.Dto.AlgoParams)">
+             <summary>
+             计算当前采样点的全局亮度特征。
+             Mean/Std 反映整帧灰度水平，MeanDelta 反映相邻采样帧整体亮度变化，
+             BrightRatio/BrightDelta 反映高亮像素比例及其变化，用于捕捉火花、闪光这类短时强亮区域。
+             </summary>
+             <summary>
+             从前一帧和当前帧构建单个采样点的统计特征。
+            
+             这里会计算：
+             - 当前帧灰度均值 Mean；
+             - 当前帧灰度标准差 Std；
+             - 当前帧相对于前一帧的亮度变化 MeanDelta；
+             - 高亮像素占比 BrightRatio；
+             - 高亮像素占比变化 BrightDelta。
+            
+             这些统计量是后续候选检测和短脉冲确认的基础输入。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.TryDetectCandidate(OpenCvSharp.Mat,OpenCvSharp.Mat,Video.Application.Dto.AlgoParams,Preferred.Api.Services.SparkDetectionService.SamplePoint,Preferred.Api.Services.SparkDetectionService.SamplePoint@)">
+             <summary>
+             粗筛候选事件。
+             如果全局亮度相对基线或相邻帧差分已经达标，直接把当前点作为候选；
+             否则再做局部差分和轮廓提取，尝试定位局部火花区域，并输出 bbox、面积占比和置信度。
+             </summary>
+             <summary>
+             尝试从当前采样点中检测候选火花/闪光目标。
+            
+             候选不等于最终事件。
+             这个方法的职责只是判断“当前帧是否存在明显亮度突增区域”，并尽量给出：
+             - 候选目标框 BBox；
+             - 面积占比 AreaRatio；
+             - 中心点 Center；
+             - 候选置信度 Confidence。
+            
+             真正是否记为事件，还需要在 ConfirmPulse 中结合时间窗口看它是否满足“短脉冲 + 回落”。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.ConfirmPulse(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},Video.Application.Dto.AlgoParams,System.Int32,System.Boolean@,System.Double@,OpenCvSharp.Rect@,System.Int32@,System.Boolean@,System.Boolean@)">
+             <summary>
+             短脉冲确认（召回优先稳健基线版）
+             - rise：峰值相对基线抬升（MeanRise/BrightRise）达标，或窗口内出现一次强 delta
+             - fall：峰值后 (pulseMaxMs + 400ms) 内回落到 baseline 附近
+             - 持续短：高亮跨度不超过 MaxPulseSec
+             抑制：
+             - 持续高亮 >= SustainRejectSec
+             - 移动光源（bbox 中心位移过大，仅对 bbox 足够的候选生效）
+             </summary>
+             <summary>
+             在最近一段时间窗口内确认是否形成了一个有效短脉冲事件。
+            
+             判定思路：
+             1. 必须在窗口内看到明显 rise（亮度相对基线抬升）；
+             2. 之后还要在合理时间内看到 fall（亮度回落）；
+             3. 若持续高亮时间过长，说明更像常亮灯或大面积曝光变化，会 reject；
+             4. 若目标在窗口内位移过大，更像移动光源，也会 reject。
+            
+             输出：
+             - isFlash：更偏“全局闪光”还是“局部火花”；
+             - confidence：事件置信度；
+             - bestBox：用于事件记录的最佳目标框；
+             - peakTimeMs：峰值时刻，用来回取截图。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.Median(System.Collections.Generic.IEnumerable{System.Double})">
+             <summary>
+             计算中位数。
+            
+             这里单独封装中位数，是因为稳健基线和窗口统计中使用中位数可以减少极端值干扰，
+             比简单均值更不容易被瞬时闪光污染。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.SelectPeakIndex(Preferred.Api.Services.SparkDetectionService.SamplePoint[],Video.Application.Dto.AlgoParams,System.Boolean@)">
+             <summary>
+             在确认窗口中选择“峰值点”索引。
+            
+             优先级：
+             1. 优先从存在有效 BBox 的局部候选点中选峰值；
+             2. 如果没有可靠局部框，则退化为选择全局 MeanRise 最大点；
+             3. 如果 MeanRise 也不明显，再退化为 MeanDelta 最大点。
+            
+             这样做是为了兼顾两类情况：
+             - 局部火花：更依赖局部候选框；
+             - 全局闪光：可能根本没有稳定 BBox，需要依赖全局亮度峰值。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.GetBestBoxNearPeak(Preferred.Api.Services.SparkDetectionService.SamplePoint[],System.Int32)">
+             <summary>
+             在峰值时间附近选择最合适的目标框。
+            
+             做法是：在窗口内寻找距离 peakTimeMs 最近且 BBox 有效的采样点，
+             其目标框作为事件记录的最终 BBox。
+            
+             这样可以避免直接使用非峰值时刻的框，导致事件框偏离真实高亮区域。
+             </summary>
         </member>
         <member name="M:Preferred.Api.Services.SparkDetectionService.CheckMotionReject(Preferred.Api.Services.SparkDetectionService.SamplePoint[],System.Int32,Video.Application.Dto.AlgoParams)">
             <summary>
@@ -51,9 +340,66 @@
             注意：如果窗口内有效 bbox 点很少（例如全局闪光），不拒绝
             </summary>
         </member>
-        <member name="M:Preferred.Api.Services.VideoAnalysisWorker.ExecuteWithTimeoutAsync(System.Int32,System.Threading.CancellationToken)">
+        <member name="M:Preferred.Api.Services.SparkDetectionService.EnqueueWindow(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},Preferred.Api.Services.SparkDetectionService.SamplePoint,System.Int32)">
+             <summary>
+             将新的采样点放入时间窗口，并自动裁剪超出窗口上限的旧点。
+            
+             这个窗口用于短脉冲确认，因此只保留最近 windowMaxMs 毫秒的数据即可。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.TrimWindowByMs(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},System.Int32)">
             <summary>
-            返回 true=成功；false=失败/超时（已记录日志）
+            按时间跨度裁剪窗口，只保留最近 windowMaxMs 毫秒内的采样点。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.TrimWindowToRecent(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},System.Int32)">
+             <summary>
+             将窗口进一步收缩到最近 keepMs 毫秒。
+            
+             常用于 pendingPulse 长时间没有新的候选命中时，
+             丢弃过旧统计点，避免上一轮半成品脉冲影响下一轮判定。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.ResizeIfNeeded(OpenCvSharp.Mat,System.Int32,System.Double@)">
+             <summary>
+             如果原图宽度超过限制，则按比例缩小；否则直接克隆原图。
+            
+             用途：
+             在候选检测阶段降低计算量，尤其是超高分辨率视频，
+             可通过缩放减少阈值分割、轮廓提取、差分计算的成本。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.CalcRatioAboveThreshold(OpenCvSharp.Mat,System.Int32)">
+             <summary>
+             计算灰度图中高于指定阈值的像素占比。
+            
+             该指标用于衡量“整帧或局部区域有多少像素处于高亮状态”，
+             是识别全局闪光和局部火花的重要辅助特征。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.ClampRect(OpenCvSharp.Rect,System.Int32,System.Int32)">
+             <summary>
+             将矩形限制在图像边界内，避免越界。
+            
+             目标框在放大、缩放回原图、加边距等处理中，可能出现坐标越界；
+             调用此方法后可确保 ROI 截取或序列化 BBox 时不会抛异常。
+             </summary>
+        </member>
+        <member name="T:Preferred.Api.Services.VideoAnalysisWorker">
+             <summary>
+             视频分析后台消费者。
+             这个 Worker 只负责调度：从内存队列取出待分析的 fileId，按照配置的并发数启动分析任务，
+             并在单个文件失败时执行有限次数的退避重试。
+            
+             注意：BackgroundService 要求 ExecuteAsync 保留取消标记参数，否则无法 override。
+             业务链路已经不再向队列、检测服务、延迟等待传递取消标记，避免分析过程中被取消打断。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.VideoAnalysisWorker.ExecuteFileAsync(System.Int32)">
+            <summary>
+            执行单个文件分析。
+            返回 true 表示 SparkDetectionService 已完整处理并把文件状态写成成功；
+            返回 false 表示分析抛出异常，交给外层重试策略决定是否重新入队。
             </summary>
         </member>
         <member name="M:Preferred.Api.Services.IZwavAnalysisAppService.CreateAnalysisByFileIdAsync(System.Int32,System.Boolean,System.Threading.CancellationToken)">
@@ -87,11 +433,6 @@
             1、优先规则表；
             2、再走内置侧别识别；
             3、不再宽松地用“清洗后的通道名”当组名，避免三侧误归组。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.ExtractTidyGroupText(System.String,System.String,System.String)">
-            <summary>
-            仅保留给调试或后续扩展使用，不参与默认 MatchGroup fallback。
             </summary>
         </member>
         <member name="T:Preferred.Api.Services.CategoryService">
@@ -5233,12 +5574,12 @@
             处理异常后的轻微退避（毫秒），用于避免持续失败刷爆资源
             </summary>
         </member>
-        <member name="M:Video.Application.Processing.IVideoAnalysisQueue.EnqueueAsync(System.Int32,System.Threading.CancellationToken)">
+        <member name="M:Video.Application.Processing.IVideoAnalysisQueue.EnqueueAsync(System.Int32)">
             <summary>
             入队：fileId
             </summary>
         </member>
-        <member name="M:Video.Application.Processing.IVideoAnalysisQueue.DequeueAsync(System.Threading.CancellationToken)">
+        <member name="M:Video.Application.Processing.IVideoAnalysisQueue.DequeueAsync">
             <summary>
             出队：阻塞等待下一个 fileId
             </summary>

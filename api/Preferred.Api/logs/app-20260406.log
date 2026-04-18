@@ -4271,3 +4271,6 @@ MySqlConnector.MySqlException (0x80004005): Unknown column 't.ChannelIndex' in '
 [2026-04-06 22:40:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.18秒 {}
 [2026-04-06 22:40:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
 [2026-04-06 22:40:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-06 22:45:00 执行 {}
+[2026-04-06 23:12:29 INF]  应用程序启动中... {}
+[2026-04-06 23:12:30 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, TimeoutSec=600, MaxRetry=2 {}
+[2026-04-06 23:12:30 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}

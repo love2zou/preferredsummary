@@ -315,3 +315,14 @@ D:\github\preferredsummary\artifacts\build\Debug\net8.0\Preferred.Api.runtimecon
 D:\github\preferredsummary\artifacts\build\Debug\net8.0\Preferred.Api.dll
 D:\github\preferredsummary\artifacts\build\Debug\net8.0\Preferred.Api.pdb
 D:\github\preferredsummary\artifacts\build\Debug\net8.0\Preferred.Api.xml
+D:\github\preferredsummary\.build\Preferred.Api\appsettings.Development.json
+D:\github\preferredsummary\.build\Preferred.Api\appsettings.json
+D:\github\preferredsummary\.build\Preferred.Api\package-lock.json
+D:\github\preferredsummary\.build\Preferred.Api\package.json
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.staticwebassets.runtime.json
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.exe
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.deps.json
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.runtimeconfig.json
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.dll
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.pdb
+D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.xml
