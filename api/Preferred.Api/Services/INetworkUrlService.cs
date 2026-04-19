@@ -55,6 +55,13 @@ namespace Preferred.Api.Services
         Task<bool> UpdateNetworkUrl(int id, NetworkUrlDto networkUrlDto);
 
         /// <summary>
+        /// 累加访问地址排序号
+        /// </summary>
+        /// <param name="id">访问地址ID</param>
+        /// <returns>更新后的排序号，不存在时返回null</returns>
+        Task<int?> IncrementNetworkUrlSeqNo(int id);
+
+        /// <summary>
         /// 删除访问地址
         /// </summary>
         /// <param name="id">访问地址ID</param>

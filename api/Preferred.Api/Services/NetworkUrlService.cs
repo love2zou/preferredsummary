@@ -43,7 +43,7 @@ namespace Preferred.Api.Services
 
             // 先分页获取基础数据
             var baseList = await query
-                .OrderBy(x => x.NetworkUrl.SeqNo)
+                .OrderByDescending(x => x.NetworkUrl.SeqNo)
                 .ThenByDescending(x => x.NetworkUrl.CrtTime)
                 .Skip((page - 1) * size)
                 .Take(size)
@@ -244,6 +244,26 @@ namespace Preferred.Api.Services
 
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<int?> IncrementNetworkUrlSeqNo(int id)
+        {
+            var now = DateTime.Now;
+            var updatedCount = await _context.NetworkUrls
+                .Where(n => n.Id == id)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(n => n.SeqNo, n => n.SeqNo + 1)
+                    .SetProperty(n => n.UpdTime, now));
+
+            if (updatedCount == 0)
+            {
+                return null;
+            }
+
+            return await _context.NetworkUrls
+                .Where(n => n.Id == id)
+                .Select(n => n.SeqNo)
+                .FirstAsync();
         }
 
         public async Task<NetworkUrl> GetNetworkUrlById(int id)

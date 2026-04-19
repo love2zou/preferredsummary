@@ -326,3 +326,14 @@ D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.runtimeconfig.json
 D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.dll
 D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.pdb
 D:\github\preferredsummary\.build\Preferred.Api\Preferred.Api.xml
+D:\github\preferredsummary\.build\api-verify\appsettings.Development.json
+D:\github\preferredsummary\.build\api-verify\appsettings.json
+D:\github\preferredsummary\.build\api-verify\package-lock.json
+D:\github\preferredsummary\.build\api-verify\package.json
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.staticwebassets.runtime.json
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.exe
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.deps.json
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.runtimeconfig.json
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.dll
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.pdb
+D:\github\preferredsummary\.build\api-verify\Preferred.Api.xml

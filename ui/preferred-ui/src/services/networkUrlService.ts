@@ -33,8 +33,8 @@ interface NetworkUrlListDto {
   description?: string
   imageCode: string
   categoryCode?: string
-  isAvailable: boolean  // 改为 boolean 类型
-  isMark: boolean       // 改为 boolean 类型
+  isAvailable?: number | boolean
+  isMark: number | boolean
   tagCodeType: string
   seqNo: number
   crtTime: string
@@ -64,6 +64,17 @@ interface PagedResponse<T> {
   page: number
   pageSize: number
   totalPages: number
+}
+
+interface ApiResponse<T = unknown> {
+  success: boolean
+  message: string
+  data: T
+}
+
+interface NetworkUrlClickCountDto {
+  id: number
+  seqNo: number
 }
 
 interface NetworkUrlListParams {
@@ -133,6 +144,11 @@ export const networkUrlService = {
     return api.get(`/api/networkurl/${id}`)
   },
 
+  // 累加点击次数，后端使用seqNo字段存储
+  incrementClickCount(id: number): Promise<ApiResponse<NetworkUrlClickCountDto>> {
+    return api.post(`/api/networkurl/${id}/click`)
+  },
+
   // 根据分类获取访问地址
   getNetworkUrlsByCategory(categoryCode: string): Promise<PagedResponse<NetworkUrlListDto>> {
     return api.get('/api/networkurl/list', { 
@@ -142,4 +158,4 @@ export const networkUrlService = {
 }
 
 // 导出时添加 TagInfo
-export type { NetworkUrl, NetworkUrlListDto, NetworkUrlListParams, Picture, PagedResponse, TagInfo }
+export type { ApiResponse, NetworkUrl, NetworkUrlClickCountDto, NetworkUrlListDto, NetworkUrlListParams, Picture, PagedResponse, TagInfo }

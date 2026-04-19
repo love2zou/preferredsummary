@@ -224,6 +224,37 @@ namespace Preferred.Api.Controllers
         }
 
         /// <summary>
+        /// 累加访问地址点击次数
+        /// </summary>
+        /// <param name="id">访问地址ID</param>
+        /// <returns>更新后的点击次数</returns>
+        [HttpPost("{id}/click")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> IncrementNetworkUrlClickCount(int id)
+        {
+            try
+            {
+                var seqNo = await _networkUrlService.IncrementNetworkUrlSeqNo(id);
+                if (!seqNo.HasValue)
+                {
+                    return NotFound(new ApiErrorResponse { Message = "访问地址不存在" });
+                }
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "点击次数更新成功",
+                    Data = new { Id = id, SeqNo = seqNo.Value }
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new ApiErrorResponse { Message = "更新点击次数失败", Details = ex.Message });
+            }
+        }
+
+        /// <summary>
         /// 删除访问地址
         /// </summary>
         /// <param name="id">访问地址ID</param>

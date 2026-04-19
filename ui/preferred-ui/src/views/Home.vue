@@ -47,6 +47,9 @@
               :key="website.id"
               class="website-card"
             >
+              <el-tag v-if="isMarked(website)" type="success" size="small" class="recommend-badge">
+                推荐
+              </el-tag>
               <div class="card-layout">
                 <!-- 左侧图片区域 -->
                 <div class="card-image">
@@ -100,9 +103,10 @@
                     </div>
                     
                     <div class="card-badges">
-                      <el-tag v-if="website.isMark" type="success" size="small" class="recommend-badge">
-                        推荐
-                      </el-tag>
+                      <span class="view-count" :title="`查看 ${getViewCount(website)}`">
+                        <el-icon class="view-count-icon"><View /></el-icon>
+                        {{ getViewCount(website) }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -122,7 +126,7 @@ import AutoLoginService from '@/services/autoLoginService'
 import { categoryService, type Category } from '@/services/categoryService'
 import { networkUrlService, type NetworkUrlListDto, type TagInfo } from '@/services/networkUrlService'
 import { tagService, type Tag } from '@/services/tagService'
-import { Link, User } from '@element-plus/icons-vue'
+import { Link, User, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { computed, onMounted, ref, watch } from 'vue'
 
@@ -180,24 +184,58 @@ const filteredWebsites = computed<NetworkUrlListDto[]>(() => {
   
   // 修改排序逻辑以适配 boolean 类型
   return result.sort((a, b) => {
-    // 推荐的在前 (boolean 比较)
-    if (a.isMark !== b.isMark) return (b.isMark ? 1 : 0) - (a.isMark ? 1 : 0)
-    // 可用的在前 (boolean 比较)
-    if (a.isAvailable !== b.isAvailable) return (b.isAvailable ? 1 : 0) - (a.isAvailable ? 1 : 0)
-    // 按序号排序
-    return a.seqNo - b.seqNo
+    const seqNoDiff = getViewCount(b) - getViewCount(a)
+    if (seqNoDiff !== 0) return seqNoDiff
+    if (isMarked(a) !== isMarked(b)) return Number(isMarked(b)) - Number(isMarked(a))
+    if (isWebsiteAvailable(a) !== isWebsiteAvailable(b)) return Number(isWebsiteAvailable(b)) - Number(isWebsiteAvailable(a))
+    return a.name.localeCompare(b.name)
   })
 })
 
 // 修改点击处理逻辑
 const handleTitleClick = (website: NetworkUrlListDto): void => {
-  if (!website.isAvailable) {  // boolean 判断
+  if (!isWebsiteAvailable(website)) {  // boolean 判断
     ElMessage.warning('该网站当前不可用')
     return
   }
   
   // 打开网站
   window.open(website.url, '_blank')
+  void incrementClickCount(website)
+}
+
+const isMarked = (website: NetworkUrlListDto): boolean => {
+  return website.isMark === true || website.isMark === 1
+}
+
+const isWebsiteAvailable = (website: NetworkUrlListDto): boolean => {
+  return website.isAvailable === true || website.isAvailable === 1
+}
+
+const getViewCount = (website: NetworkUrlListDto): number => {
+  const seqNo = Number(website.seqNo)
+  return Number.isFinite(seqNo) ? seqNo : 0
+}
+
+const setWebsiteViewCount = (id: number, seqNo: number, keepHigher = false): void => {
+  const target = websites.value.find(item => item.id === id)
+  if (target) {
+    target.seqNo = keepHigher ? Math.max(getViewCount(target), seqNo) : seqNo
+  }
+}
+
+const incrementClickCount = async (website: NetworkUrlListDto): Promise<void> => {
+  const optimisticCount = getViewCount(website) + 1
+
+  setWebsiteViewCount(website.id, optimisticCount)
+
+  try {
+    const response = await networkUrlService.incrementClickCount(website.id)
+    setWebsiteViewCount(website.id, Number(response.data?.seqNo ?? optimisticCount), true)
+  } catch (error) {
+    setWebsiteViewCount(website.id, Math.max(getViewCount(website) - 1, 0))
+    console.error('更新点击次数失败:', error)
+  }
 }
 
 const loadCategories = async (): Promise<void> => {
@@ -748,13 +786,35 @@ const openAdminLogin = (): void => {
 
 .card-badges {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .recommend-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 500;
+}
+
+.view-count {
+  color: #909399;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.view-count-icon {
+  font-size: 13px;
 }
 
 .unavailable-badge {

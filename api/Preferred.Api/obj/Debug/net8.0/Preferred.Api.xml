@@ -657,6 +657,13 @@
             <param name="networkUrlDto">访问地址信息</param>
             <returns>是否成功</returns>
         </member>
+        <member name="M:Preferred.Api.Services.INetworkUrlService.IncrementNetworkUrlSeqNo(System.Int32)">
+            <summary>
+            累加访问地址排序号
+            </summary>
+            <param name="id">访问地址ID</param>
+            <returns>更新后的排序号，不存在时返回null</returns>
+        </member>
         <member name="M:Preferred.Api.Services.INetworkUrlService.DeleteNetworkUrl(System.Int32)">
             <summary>
             删除访问地址
@@ -3491,6 +3498,13 @@
             <param name="id">访问地址ID</param>
             <param name="networkUrlDto">访问地址更新信息</param>
             <returns>更新结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.NetworkUrlController.IncrementNetworkUrlClickCount(System.Int32)">
+            <summary>
+            累加访问地址点击次数
+            </summary>
+            <param name="id">访问地址ID</param>
+            <returns>更新后的点击次数</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.NetworkUrlController.DeleteNetworkUrl(System.Int32)">
             <summary>
