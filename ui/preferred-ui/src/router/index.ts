@@ -33,6 +33,16 @@ const router = createRouter({
       path: '/video-analytics',
       name: 'VideoAnalytics',
       component: () => import('@/views/videopages/VideoAnalytics.vue')
+    },
+    {
+      path: '/pdf-tools',
+      name: 'PdfToolsIntro',
+      component: () => import('@/views/pdfpages/PdfToolsIntro.vue')
+    },
+    {
+      path: '/pdf-tools/workbench',
+      name: 'PdfToolsWorkbench',
+      component: () => import('@/views/pdfpages/PdfToolsWorkbench.vue')
     }
     // 如果需要保留登录功能但不作为主要入口，可以保留这些路由
     // {

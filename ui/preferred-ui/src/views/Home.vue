@@ -652,7 +652,7 @@ const openAdminLogin = (): void => {
 }
 
 .card-image {
-  flex: 0 0 100px;
+  flex: 0 0 130px;
   position: relative;
   display: flex;
   align-items: center;
@@ -670,7 +670,7 @@ const openAdminLogin = (): void => {
 }
 
 .default-image {
-  width: 100px;
+  width: 130px;
   height: 100%;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
   border-radius: 12px 0 0 12px;
@@ -872,7 +872,7 @@ const openAdminLogin = (): void => {
   }
   
   .card-image {
-    flex: 0 0 140px;
+    flex: 0 0 180px;
   }
   
   .website-image {
@@ -880,7 +880,7 @@ const openAdminLogin = (): void => {
   }
   
   .default-image {
-    width: 140px;
+    width: 180px;
   }
   
   .default-icon {
@@ -964,7 +964,7 @@ const openAdminLogin = (): void => {
   }
   
   .card-image {
-    flex: 0 0 120px;
+    flex: 0 0 150px;
   }
   
   .website-image {
@@ -972,7 +972,7 @@ const openAdminLogin = (): void => {
   }
   
   .default-image {
-    width: 120px;
+    width: 150px;
   }
   
   .default-icon {
@@ -1064,7 +1064,7 @@ const openAdminLogin = (): void => {
   }
   
   .card-image {
-    flex: 0 0 80px;
+    flex: 0 0 120px;
   }
   
   .website-image {
@@ -1072,7 +1072,7 @@ const openAdminLogin = (): void => {
   }
   
   .default-image {
-    width: 80px;
+    width: 120px;
   }
   
   .default-icon {
