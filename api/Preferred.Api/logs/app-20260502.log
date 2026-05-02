@@ -1,0 +1,349 @@
+[2026-05-02 00:00:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:00:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:00:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:00:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:00:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:00:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.11GB, 使用率: 66.67% {}
+[2026-05-02 00:00:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:00:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.19%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127909974016 {}
+[2026-05-02 00:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.19%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:00:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:00:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.35秒 {}
+[2026-05-02 00:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:05:00 执行 {}
+[2026-05-02 00:05:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:05:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:05:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:05:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:05:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:05:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.18GB, 使用率: 66.67% {}
+[2026-05-02 00:05:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:05:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:05:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127893098496 {}
+[2026-05-02 00:05:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:05:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:05:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.35秒 {}
+[2026-05-02 00:05:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:05:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:10:00 执行 {}
+[2026-05-02 00:10:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:10:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:10:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:10:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:10:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:10:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.15GB, 使用率: 66.67% {}
+[2026-05-02 00:10:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:10:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:10:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127894638592 {}
+[2026-05-02 00:10:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:10:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:10:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.40秒 {}
+[2026-05-02 00:10:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:10:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:15:00 执行 {}
+[2026-05-02 00:15:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:15:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:15:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:15:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:15:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:15:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.13GB, 使用率: 66.67% {}
+[2026-05-02 00:15:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:15:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:15:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127898136576 {}
+[2026-05-02 00:15:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:15:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:15:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.35秒 {}
+[2026-05-02 00:15:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:15:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:20:00 执行 {}
+[2026-05-02 00:20:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:20:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:20:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:20:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:20:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:20:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.43GB, 使用率: 66.67% {}
+[2026-05-02 00:20:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:20:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:20:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127900348416 {}
+[2026-05-02 00:20:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:20:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:20:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.37秒 {}
+[2026-05-02 00:20:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:20:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:25:00 执行 {}
+[2026-05-02 00:25:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:25:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:25:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:25:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:25:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:25:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.26GB, 使用率: 66.67% {}
+[2026-05-02 00:25:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:25:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:25:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127902355456 {}
+[2026-05-02 00:25:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:25:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:25:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.36秒 {}
+[2026-05-02 00:25:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:25:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:30:00 执行 {}
+[2026-05-02 00:28:31 INF]  应用程序启动中... {}
+[2026-05-02 00:28:32 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-05-02 00:28:32 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-05-02 00:28:33 INF] Microsoft.Hosting.Lifetime Now listening on: http://127.0.0.1:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-05-02 00:28:33 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-05-02 00:28:33 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-05-02 00:28:33 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-05-02 00:28:33 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:30:00 执行 {}
+[2026-05-02 00:29:22 INF]  应用程序启动中... {}
+[2026-05-02 00:29:23 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-05-02 00:29:23 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-05-02 00:29:25 ERR] Microsoft.Extensions.Hosting.Internal.Host Hosting failed to start {"EventId":{"Id":11,"Name":"HostedServiceStartupFaulted"}}
+System.IO.IOException: Failed to bind to address http://127.0.0.1:5000: address already in use.
+ ---> Microsoft.AspNetCore.Connections.AddressInUseException: 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+ ---> System.Net.Sockets.SocketException (10048): 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+   at System.Net.Sockets.Socket.UpdateStatusAfterSocketErrorAndThrowException(SocketError error, Boolean disconnectOnFailure, String callerName)
+   at System.Net.Sockets.Socket.DoBind(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   at System.Net.Sockets.Socket.Bind(EndPoint localEP)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions.CreateDefaultBoundListenSocket(EndPoint endpoint)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportFactory.BindAsync(EndPoint endpoint, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Infrastructure.TransportManager.BindAsync(EndPoint endPoint, ConnectionDelegate connectionDelegate, EndpointConfig endpointConfig, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.<>c__DisplayClass28_0`1.<<StartAsync>g__OnBind|0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.LocalhostListenOptions.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.DefaultAddressStrategy.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindAsync(ListenOptions[] listenOptions, AddressBindContext context, Func`2 useHttps, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.BindAsync(CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.StartAsync[TContext](IHttpApplication`1 application, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Hosting.GenericWebHostService.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__15_1(IHostedService service, CancellationToken token)
+   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)
+[2026-05-02 00:29:25 FTL]  应用程序启动失败 {}
+System.IO.IOException: Failed to bind to address http://127.0.0.1:5000: address already in use.
+ ---> Microsoft.AspNetCore.Connections.AddressInUseException: 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+ ---> System.Net.Sockets.SocketException (10048): 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+   at System.Net.Sockets.Socket.UpdateStatusAfterSocketErrorAndThrowException(SocketError error, Boolean disconnectOnFailure, String callerName)
+   at System.Net.Sockets.Socket.DoBind(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   at System.Net.Sockets.Socket.Bind(EndPoint localEP)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions.CreateDefaultBoundListenSocket(EndPoint endpoint)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportFactory.BindAsync(EndPoint endpoint, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Infrastructure.TransportManager.BindAsync(EndPoint endPoint, ConnectionDelegate connectionDelegate, EndpointConfig endpointConfig, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.<>c__DisplayClass28_0`1.<<StartAsync>g__OnBind|0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.LocalhostListenOptions.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.DefaultAddressStrategy.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindAsync(ListenOptions[] listenOptions, AddressBindContext context, Func`2 useHttps, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.BindAsync(CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.StartAsync[TContext](IHttpApplication`1 application, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Hosting.GenericWebHostService.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__15_1(IHostedService service, CancellationToken token)
+   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)
+   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.Run(IHost host)
+   at Preferred.Api.Program.Main(String[] args) in D:\github\preferredsummary\api\Preferred.Api\Program.cs:line 123
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 00:30:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 00:30:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.84GB, 使用率: 66.67% {}
+[2026-05-02 00:30:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:30:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127914037248 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.37秒 {}
+[2026-05-02 00:30:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.84GB, 使用率: 66.67% {}
+[2026-05-02 00:30:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 00:30:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.78% {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.58%, 内存: 66.67%, 磁盘: 29.78%, 使用内存: 127914037248 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:35:00 执行 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.58%, 内存: 66.67%, 磁盘: 29.78% {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.59秒 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 00:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 00:35:00 执行 {}
+[2026-05-02 00:30:03 INF]  应用程序启动中... {}
+[2026-05-02 00:30:04 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-05-02 00:30:04 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-05-02 00:30:05 ERR] Microsoft.Extensions.Hosting.Internal.Host Hosting failed to start {"EventId":{"Id":11,"Name":"HostedServiceStartupFaulted"}}
+System.IO.IOException: Failed to bind to address http://127.0.0.1:5000: address already in use.
+ ---> Microsoft.AspNetCore.Connections.AddressInUseException: 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+ ---> System.Net.Sockets.SocketException (10048): 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+   at System.Net.Sockets.Socket.UpdateStatusAfterSocketErrorAndThrowException(SocketError error, Boolean disconnectOnFailure, String callerName)
+   at System.Net.Sockets.Socket.DoBind(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   at System.Net.Sockets.Socket.Bind(EndPoint localEP)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions.CreateDefaultBoundListenSocket(EndPoint endpoint)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportFactory.BindAsync(EndPoint endpoint, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Infrastructure.TransportManager.BindAsync(EndPoint endPoint, ConnectionDelegate connectionDelegate, EndpointConfig endpointConfig, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.<>c__DisplayClass28_0`1.<<StartAsync>g__OnBind|0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.LocalhostListenOptions.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.DefaultAddressStrategy.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindAsync(ListenOptions[] listenOptions, AddressBindContext context, Func`2 useHttps, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.BindAsync(CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.StartAsync[TContext](IHttpApplication`1 application, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Hosting.GenericWebHostService.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__15_1(IHostedService service, CancellationToken token)
+   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)
+[2026-05-02 00:30:05 FTL]  应用程序启动失败 {}
+System.IO.IOException: Failed to bind to address http://127.0.0.1:5000: address already in use.
+ ---> Microsoft.AspNetCore.Connections.AddressInUseException: 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+ ---> System.Net.Sockets.SocketException (10048): 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
+   at System.Net.Sockets.Socket.UpdateStatusAfterSocketErrorAndThrowException(SocketError error, Boolean disconnectOnFailure, String callerName)
+   at System.Net.Sockets.Socket.DoBind(EndPoint endPointSnapshot, SocketAddress socketAddress)
+   at System.Net.Sockets.Socket.Bind(EndPoint localEP)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportOptions.CreateDefaultBoundListenSocket(EndPoint endpoint)
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketConnectionListener.Bind()
+   at Microsoft.AspNetCore.Server.Kestrel.Transport.Sockets.SocketTransportFactory.BindAsync(EndPoint endpoint, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Infrastructure.TransportManager.BindAsync(EndPoint endPoint, ConnectionDelegate connectionDelegate, EndpointConfig endpointConfig, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.<>c__DisplayClass28_0`1.<<StartAsync>g__OnBind|0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   --- End of inner exception stack trace ---
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindEndpointAsync(ListenOptions endpoint, AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.LocalhostListenOptions.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.DefaultAddressStrategy.BindAsync(AddressBindContext context, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.Internal.AddressBinder.BindAsync(ListenOptions[] listenOptions, AddressBindContext context, Func`2 useHttps, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.BindAsync(CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerImpl.StartAsync[TContext](IHttpApplication`1 application, CancellationToken cancellationToken)
+   at Microsoft.AspNetCore.Hosting.GenericWebHostService.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.Internal.Host.<StartAsync>b__15_1(IHostedService service, CancellationToken token)
+   at Microsoft.Extensions.Hosting.Internal.Host.ForeachService[T](IEnumerable`1 services, CancellationToken token, Boolean concurrent, Boolean abortOnFirstException, List`1 exceptions, Func`3 operation)
+   at Microsoft.Extensions.Hosting.Internal.Host.StartAsync(CancellationToken cancellationToken)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.RunAsync(IHost host, CancellationToken token)
+   at Microsoft.Extensions.Hosting.HostingAbstractionsHostExtensions.Run(IHost host)
+   at Preferred.Api.Program.Main(String[] args) in D:\github\preferredsummary\api\Preferred.Api\Program.cs:line 123
+[2026-05-02 11:32:17 INF]  应用程序启动中... {}
+[2026-05-02 11:32:18 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-05-02 11:32:18 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-05-02 11:32:19 INF] Microsoft.Hosting.Lifetime Now listening on: http://127.0.0.1:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-05-02 11:32:19 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-05-02 11:32:19 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-05-02 11:32:19 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-05-02 11:32:19 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 11:35:00 执行 {}
+[2026-05-02 11:42:26 INF]  应用程序启动中... {}
+[2026-05-02 11:42:27 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-05-02 11:42:28 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-05-02 11:42:29 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-05-02 11:42:29 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-05-02 11:42:29 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-05-02 11:42:29 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-05-02 11:42:29 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 11:45:00 执行 {}
+[2026-05-02 11:45:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 11:45:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 11:45:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 11:45:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 11:45:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 11:45:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 15.00GB, 估算总内存: 23.57GB, 使用率: 66.67% {}
+[2026-05-02 11:45:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 11:45:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.93% {}
+[2026-05-02 11:45:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.78%, 内存: 66.67%, 磁盘: 29.93%, 使用内存: 128544665600 {}
+[2026-05-02 11:45:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.78%, 内存: 66.67%, 磁盘: 29.93% {}
+[2026-05-02 11:45:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 11:45:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.52秒 {}
+[2026-05-02 11:45:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 11:45:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 11:50:00 执行 {}
+[2026-05-02 11:50:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 11:50:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 11:50:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 11:50:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 11:50:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 11:50:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.35GB, 使用率: 66.67% {}
+[2026-05-02 11:50:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 11:50:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.91% {}
+[2026-05-02 11:50:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.19%, 内存: 66.67%, 磁盘: 29.91%, 使用内存: 128454782976 {}
+[2026-05-02 11:50:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.19%, 内存: 66.67%, 磁盘: 29.91% {}
+[2026-05-02 11:50:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 11:50:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.36秒 {}
+[2026-05-02 11:50:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 11:50:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 11:55:00 执行 {}
+[2026-05-02 11:55:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 11:55:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 11:55:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 11:55:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 11:55:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 11:55:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 24.45GB, 使用率: 66.67% {}
+[2026-05-02 11:55:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 11:55:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.91% {}
+[2026-05-02 11:55:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.29%, 内存: 66.67%, 磁盘: 29.91%, 使用内存: 128467832832 {}
+[2026-05-02 11:55:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.29%, 内存: 66.67%, 磁盘: 29.91% {}
+[2026-05-02 11:55:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 11:55:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.34秒 {}
+[2026-05-02 11:55:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 11:55:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 12:00:00 执行 {}
+[2026-05-02 12:00:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 12:00:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 12:00:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 12:00:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 12:00:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 12:00:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 25.56GB, 使用率: 66.67% {}
+[2026-05-02 12:00:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 12:00:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.92% {}
+[2026-05-02 12:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.10%, 内存: 66.67%, 磁盘: 29.92%, 使用内存: 128484651008 {}
+[2026-05-02 12:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.10%, 内存: 66.67%, 磁盘: 29.92% {}
+[2026-05-02 12:00:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 12:00:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.33秒 {}
+[2026-05-02 12:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 12:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 12:05:00 执行 {}
+[2026-05-02 12:05:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 12:05:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 12:05:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 12:05:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 12:05:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 12:05:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 17.00GB, 估算总内存: 25.99GB, 使用率: 66.67% {}
+[2026-05-02 12:05:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 12:05:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.92% {}
+[2026-05-02 12:05:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 2.03%, 内存: 66.67%, 磁盘: 29.92%, 使用内存: 128489967616 {}
+[2026-05-02 12:05:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 2.03%, 内存: 66.67%, 磁盘: 29.92% {}
+[2026-05-02 12:05:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 12:05:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.40秒 {}
+[2026-05-02 12:05:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 12:05:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 12:10:00 执行 {}
+[2026-05-02 12:10:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-05-02 12:10:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-05-02 12:10:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-05-02 12:10:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-05-02 12:10:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-05-02 12:10:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 18.00GB, 估算总内存: 27.10GB, 使用率: 66.67% {}
+[2026-05-02 12:10:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-05-02 12:10:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 119.00GB, 使用率: 29.93% {}
+[2026-05-02 12:10:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 29.93%, 使用内存: 128534515712 {}
+[2026-05-02 12:10:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 29.93% {}
+[2026-05-02 12:10:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-05-02 12:10:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.34秒 {}
+[2026-05-02 12:10:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-05-02 12:10:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 12:15:00 执行 {}
+[2026-05-02 17:57:05 INF]  应用程序启动中... {}
+[2026-05-02 17:57:06 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-05-02 17:57:06 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-05-02 17:57:07 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-05-02 17:57:07 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-05-02 17:57:07 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-05-02 17:57:07 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-05-02 17:57:07 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-05-02 18:00:00 执行 {}
+[2026-05-02 18:00:04 INF]  应用程序启动中... {}

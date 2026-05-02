@@ -12,6 +12,12 @@ import AccessManagement from '@/views/AccessManagement.vue'
 import NotificationManagement from '@/views/NotificationManagement.vue'
 import CategoryManagement from '@/views/CategoryManagement.vue'
 import ScheduledTaskManagement from '@/views/ScheduledTaskManagement.vue'
+import ReservationClubManagement from '@/views/ReservationClubManagement.vue'
+import ReservationTrainerManagement from '@/views/ReservationTrainerManagement.vue'
+import ReservationSessionManagement from '@/views/ReservationSessionManagement.vue'
+import ReservationScheduleManagement from '@/views/ReservationScheduleManagement.vue'
+import ReservationPackageManagement from '@/views/ReservationPackageManagement.vue'
+import ReservationOrderManagement from '@/views/ReservationOrderManagement.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -93,6 +99,42 @@ const router = createRouter({
           path: '/scheduled-task-management',
           name: 'ScheduledTaskManagement',
           component: ScheduledTaskManagement,
+          meta: { requiresAuth: true }
+        },
+        {
+          path: '/reservation-club-management',
+          name: 'ReservationClubManagement',
+          component: ReservationClubManagement,
+          meta: { requiresAuth: true }
+        },
+        {
+          path: '/reservation-trainer-management',
+          name: 'ReservationTrainerManagement',
+          component: ReservationTrainerManagement,
+          meta: { requiresAuth: true }
+        },
+        {
+          path: '/reservation-session-management',
+          name: 'ReservationSessionManagement',
+          component: ReservationSessionManagement,
+          meta: { requiresAuth: true }
+        },
+        {
+          path: '/reservation-schedule-management',
+          name: 'ReservationScheduleManagement',
+          component: ReservationScheduleManagement,
+          meta: { requiresAuth: true }
+        },
+        {
+          path: '/reservation-package-management',
+          name: 'ReservationPackageManagement',
+          component: ReservationPackageManagement,
+          meta: { requiresAuth: true }
+        },
+        {
+          path: '/reservation-order-management',
+          name: 'ReservationOrderManagement',
+          component: ReservationOrderManagement,
           meta: { requiresAuth: true }
         }
       ]

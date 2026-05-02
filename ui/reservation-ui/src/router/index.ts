@@ -1,101 +1,116 @@
-// 路由配置（新增 BindCoach 路由）
-import { useUserStore } from '@/stores/user'
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/authStore'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      redirect: '/home'
+      redirect: '/login'
     },
     {
       path: '/login',
-      name: 'Login',
+      name: 'login',
       component: () => import('@/views/Login.vue'),
-      meta: { requiresAuth: false }
+      meta: { showTabBar: false }
     },
     {
-      path: '/register',
-      name: 'Register',
-      component: () => import('@/views/Register.vue'),
-      meta: { requiresAuth: false }
+      path: '/coach',
+      name: 'coach-dashboard',
+      component: () => import('@/views/CoachDashboard.vue'),
+      meta: { showTabBar: false, requiresAuth: true, role: 'coach' }
     },
     {
       path: '/home',
-      name: 'Home',
+      name: 'home',
       component: () => import('@/views/Home.vue'),
-      meta: { requiresAuth: true }
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
     },
-    // 新增：个人信息
+    {
+      path: '/trainers',
+      name: 'trainers',
+      component: () => import('@/views/TrainerList.vue'),
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/trainer/:id',
+      name: 'trainer-detail',
+      component: () => import('@/views/TrainerDetail.vue'),
+      props: true,
+      meta: { showTabBar: false, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/booking/:id',
+      name: 'booking',
+      component: () => import('@/views/BookingCoach.vue'),
+      props: true,
+      meta: { showTabBar: false, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/reservations',
+      name: 'reservations',
+      component: () => import('@/views/MyReservations.vue'),
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/training',
+      name: 'training',
+      component: () => import('@/views/TrainingHub.vue'),
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/reservation-flow',
+      name: 'reservation-flow',
+      component: () => import('@/views/ReservationFlow.vue'),
+      meta: { showTabBar: false, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/commerce',
+      name: 'commerce-center',
+      component: () => import('@/views/CommerceCenter.vue'),
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/member-center',
+      name: 'member-center',
+      component: () => import('@/views/MemberCenter.vue'),
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
+    },
+    {
+      path: '/experience-map',
+      name: 'experience-map',
+      component: () => import('@/views/ExperienceMap.vue'),
+      meta: { showTabBar: false, requiresAuth: true, role: 'member' }
+    },
     {
       path: '/profile',
-      name: 'Profile',
-      component: () => import('@/views/member/Profile.vue'),
-      meta: { requiresAuth: true }
-    },
-    // 新增：关于健身
-    {
-      path: '/fitness',
-      name: 'Fitness',
-      component: () => import('@/views/Fitness.vue'),
-      meta: { requiresAuth: true }
-    },
-    // 新增：健身预约 - 创建
-    {
-      path: '/booking/create',
-      name: 'CreateBooking',
-      component: () => import('@/views/booking/CreateBooking.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/booking',
-      name: 'BookingList',
-      component: () => import('@/views/booking/BookingList.vue'),
-      meta: { requiresAuth: true }
-    },
-    // 移除：会员端绑定教练页面
-    // 原：{
-    //   path: '/bind-coach',
-    //   name: 'BindCoach',
-    //   component: () => import('@/views/booking/BindCoach.vue'),
-    //   meta: { requiresAuth: true }
-    // }
-    {
-      path: '/members',
-      name: 'MyMembers',
-      component: () => import('@/views/trainer/MyMembers.vue'),
-      meta: { requiresAuth: true }
-    },
-    // 新增：添加会员页面
-    {
-      path: '/members/add',
-      name: 'AddMembers',
-      component: () => import('@/views/trainer/AddMembers.vue'),
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/notifications',
-      name: 'Notifications',
-      component: () => import('@/views/notifications/NotificationList.vue'),
-      meta: { requiresAuth: true }
+      name: 'profile',
+      component: () => import('@/views/Profile.vue'),
+      meta: { showTabBar: true, requiresAuth: true, role: 'member' }
     }
   ]
 })
 
-// 全局守卫：未登录禁止进入需要认证的页面
-router.beforeEach((to, from, next) => {
-  const userStore = useUserStore()
+router.beforeEach((to) => {
+  const authStore = useAuthStore()
 
-  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
-    next('/login')
-    return
+  if (to.name === 'login' && authStore.isLoggedIn) {
+    return authStore.isCoach ? { name: 'coach-dashboard' } : { name: 'home' }
   }
-  if (!to.meta.requiresAuth && userStore.isLoggedIn && to.path === '/login') {
-    next('/home')
-    return
+
+  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+    return { name: 'login' }
   }
-  next()
+
+  if (to.meta.role === 'coach' && !authStore.isCoach) {
+    return { name: 'home' }
+  }
+
+  if (to.meta.role === 'member' && !authStore.isMember) {
+    return { name: 'coach-dashboard' }
+  }
+
+  return true
 })
 
 export default router

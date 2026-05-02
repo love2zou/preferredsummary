@@ -1,0 +1,8 @@
+[2026-04-20 21:14:27 INF]  应用程序启动中... {}
+[2026-04-20 21:14:28 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-04-20 21:14:28 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-04-20 21:14:30 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-04-20 21:14:30 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-04-20 21:14:30 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-04-20 21:14:30 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-04-20 21:14:30 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-20 21:15:00 执行 {}

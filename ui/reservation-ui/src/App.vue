@@ -1,23 +1,13 @@
 <template>
-  <router-view />
+  <AppShell>
+    <router-view v-slot="{ Component, route }">
+      <transition name="screen-slide" mode="out-in">
+        <component :is="Component" :key="route.fullPath" />
+      </transition>
+    </router-view>
+  </AppShell>
 </template>
 
 <script setup lang="ts">
-import { useUserStore } from '@/stores/user'
-import { onMounted } from 'vue'
-
-const userStore = useUserStore()
-
-onMounted(() => {
-  // 初始化用户信息
-  userStore.initUser()
-})
+import AppShell from '@/components/AppShell.vue'
 </script>
-
-<style>
-#app {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-</style>

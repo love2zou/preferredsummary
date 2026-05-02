@@ -1,0 +1,150 @@
+[2026-04-19 00:00:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 00:00:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 00:00:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 00:00:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 00:00:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 00:00:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 19.00GB, 估算总内存: 29.19GB, 使用率: 66.67% {}
+[2026-04-19 00:00:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 00:00:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 115.00GB, 使用率: 28.94% {}
+[2026-04-19 00:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.29%, 内存: 66.67%, 磁盘: 28.94%, 使用内存: 124279549952 {}
+[2026-04-19 00:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.29%, 内存: 66.67%, 磁盘: 28.94% {}
+[2026-04-19 00:00:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 00:00:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.10秒 {}
+[2026-04-19 00:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 00:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 00:05:00 执行 {}
+[2026-04-19 00:07:05 INF]  应用程序启动中... {}
+[2026-04-19 00:07:06 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-04-19 00:07:06 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-04-19 00:07:07 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-04-19 00:07:07 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-04-19 00:07:07 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-04-19 00:07:07 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-04-19 00:07:07 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 00:10:00 执行 {}
+[2026-04-19 22:22:52 INF]  应用程序启动中... {}
+[2026-04-19 22:22:53 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-04-19 22:22:53 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-04-19 22:22:54 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-04-19 22:22:54 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-04-19 22:22:54 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-04-19 22:22:54 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-04-19 22:22:55 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:25:00 执行 {}
+[2026-04-19 22:25:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:25:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:25:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:25:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:25:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:25:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 16.00GB, 估算总内存: 25.02GB, 使用率: 66.67% {}
+[2026-04-19 22:25:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:25:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 114.00GB, 使用率: 28.67% {}
+[2026-04-19 22:25:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.58%, 内存: 66.67%, 磁盘: 28.67%, 使用内存: 123129057280 {}
+[2026-04-19 22:25:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.58%, 内存: 66.67%, 磁盘: 28.67% {}
+[2026-04-19 22:25:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:25:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.25秒 {}
+[2026-04-19 22:25:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:25:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:30:00 执行 {}
+[2026-04-19 22:30:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:30:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:30:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:30:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:30:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:30:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 18.00GB, 估算总内存: 27.78GB, 使用率: 66.67% {}
+[2026-04-19 22:30:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:30:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 114.00GB, 使用率: 28.69% {}
+[2026-04-19 22:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.10%, 内存: 66.67%, 磁盘: 28.69%, 使用内存: 123205980160 {}
+[2026-04-19 22:30:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.10%, 内存: 66.67%, 磁盘: 28.69% {}
+[2026-04-19 22:30:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:30:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.10秒 {}
+[2026-04-19 22:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:30:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:35:00 执行 {}
+[2026-04-19 22:35:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:35:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:35:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:35:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:35:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:35:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 20.00GB, 估算总内存: 30.28GB, 使用率: 66.67% {}
+[2026-04-19 22:35:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:35:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 114.00GB, 使用率: 28.69% {}
+[2026-04-19 22:35:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.10%, 内存: 66.67%, 磁盘: 28.69%, 使用内存: 123227549696 {}
+[2026-04-19 22:35:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.10%, 内存: 66.67%, 磁盘: 28.69% {}
+[2026-04-19 22:35:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:35:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.11秒 {}
+[2026-04-19 22:35:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:35:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:40:00 执行 {}
+[2026-04-19 22:40:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:40:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:40:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:40:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:40:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:40:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 20.00GB, 估算总内存: 30.30GB, 使用率: 66.67% {}
+[2026-04-19 22:40:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:40:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 115.00GB, 使用率: 28.75% {}
+[2026-04-19 22:40:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.19%, 内存: 66.67%, 磁盘: 28.75%, 使用内存: 123486134272 {}
+[2026-04-19 22:40:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.19%, 内存: 66.67%, 磁盘: 28.75% {}
+[2026-04-19 22:40:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:40:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.12秒 {}
+[2026-04-19 22:40:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:40:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:45:00 执行 {}
+[2026-04-19 22:45:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:45:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:45:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:45:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:45:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:45:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 20.00GB, 估算总内存: 30.41GB, 使用率: 66.67% {}
+[2026-04-19 22:45:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:45:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 115.00GB, 使用率: 28.76% {}
+[2026-04-19 22:45:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 28.76%, 使用内存: 123521753088 {}
+[2026-04-19 22:45:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 28.76% {}
+[2026-04-19 22:45:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:45:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.14秒 {}
+[2026-04-19 22:45:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:45:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:50:00 执行 {}
+[2026-04-19 22:49:59 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:50:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:50:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:50:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:50:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:50:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 20.00GB, 估算总内存: 30.21GB, 使用率: 66.67% {}
+[2026-04-19 22:50:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:50:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 114.00GB, 使用率: 28.75% {}
+[2026-04-19 22:50:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.10%, 内存: 66.67%, 磁盘: 28.75%, 使用内存: 123475230720 {}
+[2026-04-19 22:50:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.10%, 内存: 66.67%, 磁盘: 28.75% {}
+[2026-04-19 22:50:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:50:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.11秒 {}
+[2026-04-19 22:50:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:50:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 22:55:00 执行 {}
+[2026-04-19 22:55:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 22:55:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 22:55:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 22:55:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 22:55:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 22:55:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 19.00GB, 估算总内存: 30.00GB, 使用率: 66.67% {}
+[2026-04-19 22:55:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 22:55:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 114.00GB, 使用率: 28.75% {}
+[2026-04-19 22:55:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 0.00%, 内存: 66.67%, 磁盘: 28.75%, 使用内存: 123468591104 {}
+[2026-04-19 22:55:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 0.00%, 内存: 66.67%, 磁盘: 28.75% {}
+[2026-04-19 22:55:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 22:55:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.10秒 {}
+[2026-04-19 22:55:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 22:55:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 23:00:00 执行 {}
+[2026-04-19 22:59:15 INF]  应用程序启动中... {}
+[2026-04-19 22:59:16 INF] Preferred.Api.Services.VideoAnalysisWorker VideoAnalysisWorker started. DOP=2, MaxRetry=2 {}
+[2026-04-19 22:59:17 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务后台服务已启动 {}
+[2026-04-19 22:59:18 INF] Microsoft.Hosting.Lifetime Now listening on: http://localhost:5000 {"EventId":{"Id":14,"Name":"ListeningOnAddress"}}
+[2026-04-19 22:59:18 INF] Microsoft.Hosting.Lifetime Application started. Press Ctrl+C to shut down. {}
+[2026-04-19 22:59:18 INF] Microsoft.Hosting.Lifetime Hosting environment: Development {}
+[2026-04-19 22:59:18 INF] Microsoft.Hosting.Lifetime Content root path: D:\github\preferredsummary\api\Preferred.Api {}
+[2026-04-19 22:59:18 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 23:00:00 执行 {}
+[2026-04-19 23:00:00 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 开始执行定时任务: 1 {}
+[2026-04-19 23:00:00 INF] Preferred.Api.Services.ScheduledTaskService 开始手动执行定时任务: 系统资源监控 (SYSTEM_RESOURCE_MONITOR) {}
+[2026-04-19 23:00:00 INF] Preferred.Api.Services.ScheduledTaskService 执行系统监控任务: 系统资源监控 {}
+[2026-04-19 23:00:00 INF] Preferred.Api.Services.SystemMonitorService 系统监控服务已初始化 - 操作系统: Windows {}
+[2026-04-19 23:00:00 INF] Preferred.Api.Services.SystemMonitorService 开始执行系统资源监控... {}
+[2026-04-19 23:00:01 DBG] Preferred.Api.Services.SystemMonitorService 进程估算内存使用率 - 进程总内存: 19.00GB, 估算总内存: 29.99GB, 使用率: 66.67% {}
+[2026-04-19 23:00:01 DBG] Preferred.Api.Services.SystemMonitorService 尝试获取Windows磁盘使用情况: C:\ {}
+[2026-04-19 23:00:01 DBG] Preferred.Api.Services.SystemMonitorService 磁盘 C:\ - 总计: 400.00GB, 已用: 114.00GB, 使用率: 28.75% {}
+[2026-04-19 23:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控 - 配置磁盘: auto, 实际监控: C:\, CPU: 1.45%, 内存: 66.67%, 磁盘: 28.75%, 使用内存: 123468681216 {}
+[2026-04-19 23:00:01 INF] Preferred.Api.Services.SystemMonitorService 系统资源监控数据保存成功 - CPU: 1.45%, 内存: 66.67%, 磁盘: 28.75% {}
+[2026-04-19 23:00:01 INF] Preferred.Api.Services.ScheduledTaskService 系统监控任务执行完成: 系统资源监控 {}
+[2026-04-19 23:00:01 INF] Preferred.Api.Services.ScheduledTaskService 手动执行定时任务成功: 系统资源监控 (SYSTEM_RESOURCE_MONITOR), 耗时: 1.24秒 {}
+[2026-04-19 23:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务执行完成: 1, 结果: 成功 {}
+[2026-04-19 23:00:01 INF] Preferred.Api.Services.ScheduledTaskBackgroundService 定时任务 系统资源监控 已安排在 2026-04-19 23:05:00 执行 {}

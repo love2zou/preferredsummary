@@ -195,6 +195,395 @@ CREATE TABLE IF NOT EXISTS Tb_BookTask (
 /*==============================================================*/
 /* 录波分析: Tb_ZwavFile  ZWAV原始文件表                          */
 /*==============================================================*/
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationClub  门店基础信息表                */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationClub (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   ClubCode             VARCHAR(50)           NOT NULL COMMENT '门店编码',
+   ClubName             VARCHAR(100)          NOT NULL COMMENT '门店名称',
+   City                 VARCHAR(50)           NOT NULL COMMENT '所在城市',
+   District             VARCHAR(50)           NULL COMMENT '所在区域',
+   Address              VARCHAR(255)          NULL COMMENT '门店地址',
+   BusinessHours        VARCHAR(100)          NULL COMMENT '营业时间',
+   IsActive             TINYINT(1) DEFAULT 1  NOT NULL COMMENT '是否启用',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationClub_ClubCode (ClubCode),
+   KEY IDX_Tb_ReservationClub_City_IsActive (City, IsActive)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP门店基础信息表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainerProfile  教练档案表          */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainerProfile (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   UserId               INT                   NOT NULL COMMENT '关联用户ID，对应Tb_User.Id',
+   ClubId               INT                   NOT NULL COMMENT '所属门店ID',
+   DisplayName          VARCHAR(100)          NOT NULL COMMENT '教练展示名称',
+   Title                VARCHAR(100)          NOT NULL COMMENT '教练头衔',
+   Gender               VARCHAR(10)           NOT NULL COMMENT '性别',
+   YearsOfExperience    INT DEFAULT 0         NOT NULL COMMENT '从业年限',
+   Rating               DECIMAL(4,2) DEFAULT 0.00 NOT NULL COMMENT '评分',
+   ReviewCount          INT DEFAULT 0         NOT NULL COMMENT '评价数',
+   ServedClients        INT DEFAULT 0         NOT NULL COMMENT '服务人数',
+   Satisfaction         INT DEFAULT 0         NOT NULL COMMENT '好评率',
+   BasePrice            DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '基础课单价',
+   TrainingArea         VARCHAR(100)          NULL COMMENT '训练区域',
+   Highlight            VARCHAR(100)          NULL COMMENT '首页推荐亮点',
+   Introduction         VARCHAR(1000)         NULL COMMENT '教练简介',
+   Story                VARCHAR(1000)         NULL COMMENT '教练补充介绍',
+   HeroImageUrl         VARCHAR(500)          NULL COMMENT '教练主图',
+   HeroTone             VARCHAR(20)           NULL COMMENT '主视觉背景色',
+   AccentTone           VARCHAR(20)           NULL COMMENT '强调色',
+   IsRecommended        TINYINT(1) DEFAULT 0  NOT NULL COMMENT '是否首页推荐',
+   IsActive             TINYINT(1) DEFAULT 1  NOT NULL COMMENT '是否启用',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationTrainerProfile_UserId (UserId),
+   KEY IDX_Tb_ReservationTrainerProfile_ClubId_IsActive (ClubId, IsActive),
+   KEY IDX_Tb_ReservationTrainerProfile_IsRecommended (IsRecommended)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP教练档案表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainerTag  教练标签表              */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainerTag (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   TrainerProfileId     INT                   NOT NULL COMMENT '教练档案ID',
+   TagType              VARCHAR(30)           NOT NULL COMMENT '标签类型(Goal/Specialty/Badge/Certification)',
+   TagName              VARCHAR(100)          NOT NULL COMMENT '标签名称',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   KEY IDX_Tb_ReservationTrainerTag_Profile_TagType (TrainerProfileId, TagType)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP教练标签表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainerSessionType  课程类型表      */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainerSessionType (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   TrainerProfileId     INT                   NOT NULL COMMENT '教练档案ID',
+   SessionCode          VARCHAR(50)           NOT NULL COMMENT '课程编码',
+   SessionName          VARCHAR(100)          NOT NULL COMMENT '课程名称',
+   Description          VARCHAR(255)          NULL COMMENT '课程说明',
+   DurationMinutes      INT DEFAULT 60        NOT NULL COMMENT '课程时长(分钟)',
+   Price                DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '课程价格',
+   IsActive             TINYINT(1) DEFAULT 1  NOT NULL COMMENT '是否启用',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationTrainerSessionType_Profile_Code (TrainerProfileId, SessionCode),
+   KEY IDX_Tb_ReservationTrainerSessionType_Profile_IsActive (TrainerProfileId, IsActive)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP教练课程类型表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainerScheduleSlot  教练排班表     */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainerScheduleSlot (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   TrainerProfileId     INT                   NOT NULL COMMENT '教练档案ID',
+   ClubId               INT                   NOT NULL COMMENT '排班所属门店ID',
+   ScheduleDate         DATETIME              NOT NULL COMMENT '排班日期',
+   StartTime            VARCHAR(10)           NOT NULL COMMENT '开始时间(HH:mm)',
+   EndTime              VARCHAR(10)           NOT NULL COMMENT '结束时间(HH:mm)',
+   IsAvailable          TINYINT(1) DEFAULT 1  NOT NULL COMMENT '是否可预约',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationTrainerScheduleSlot_Unique (TrainerProfileId, ScheduleDate, StartTime, EndTime),
+   KEY IDX_Tb_ReservationTrainerScheduleSlot_Profile_Date (TrainerProfileId, ScheduleDate),
+   KEY IDX_Tb_ReservationTrainerScheduleSlot_Available (IsAvailable)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP教练排班时间段表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationMemberPackage  会员课包表           */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationMemberPackage (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   MemberId             INT                   NOT NULL COMMENT '会员ID，对应Tb_User.Id',
+   ClubId               INT                   NOT NULL COMMENT '所属门店ID',
+   PackageName          VARCHAR(100)          NOT NULL COMMENT '课包名称',
+   MembershipName       VARCHAR(100)          NULL COMMENT '会员名称',
+   TotalSessions        INT DEFAULT 0         NOT NULL COMMENT '总课时',
+   RemainingSessions    INT DEFAULT 0         NOT NULL COMMENT '剩余课时',
+   EffectiveDate        DATETIME              NOT NULL COMMENT '生效时间',
+   ExpireDate           DATETIME              NOT NULL COMMENT '失效时间',
+   StatusCode           VARCHAR(20)           NOT NULL COMMENT '状态(Active/Expired/Frozen)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   KEY IDX_Tb_ReservationMemberPackage_Member_Status_Expire (MemberId, StatusCode, ExpireDate),
+   KEY IDX_Tb_ReservationMemberPackage_ClubId (ClubId)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP会员课包表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationOrder  预约订单表                   */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationOrder (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   ReservationNo        VARCHAR(50)           NOT NULL COMMENT '预约单号',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   TrainerProfileId     INT                   NOT NULL COMMENT '教练档案ID',
+   ClubId               INT                   NOT NULL COMMENT '门店ID',
+   SessionTypeId        INT                   NOT NULL COMMENT '课程类型ID',
+   ScheduleSlotId       INT                   NULL COMMENT '关联排班ID',
+   ReservationDate      DATETIME              NOT NULL COMMENT '预约日期',
+   StartTime            VARCHAR(10)           NOT NULL COMMENT '开始时间(HH:mm)',
+   EndTime              VARCHAR(10)           NOT NULL COMMENT '结束时间(HH:mm)',
+   PriceAmount          DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '订单金额',
+   StatusCode           VARCHAR(20)           NOT NULL COMMENT '状态(Upcoming/Completed/Cancelled)',
+   Remark               VARCHAR(500)          NULL COMMENT '备注',
+   CancelTime           DATETIME              NULL COMMENT '取消时间',
+   CompleteTime         DATETIME              NULL COMMENT '完成时间',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationOrder_ReservationNo (ReservationNo),
+   KEY IDX_Tb_ReservationOrder_Member_Status_Date (MemberId, StatusCode, ReservationDate),
+   KEY IDX_Tb_ReservationOrder_Trainer_Date (TrainerProfileId, ReservationDate)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP预约订单表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationReview  预约评价表                  */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationReview (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   ReservationOrderId   INT                   NOT NULL COMMENT '预约订单ID',
+   TrainerProfileId     INT                   NOT NULL COMMENT '教练档案ID',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   AuthorName           VARCHAR(100)          NOT NULL COMMENT '评价人名称',
+   Rating               DECIMAL(4,2) DEFAULT 0.00 NOT NULL COMMENT '评分',
+   ReviewTag            VARCHAR(100)          NULL COMMENT '评价标签',
+   Content              VARCHAR(1000)         NOT NULL COMMENT '评价内容',
+   IsVisible            TINYINT(1) DEFAULT 1  NOT NULL COMMENT '是否可展示',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationReview_OrderId (ReservationOrderId),
+   KEY IDX_Tb_ReservationReview_Trainer_IsVisible (TrainerProfileId, IsVisible)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP教练评价表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationCoursePackage  课程商品包表         */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationCoursePackage (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   PackageCode          VARCHAR(50)           NOT NULL COMMENT '课程包编码',
+   PackageName          VARCHAR(100)          NOT NULL COMMENT '课程包名称',
+   CategoryName         VARCHAR(50)           NOT NULL COMMENT '课程分类名称',
+   Summary              VARCHAR(500)          NULL COMMENT '课程包简介',
+   CoverImageUrl        VARCHAR(500)          NULL COMMENT '封面图地址',
+   OriginalPrice        DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '原价',
+   SalePrice            DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '售价',
+   TotalSessions        INT DEFAULT 0         NOT NULL COMMENT '总课时数',
+   ValidDays            INT DEFAULT 0         NOT NULL COMMENT '有效天数',
+   CoachLevel           VARCHAR(50)           NULL COMMENT '适用教练级别',
+   ClubScope            VARCHAR(100)          NULL COMMENT '适用门店范围',
+   IsRecommended        TINYINT(1) DEFAULT 0  NOT NULL COMMENT '是否推荐',
+   StatusCode           VARCHAR(20) DEFAULT 'Active' NOT NULL COMMENT '状态(Active/Inactive)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationCoursePackage_PackageCode (PackageCode),
+   KEY IDX_Tb_ReservationCoursePackage_Status_SeqNo (StatusCode, SeqNo),
+   KEY IDX_Tb_ReservationCoursePackage_IsRecommended (IsRecommended)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP课程商品包表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationCourseOrder  课程购买订单表         */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationCourseOrder (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   OrderNo              VARCHAR(50)           NOT NULL COMMENT '订单编号',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   CoursePackageId      INT                   NOT NULL COMMENT '课程包ID',
+   Quantity             INT DEFAULT 1         NOT NULL COMMENT '购买数量',
+   OriginAmount         DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '原始金额',
+   DiscountAmount       DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '优惠金额',
+   PointDiscountAmount  DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '积分抵扣金额',
+   PayAmount            DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '实付金额',
+   CouponId             INT                   NULL COMMENT '使用优惠券ID',
+   PaymentMethod        VARCHAR(30)           NULL COMMENT '支付方式',
+   StatusCode           VARCHAR(20) DEFAULT 'PendingPayment' NOT NULL COMMENT '状态(PendingPayment/Paid/Completed/Closed)',
+   OrderTime            DATETIME              NOT NULL COMMENT '下单时间',
+   PayTime              DATETIME              NULL COMMENT '支付时间',
+   EffectiveTime        DATETIME              NULL COMMENT '生效时间',
+   Remark               VARCHAR(500)          NULL COMMENT '备注',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationCourseOrder_OrderNo (OrderNo),
+   KEY IDX_Tb_ReservationCourseOrder_Member_Status_Time (MemberId, StatusCode, OrderTime),
+   KEY IDX_Tb_ReservationCourseOrder_Package_Status (CoursePackageId, StatusCode)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP课程购买订单表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationCoupon  优惠券定义表                */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationCoupon (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   CouponCode           VARCHAR(50)           NOT NULL COMMENT '优惠券编码',
+   Title                VARCHAR(100)          NOT NULL COMMENT '优惠券标题',
+   CouponType           VARCHAR(20)           NOT NULL COMMENT '优惠类型(Amount/Discount)',
+   DiscountValue        DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '优惠值',
+   MinAmount            DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '最低使用金额',
+   RuleText             VARCHAR(500)          NULL COMMENT '使用规则',
+   StartDate            DATETIME              NOT NULL COMMENT '生效开始时间',
+   EndDate              DATETIME              NOT NULL COMMENT '生效结束时间',
+   IsActive             TINYINT(1) DEFAULT 1  NOT NULL COMMENT '是否启用',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationCoupon_CouponCode (CouponCode),
+   KEY IDX_Tb_ReservationCoupon_IsActive_Date (IsActive, StartDate, EndDate)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP优惠券定义表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationMemberCoupon  会员优惠券表          */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationMemberCoupon (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   CouponId             INT                   NOT NULL COMMENT '优惠券ID',
+   CourseOrderId        INT                   NULL COMMENT '关联课程订单ID',
+   StatusCode           VARCHAR(20) DEFAULT 'Available' NOT NULL COMMENT '状态(Available/Used/Expired)',
+   ClaimedTime          DATETIME              NOT NULL COMMENT '领取时间',
+   UsedTime             DATETIME              NULL COMMENT '使用时间',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationMemberCoupon_Member_Coupon (MemberId, CouponId),
+   KEY IDX_Tb_ReservationMemberCoupon_Member_Status (MemberId, StatusCode),
+   KEY IDX_Tb_ReservationMemberCoupon_CourseOrderId (CourseOrderId)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP会员优惠券表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationBodyMetric  会员身体数据表          */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationBodyMetric (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   MeasureTime          DATETIME              NOT NULL COMMENT '测量时间',
+   WeightKg             DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '体重(kg)',
+   BodyFatRate          DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '体脂率(%)',
+   Bmi                  DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT 'BMI',
+   MuscleKg             DECIMAL(10,2) DEFAULT 0.00 NOT NULL COMMENT '肌肉量(kg)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationBodyMetric_Member_MeasureTime (MemberId, MeasureTime),
+   KEY IDX_Tb_ReservationBodyMetric_Member_Time (MemberId, MeasureTime)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP会员身体数据表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainingRecord  训练记录表          */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainingRecord (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   CoachUserId          INT                   NOT NULL COMMENT '教练用户ID',
+   ReservationOrderId   INT                   NULL COMMENT '关联预约订单ID',
+   RecordTime           DATETIME              NOT NULL COMMENT '记录时间',
+   Title                VARCHAR(100)          NOT NULL COMMENT '训练标题',
+   DurationMinutes      INT DEFAULT 0         NOT NULL COMMENT '训练时长(分钟)',
+   Calories             INT DEFAULT 0         NOT NULL COMMENT '消耗热量(kcal)',
+   LocationName         VARCHAR(100)          NULL COMMENT '训练地点',
+   StatusCode           VARCHAR(20) DEFAULT 'Completed' NOT NULL COMMENT '状态(Completed/Draft)',
+   Summary              VARCHAR(1000)         NULL COMMENT '训练总结',
+   ActionNotesJson      TEXT                  NULL COMMENT '动作明细(JSON)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationTrainingRecord_Member_Time_Title (MemberId, RecordTime, Title),
+   KEY IDX_Tb_ReservationTrainingRecord_Member_Time (MemberId, RecordTime),
+   KEY IDX_Tb_ReservationTrainingRecord_Coach_Time (CoachUserId, RecordTime)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP训练记录表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainingPlan  训练计划表            */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainingPlan (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   CoachUserId          INT                   NULL COMMENT '教练用户ID',
+   PlanName             VARCHAR(100)          NOT NULL COMMENT '计划名称',
+   Goal                 VARCHAR(100)          NULL COMMENT '训练目标',
+   StartDate            DATETIME              NOT NULL COMMENT '计划开始时间',
+   EndDate              DATETIME              NOT NULL COMMENT '计划结束时间',
+   ProgressText         VARCHAR(50)           NULL COMMENT '进度文本',
+   StatusCode           VARCHAR(20) DEFAULT 'Active' NOT NULL COMMENT '状态(Active/Completed/Archived)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationTrainingPlan_Member_PlanName (MemberId, PlanName),
+   KEY IDX_Tb_ReservationTrainingPlan_Member_Status (MemberId, StatusCode),
+   KEY IDX_Tb_ReservationTrainingPlan_CoachUserId (CoachUserId)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP训练计划表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationTrainingPlanItem  训练计划明细表    */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationTrainingPlanItem (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   PlanId               INT                   NOT NULL COMMENT '训练计划ID',
+   DayLabel             VARCHAR(20)           NOT NULL COMMENT '星期标签',
+   SortOrder            INT DEFAULT 0         NOT NULL COMMENT '排序顺序',
+   Title                VARCHAR(100)          NOT NULL COMMENT '训练内容标题',
+   DurationMinutes      INT DEFAULT 0         NOT NULL COMMENT '目标时长(分钟)',
+   CaloriesTarget       INT DEFAULT 0         NOT NULL COMMENT '目标消耗(kcal)',
+   IsCompleted          TINYINT(1) DEFAULT 0  NOT NULL COMMENT '是否已完成',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationTrainingPlanItem_Plan_DayLabel (PlanId, DayLabel),
+   KEY IDX_Tb_ReservationTrainingPlanItem_Plan_SortOrder (PlanId, SortOrder)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP训练计划明细表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationConversationMessage  联系教练消息表 */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationConversationMessage (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   SessionKey           VARCHAR(100)          NOT NULL COMMENT '会话键',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   CoachUserId          INT                   NOT NULL COMMENT '教练用户ID',
+   SenderRole           VARCHAR(20)           NOT NULL COMMENT '发送方角色(member/coach/system)',
+   SenderName           VARCHAR(100)          NOT NULL COMMENT '发送方名称',
+   Content              VARCHAR(2000)         NOT NULL COMMENT '消息内容',
+   SentTime             DATETIME              NOT NULL COMMENT '发送时间',
+   StatusCode           VARCHAR(20) DEFAULT 'Sent' NOT NULL COMMENT '状态(Sent/Read/Withdrawn)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   KEY IDX_Tb_ReservationConversationMessage_Session_Time (SessionKey, SentTime),
+   KEY IDX_Tb_ReservationConversationMessage_Member_Coach (MemberId, CoachUserId)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP联系教练消息表';
+
+/*==============================================================*/
+/* 健身预约APP: Tb_ReservationCheckInRecord  到店签到记录表       */
+/*==============================================================*/
+CREATE TABLE IF NOT EXISTS Tb_ReservationCheckInRecord (
+   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
+   ReservationOrderId   INT                   NOT NULL COMMENT '预约订单ID',
+   MemberId             INT                   NOT NULL COMMENT '会员ID',
+   CoachUserId          INT                   NOT NULL COMMENT '教练用户ID',
+   CheckInMethod        VARCHAR(30)           NOT NULL COMMENT '签到方式',
+   CheckInTime          DATETIME              NOT NULL COMMENT '签到时间',
+   ClubName             VARCHAR(100)          NOT NULL COMMENT '签到门店名称',
+   AreaName             VARCHAR(100)          NULL COMMENT '训练区域名称',
+   StatusCode           VARCHAR(20) DEFAULT 'CheckedIn' NOT NULL COMMENT '状态(CheckedIn/Absent)',
+   SeqNo                INT DEFAULT 0         NOT NULL COMMENT '排序号',
+   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
+   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
+   UNIQUE KEY UK_Tb_ReservationCheckInRecord_OrderId (ReservationOrderId),
+   KEY IDX_Tb_ReservationCheckInRecord_Member_Time (MemberId, CheckInTime),
+   KEY IDX_Tb_ReservationCheckInRecord_Coach_Time (CoachUserId, CheckInTime)
+)ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP到店签到记录表';
+
 CREATE TABLE IF NOT EXISTS Tb_ZwavFile (
    Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
    OriginalName 	 	VARCHAR(255)         NOT NULL COMMENT '原始文件名',

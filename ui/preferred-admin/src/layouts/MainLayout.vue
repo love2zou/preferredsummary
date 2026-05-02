@@ -93,6 +93,37 @@
             <el-icon><UserFilled /></el-icon>
             <span>用户管理</span>
           </el-menu-item>
+
+          <el-sub-menu index="reservation-app">
+            <template #title>
+              <el-icon><Calendar /></el-icon>
+              <span>预约APP管理</span>
+            </template>
+            <el-menu-item index="/reservation-club-management">
+              <el-icon><OfficeBuilding /></el-icon>
+              <span>门店管理</span>
+            </el-menu-item>
+            <el-menu-item index="/reservation-trainer-management">
+              <el-icon><UserFilled /></el-icon>
+              <span>教练管理</span>
+            </el-menu-item>
+            <el-menu-item index="/reservation-session-management">
+              <el-icon><Collection /></el-icon>
+              <span>课程类型</span>
+            </el-menu-item>
+            <el-menu-item index="/reservation-schedule-management">
+              <el-icon><Timer /></el-icon>
+              <span>排班管理</span>
+            </el-menu-item>
+            <el-menu-item index="/reservation-package-management">
+              <el-icon><Tickets /></el-icon>
+              <span>会员课包</span>
+            </el-menu-item>
+            <el-menu-item index="/reservation-order-management">
+              <el-icon><Notebook /></el-icon>
+              <span>预约订单</span>
+            </el-menu-item>
+          </el-sub-menu>
         </el-menu>
       </el-aside>
 
@@ -109,16 +140,20 @@ import { useAuthStore } from '@/stores/auth'
 import {
   ArrowDown,
   Bell,
+  Calendar,
   Collection,
   Folder,
   House,
   Link,
   Monitor,
+  Notebook,
+  OfficeBuilding,
   Picture,
   Setting,
   SwitchButton,
   Timer // 新增定时任务图标
   ,
+  Tickets,
   User,
   UserFilled
 } from '@element-plus/icons-vue'

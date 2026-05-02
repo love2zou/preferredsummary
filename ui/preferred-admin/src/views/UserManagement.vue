@@ -104,13 +104,13 @@
           <!-- 新增：用户类型 -->
           <el-table-column prop="userTypeCode" label="用户类型" width="120">
             <template #default="scope">
-              {{ getUserTypeName(scope.row.userTypeCode) || '-' }}
+              {{ getUserTypeName(scope.row.userTypeCode) }}
             </template>
           </el-table-column>
           <!-- 新增：所属系统 -->
           <el-table-column prop="userToSystemCode" label="所属系统" width="140">
             <template #default="scope">
-              {{ getSystemName(scope.row.userToSystemCode) || '-' }}
+              {{ getSystemName(scope.row.userToSystemCode) }}
             </template>
           </el-table-column>
           <!-- 修正 prop 名称为 crtTime -->
@@ -390,9 +390,9 @@
 
 <script setup lang="ts">
 import { tagApi, type Tag } from '@/api/tag'
-import { userApi, type ChangePasswordParams, type PagedResponse, type UserCreateParams, type UserListParams, type User as UserType, type UserUpdateParams, type UserNamePair } from '@/api/user'
+import { userApi, type ChangePasswordParams, type PagedResponse, type UserCreateParams, type UserListParams, type User as UserType, type UserUpdateParams } from '@/api/user'
 import { pictureApi } from '@/api/picture'
-import { Message, Plus, Refresh, Search, User, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, Refresh, Search, User, Message } from '@element-plus/icons-vue'
 import { ElForm, ElMessage, ElMessageBox, type FormRules } from 'element-plus'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
@@ -409,7 +409,10 @@ const generatingNames = ref(false) // 生成用户名状态
 const avatarFileInput = ref<HTMLInputElement>()
 const uploadedAvatarUrl = ref<string>('')
 const uploadedAvatarBlob = ref<Blob | null>(null)
-  // 新增：对话框标题（编辑/新增自动切换）
+const USER_TYPE_MODULE = '用户管理-用户类型'
+const USER_SYSTEM_MODULE = '用户管理-所属系统'
+
+// 新增：对话框标题（编辑/新增自动切换）
 const dialogTitle = computed(() => (isEdit.value ? '编辑用户' : '新增用户'))
 // 搜索表单
 const searchForm = reactive({
@@ -718,8 +721,8 @@ const cleanupAvatarTempData = () => {
 onMounted(async () => {
   console.log('UserManagement component mounted')
   calculateTableHeight()
-  // 并行加载两个下拉选项
-  await Promise.all([loadUserTypeOptions(), loadSystemOptions()])
+  // 优先加载标签选项，确保“用户类型 / 所属系统”统一来源于标签管理
+  await loadTagOptions()
   // 选项加载完成后再拉取列表，避免显示 "-"
   await loadUserList()
   window.addEventListener('resize', calculateTableHeight)
@@ -760,8 +763,7 @@ const handleAdd = () => {
   // 自动生成用户名和姓名
   generateUserNames()
 
-  loadUserTypeOptions()
-  loadSystemOptions()
+  loadTagOptions()
 }
 
 const handleEdit = (row: UserType) => {
@@ -782,8 +784,7 @@ const handleEdit = (row: UserType) => {
     isActive: row.isActive
   })
   dialogVisible.value = true
-  loadUserTypeOptions()
-  loadSystemOptions()
+  loadTagOptions()
 }
 
 const handleDelete = async (row: UserType) => {
@@ -897,50 +898,61 @@ const handlePasswordSubmit = async () => {
 // 标签下拉数据源与加载状态
 const userTypeOptions = ref<Tag[]>([])
 const systemOptions = ref<Tag[]>([])
+const userTypeNameMap = ref<Record<string, string>>({})
+const systemNameMap = ref<Record<string, string>>({})
 const tagLoading = reactive({ userType: false, system: false })
 
-const loadUserTypeOptions = async () => {
+const normalizeTagOptions = (tags: Tag[] = []) =>
+  [...tags].sort((a, b) => (a.seqNo ?? 0) - (b.seqNo ?? 0))
+
+const buildTagNameMap = (tags: Tag[]) =>
+  tags.reduce((acc: Record<string, string>, tag) => {
+    acc[tag.tagCode] = tag.tagName
+    return acc
+  }, {})
+
+const loadTagOptions = async () => {
   tagLoading.userType = true
+  tagLoading.system = true
+
   try {
-    const res = await tagApi.getTagsByModule('用户管理-用户类型')
-    userTypeOptions.value = res?.data || []
-  } catch (e) {
-    console.error('加载用户类型失败:', e)
+    const [userTypeRes, systemRes] = await Promise.all([
+      tagApi.getTagsByModule(USER_TYPE_MODULE),
+      tagApi.getTagsByModule(USER_SYSTEM_MODULE)
+    ])
+
+    const userTypeTags = normalizeTagOptions(
+      Array.isArray(userTypeRes?.data) ? userTypeRes.data : []
+    )
+    const systemTags = normalizeTagOptions(
+      Array.isArray(systemRes?.data) ? systemRes.data : []
+    )
+
+    userTypeOptions.value = userTypeTags
+    systemOptions.value = systemTags
+    userTypeNameMap.value = buildTagNameMap(userTypeTags)
+    systemNameMap.value = buildTagNameMap(systemTags)
+  } catch (error) {
+    console.error('加载用户标签选项失败:', error)
     userTypeOptions.value = []
+    systemOptions.value = []
+    userTypeNameMap.value = {}
+    systemNameMap.value = {}
   } finally {
     tagLoading.userType = false
-  }
-}
-
-const loadSystemOptions = async () => {
-  tagLoading.system = true
-  try {
-    const res = await tagApi.getTagsByModule('用户管理-所属系统')
-    systemOptions.value = res?.data || []
-  } catch (e) {
-    console.error('加载所属系统失败:', e)
-    systemOptions.value = []
-  } finally {
     tagLoading.system = false
   }
 }
 
 const getUserTypeName = (code?: string | null) => {
-  if (!code) return ''
-  const found = userTypeOptions.value.find(t => t.tagCode === code)
-  return found?.tagName || ''
+  if (!code) return '-'
+  return userTypeNameMap.value[code] || code
 }
 
 const getSystemName = (code?: string | null) => {
-  if (!code) return ''
-  const found = systemOptions.value.find(t => t.tagCode === code)
-  return found?.tagName || ''
+  if (!code) return '-'
+  return systemNameMap.value[code] || code
 }
-onMounted(() => {
-  calculateTableHeight()
-  loadUserList()
-  window.addEventListener('resize', calculateTableHeight)
-})
 </script>
 
 <style scoped>

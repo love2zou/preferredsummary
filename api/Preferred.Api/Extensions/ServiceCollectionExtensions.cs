@@ -24,7 +24,11 @@ namespace Preferred.Api.Extensions
             services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<ISystemResourceService, SystemResourceService>();
             services.AddScoped<IScheduledTaskService, ScheduledTaskService>();
-            services.AddScoped<IBookingService, BookingService>();
+            services.AddScoped<IReservationAppService, ReservationAppService>();
+            services.AddScoped<IReservationAdminService, ReservationAdminService>();
+            services.AddScoped<IReservationCoachService, ReservationCoachService>();
+            services.AddScoped<IReservationPortalService, ReservationPortalService>();
+            services.AddScoped<IReservationDemoService, ReservationDemoService>();
             // 注册系统监控服务
             services.AddScoped<ISystemMonitorService, SystemMonitorService>();
             //录波文件服务

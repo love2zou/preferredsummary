@@ -147,6 +147,7 @@
         :model="formData"
         :rules="formRules"
         label-width="100px"
+        @paste="handleImagePaste"
       >
         <el-row :gutter="20">
           <el-col :span="12">
@@ -195,10 +196,16 @@
                 style="display: none"
                 @change="handleFileSelect"
               />
-              <div class="upload-placeholder" @click="selectFile">
+              <div
+                class="upload-placeholder"
+                tabindex="0"
+                @click="selectFile"
+                @keydown.enter.prevent="selectFile"
+                @keydown.space.prevent="selectFile"
+              >
                 <el-icon class="upload-icon"><Plus /></el-icon>
                 <div class="upload-text">点击选择图片</div>
-                <div class="upload-tip">支持 jpg、png、gif 格式，文件大小不超过 10MB</div>
+                <div class="upload-tip">支持点击选择或直接粘贴图片，文件大小不超过 10MB</div>
               </div>
             </div>
            
@@ -475,31 +482,74 @@ const selectFile = () => {
   fileInput.value?.click()
 }
 
+const getFileExtensionByType = (type: string): string => {
+  const extensionMap: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/gif': 'gif',
+    'image/webp': 'webp',
+    'image/bmp': 'bmp'
+  }
+
+  return extensionMap[type] || 'png'
+}
+
+const createPastedImageName = (type: string): string => {
+  const timestamp = new Date()
+    .toISOString()
+    .replace(/[-:]/g, '')
+    .replace(/\..+/, '')
+
+  return `pasted-image-${timestamp}.${getFileExtensionByType(type)}`
+}
+
+const validateImageFile = (file: File): boolean => {
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件！')
+    return false
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 10MB！')
+    return false
+  }
+
+  return true
+}
+
+const processSelectedImage = (file: File) => {
+  if (!validateImageFile(file)) return
+
+  cleanupTempImage()
+  selectedFile.value = file
+  formData.imageName = getImageNameFromFile(file.name)
+  loadImageForCrop(file)
+}
+
 // 文件选择处理
 const handleFileSelect = (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   
   if (!file) return
-  
-  // 验证文件类型
-  if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件！')
-    return
-  }
-  
-  // 验证文件大小（10MB）
-  if (file.size > 10 * 1024 * 1024) {
-    ElMessage.error('图片大小不能超过 10MB！')
-    return
-  }
-  
-  selectedFile.value = file
-  // 自动设置图片名称（不含后缀）
-  formData.imageName = getImageNameFromFile(file.name)
-  
-  // 加载图片并打开裁剪对话框
-  loadImageForCrop(file)
+  processSelectedImage(file)
+  target.value = ''
+}
+
+const handleImagePaste = (event: ClipboardEvent) => {
+  const items = Array.from(event.clipboardData?.items || [])
+  const imageItem = items.find((item) => item.type.startsWith('image/'))
+  const blob = imageItem?.getAsFile()
+
+  if (!blob) return
+
+  event.preventDefault()
+  const file = new File([blob], createPastedImageName(blob.type), {
+    type: blob.type,
+    lastModified: Date.now()
+  })
+
+  processSelectedImage(file)
 }
 
 // 加载图片用于裁剪

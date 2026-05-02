@@ -20,8 +20,24 @@ namespace Preferred.Api.Data
         public DbSet<SystemResource> SystemResources { get; set; }
         public DbSet<ScheduledTask> ScheduledTasks { get; set; }
         public DbSet<ScheduledTaskLog> ScheduledTaskLogs { get; set; }
-        public DbSet<CoachMemberRelation> CoachMemberRelations { get; set; }
-        public DbSet<BookTask> BookTasks { get; set; }
+        public DbSet<ReservationClub> ReservationClubs { get; set; }
+        public DbSet<ReservationTrainerProfile> ReservationTrainerProfiles { get; set; }
+        public DbSet<ReservationTrainerTag> ReservationTrainerTags { get; set; }
+        public DbSet<ReservationTrainerSessionType> ReservationTrainerSessionTypes { get; set; }
+        public DbSet<ReservationTrainerScheduleSlot> ReservationTrainerScheduleSlots { get; set; }
+        public DbSet<ReservationMemberPackage> ReservationMemberPackages { get; set; }
+        public DbSet<ReservationOrder> ReservationOrders { get; set; }
+        public DbSet<ReservationReview> ReservationReviews { get; set; }
+        public DbSet<ReservationCoursePackage> ReservationCoursePackages { get; set; }
+        public DbSet<ReservationCourseOrder> ReservationCourseOrders { get; set; }
+        public DbSet<ReservationCoupon> ReservationCoupons { get; set; }
+        public DbSet<ReservationMemberCoupon> ReservationMemberCoupons { get; set; }
+        public DbSet<ReservationBodyMetric> ReservationBodyMetrics { get; set; }
+        public DbSet<ReservationTrainingRecord> ReservationTrainingRecords { get; set; }
+        public DbSet<ReservationTrainingPlan> ReservationTrainingPlans { get; set; }
+        public DbSet<ReservationTrainingPlanItem> ReservationTrainingPlanItems { get; set; }
+        public DbSet<ReservationConversationMessage> ReservationConversationMessages { get; set; }
+        public DbSet<ReservationCheckInRecord> ReservationCheckInRecords { get; set; }
         // ====================== ZWAV 录波分析表映射- Start======================
         public DbSet<ZwavAnalysis> ZwavAnalyses { get; set; }
         public DbSet<ZwavFile> ZwavFiles { get; set; }
@@ -236,35 +252,163 @@ namespace Preferred.Api.Data
                 entity.HasIndex(e => e.StartTime);
                 entity.HasIndex(e => e.Success);
             });
-            modelBuilder.Entity<CoachMemberRelation>(entity =>
-            {
-                entity.ToTable("Tb_CoachMemberRelation");
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                entity.Property(e => e.CoachId).IsRequired();
-                entity.Property(e => e.MemberId).IsRequired();
-                entity.Property(e => e.SeqNo).HasDefaultValue(0);
-                entity.Property(e => e.CrtTime).IsRequired();
-                entity.Property(e => e.UpdTime).IsRequired();
-                entity.HasIndex(e => new { e.MemberId, e.CoachId }).IsUnique();
-            });
-            
-            modelBuilder.Entity<BookTask>(entity =>
-            {
-                entity.ToTable("Tb_BookTask");
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id).ValueGeneratedOnAdd();
-                entity.Property(e => e.CoachId).IsRequired();
-                entity.Property(e => e.MemberId).IsRequired();
-                entity.Property(e => e.BookDate).IsRequired();
-                entity.Property(e => e.BookTimeSlot).IsRequired().HasMaxLength(20);
-                entity.Property(e => e.SeqNo).HasDefaultValue(0);
-                entity.Property(e => e.CrtTime).IsRequired();
-                entity.Property(e => e.UpdTime).IsRequired();
-                entity.HasIndex(e => new { e.CoachId, e.BookDate, e.BookTimeSlot }).IsUnique();
-            });
 
             // ====================== ZWAV 录波分析表映射 ======================
+            modelBuilder.Entity<ReservationClub>(entity =>
+            {
+                entity.ToTable("Tb_ReservationClub");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.ClubCode).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.ClubName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.City).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.District).HasMaxLength(50);
+                entity.Property(e => e.Address).HasMaxLength(255);
+                entity.Property(e => e.BusinessHours).HasMaxLength(100);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => e.ClubCode).IsUnique();
+                entity.HasIndex(e => new { e.City, e.IsActive });
+            });
+
+            modelBuilder.Entity<ReservationTrainerProfile>(entity =>
+            {
+                entity.ToTable("Tb_ReservationTrainerProfile");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.UserId).IsRequired();
+                entity.Property(e => e.ClubId).IsRequired();
+                entity.Property(e => e.DisplayName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Title).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Gender).IsRequired().HasMaxLength(10);
+                entity.Property(e => e.Rating).HasColumnType("decimal(4,2)");
+                entity.Property(e => e.BasePrice).HasColumnType("decimal(10,2)");
+                entity.Property(e => e.TrainingArea).HasMaxLength(100);
+                entity.Property(e => e.Highlight).HasMaxLength(100);
+                entity.Property(e => e.Introduction).HasMaxLength(1000);
+                entity.Property(e => e.Story).HasMaxLength(1000);
+                entity.Property(e => e.HeroImageUrl).HasMaxLength(500);
+                entity.Property(e => e.HeroTone).HasMaxLength(20);
+                entity.Property(e => e.AccentTone).HasMaxLength(20);
+                entity.Property(e => e.IsRecommended).HasDefaultValue(false);
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => e.UserId).IsUnique();
+                entity.HasIndex(e => new { e.ClubId, e.IsActive });
+            });
+
+            modelBuilder.Entity<ReservationTrainerTag>(entity =>
+            {
+                entity.ToTable("Tb_ReservationTrainerTag");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.TrainerProfileId).IsRequired();
+                entity.Property(e => e.TagType).IsRequired().HasMaxLength(30);
+                entity.Property(e => e.TagName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.TrainerProfileId, e.TagType });
+            });
+
+            modelBuilder.Entity<ReservationTrainerSessionType>(entity =>
+            {
+                entity.ToTable("Tb_ReservationTrainerSessionType");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.TrainerProfileId).IsRequired();
+                entity.Property(e => e.SessionCode).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.SessionName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Description).HasMaxLength(255);
+                entity.Property(e => e.DurationMinutes).HasDefaultValue(60);
+                entity.Property(e => e.Price).HasColumnType("decimal(10,2)");
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.TrainerProfileId, e.SessionCode }).IsUnique();
+            });
+
+            modelBuilder.Entity<ReservationTrainerScheduleSlot>(entity =>
+            {
+                entity.ToTable("Tb_ReservationTrainerScheduleSlot");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.TrainerProfileId).IsRequired();
+                entity.Property(e => e.ClubId).IsRequired();
+                entity.Property(e => e.ScheduleDate).IsRequired();
+                entity.Property(e => e.StartTime).IsRequired().HasMaxLength(10);
+                entity.Property(e => e.EndTime).IsRequired().HasMaxLength(10);
+                entity.Property(e => e.IsAvailable).HasDefaultValue(true);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.TrainerProfileId, e.ScheduleDate, e.StartTime, e.EndTime }).IsUnique();
+            });
+
+            modelBuilder.Entity<ReservationMemberPackage>(entity =>
+            {
+                entity.ToTable("Tb_ReservationMemberPackage");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.MemberId).IsRequired();
+                entity.Property(e => e.ClubId).IsRequired();
+                entity.Property(e => e.PackageName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.MembershipName).HasMaxLength(100);
+                entity.Property(e => e.StatusCode).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.MemberId, e.StatusCode, e.ExpireDate });
+            });
+
+            modelBuilder.Entity<ReservationOrder>(entity =>
+            {
+                entity.ToTable("Tb_ReservationOrder");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.ReservationNo).IsRequired().HasMaxLength(50);
+                entity.Property(e => e.MemberId).IsRequired();
+                entity.Property(e => e.TrainerProfileId).IsRequired();
+                entity.Property(e => e.ClubId).IsRequired();
+                entity.Property(e => e.SessionTypeId).IsRequired();
+                entity.Property(e => e.ReservationDate).IsRequired();
+                entity.Property(e => e.StartTime).IsRequired().HasMaxLength(10);
+                entity.Property(e => e.EndTime).IsRequired().HasMaxLength(10);
+                entity.Property(e => e.PriceAmount).HasColumnType("decimal(10,2)");
+                entity.Property(e => e.StatusCode).IsRequired().HasMaxLength(20);
+                entity.Property(e => e.Remark).HasMaxLength(500);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => e.ReservationNo).IsUnique();
+                entity.HasIndex(e => new { e.MemberId, e.StatusCode, e.ReservationDate });
+            });
+
+            modelBuilder.Entity<ReservationReview>(entity =>
+            {
+                entity.ToTable("Tb_ReservationReview");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+                entity.Property(e => e.ReservationOrderId).IsRequired();
+                entity.Property(e => e.TrainerProfileId).IsRequired();
+                entity.Property(e => e.MemberId).IsRequired();
+                entity.Property(e => e.AuthorName).IsRequired().HasMaxLength(100);
+                entity.Property(e => e.Rating).HasColumnType("decimal(4,2)");
+                entity.Property(e => e.ReviewTag).HasMaxLength(100);
+                entity.Property(e => e.Content).IsRequired().HasMaxLength(1000);
+                entity.Property(e => e.IsVisible).HasDefaultValue(true);
+                entity.Property(e => e.SeqNo).HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+                entity.HasIndex(e => new { e.TrainerProfileId, e.IsVisible });
+                entity.HasIndex(e => e.ReservationOrderId).IsUnique();
+            });
+
             modelBuilder.Entity<ZwavFile>(entity =>
             {
                 entity.ToTable("Tb_ZwavFile");

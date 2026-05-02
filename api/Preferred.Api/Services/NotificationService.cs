@@ -458,52 +458,5 @@ namespace Preferred.Api.Services
                 return new ApiResponse<bool> { Success = false, Message = $"批量标记已读失败：{ex.Message}" };
             }
         }
-
-        public async Task<ApiResponse<bool>> SendBookingCreatedToCoachAsync(int coachId, int memberId, DateTime bookDate, List<TimeSlotItem> timeSlots)
-        {
-            try
-            {
-                if (timeSlots == null || timeSlots.Count == 0)
-                {
-                    return new ApiResponse<bool> { Success = false, Message = "预约时间段不能为空", Data = false };
-                }
-
-                var coach = await _context.Users.FindAsync(coachId);
-                var member = await _context.Users.FindAsync(memberId);
-                if (coach == null || member == null)
-                {
-                    return new ApiResponse<bool> { Success = false, Message = "教练或会员不存在", Data = false };
-                }
-
-                var slotText = string.Join(", ", timeSlots.Select(s => $"{s.StartTime}-{s.EndTime}"));
-                var now = DateTime.UtcNow;
-
-                var create = await CreateNotification(new NotificationCreateDto
-                {
-                    Name = "会员预约提醒",
-                    Content = $"会员 {member.UserName} 于 {bookDate:yyyy-MM-dd} 提交预约，时段：{slotText}。",
-                    NotifyType = "提醒",
-                    NotifyStatus = 0,
-                    SendStatus = 1,
-                    SendTime = now,
-                    SendUser = "管理员",
-                    Receiver = coach.UserName,
-                    Remark = "会员预约成功后系统推送给教练",
-                    SeqNo = 0
-                });
-
-                var ok = create.Success;
-                return new ApiResponse<bool>
-                {
-                    Success = ok,
-                    Message = ok ? "通知发送成功" : $"通知发送失败：{create.Message}",
-                    Data = ok
-                };
-            }
-            catch (Exception ex)
-            {
-                return new ApiResponse<bool> { Success = false, Message = $"发送预约提醒失败：{ex.Message}", Data = false };
-            }
-        }
     }
 }
