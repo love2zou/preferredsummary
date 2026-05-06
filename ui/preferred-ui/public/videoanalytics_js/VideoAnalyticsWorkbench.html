@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>智能分析工作台</title>
+  <link href="./assets/video-analytics.css" rel="stylesheet" />
+</head>
+
+<body>
+  <div id="toastRoot" class="toast-root"></div>
+
+  <div class="workbench-view">
+    <div class="tabs-wrap">
+      <div class="tabs-meta">
+        <div class="meta-left">
+          <button class="el-button el-button--small" id="btnBackList" type="button">返回任务列表</button>
+          <span class="job-title" id="currentJobNo">-</span>
+          <span id="currentJobStatus"></span>
+          <span id="uploadClosedTag"></span>
+        </div>
+
+        <div class="meta-right">
+          <button class="circle-btn" id="btnOpenAlgoDialog" type="button" title="参数设置">⚙</button>
+          <button class="circle-btn" id="btnOpenHelpDialog" type="button" title="使用说明">?</button>
+        </div>
+      </div>
+
+      <div class="wb-tabs-header">
+        <button class="wb-tab is-active" id="tabListBtn" type="button">视频清单</button>
+        <button class="wb-tab" id="tabDetailBtn" type="button">视频分析详情</button>
+      </div>
+
+      <div id="tabListPanel" class="wb-tab-panel">
+        <div class="list-body">
+          <div class="list-left">
+            <div class="panel-header">
+              <div class="lh-title">
+                <span>视频清单</span>
+                <span class="sub-text" id="listSummaryText"></span>
+              </div>
+              <div class="lh-controls">
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="onlyAbnormalToggle" />
+                  <span>仅异常</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table class="el-table">
+                <thead>
+                  <tr>
+                    <th style="width: 55px;">#</th>
+                    <th>文件名</th>
+                    <th style="width: 90px;">异常</th>
+                    <th style="width: 110px;">火/闪</th>
+                    <th style="width: 90px;">Max</th>
+                    <th style="width: 110px;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="listTableBody"></tbody>
+              </table>
+            </div>
+
+            <div class="pager">
+              <div class="pager-left">
+                <span class="sub-text" id="listPagerText"></span>
+              </div>
+              <div class="pager-right">
+                <button class="el-button el-button--small" id="btnListPrev" type="button">上一页</button>
+                <span class="pager-mid" id="listPageText">1 / 1</span>
+                <button class="el-button el-button--small" id="btnListNext" type="button">下一页</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="list-right">
+            <div class="panel-header">
+              <div class="lr-title">
+                <span>多画面预览</span>
+                <span class="sub-text" id="gridSummaryText"></span>
+              </div>
+              <div class="lr-controls">
+                <div class="segmented-group">
+                  <button class="segmented-btn" data-grid="4" type="button">4画面</button>
+                  <button class="segmented-btn is-active" data-grid="9" type="button">9画面</button>
+                  <button class="segmented-btn" data-grid="16" type="button">16画面</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid-stage">
+              <div id="videoGrid" class="video-grid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tabDetailPanel" class="wb-tab-panel is-hidden">
+        <div class="detail-filter-bar">
+          <div class="df-left">
+            <span class="filter-label">置信度阈值</span>
+            <input id="filterConfRange" type="range" min="0" max="1" step="0.05" value="0" class="range-input" />
+            <span class="range-value" id="filterConfText">0%</span>
+
+            <label class="checkbox-inline">
+              <input type="checkbox" id="filterHasEventsToggle" />
+              <span>仅看有事件</span>
+            </label>
+
+            <div class="radio-group">
+              <label><input type="radio" name="filterType" value="ALL" checked /> 全部</label>
+              <label><input type="radio" name="filterType" value="Spark" /> 火花</label>
+              <label><input type="radio" name="filterType" value="Flash" /> 闪光</label>
+            </div>
+          </div>
+
+          <div class="df-right">
+            <span class="sub-text">筛选仅作用于“事件墙 / 详情查看”，不影响清单页的异常标记。</span>
+          </div>
+        </div>
+
+        <div class="wb-body">
+          <div class="wb-col-left">
+            <div class="panel-header">
+              <span id="detailVideoSummary">视频列表</span>
+              <div class="video-actions">
+                <label class="checkbox-inline">
+                  <input type="checkbox" id="selectAllVideosToggle" />
+                  <span>全选</span>
+                </label>
+                <button class="el-button el-button--danger el-button--small" id="btnReanalyzeSelected" type="button">重新分析</button>
+              </div>
+            </div>
+            <div id="detailVideoList" class="video-list"></div>
+          </div>
+
+          <div class="wb-col-center">
+            <div class="panel-header">
+              <span>全量事件预览</span>
+              <span class="sub-text" id="eventWallSummary"></span>
+            </div>
+            <div id="eventWall" class="group-wall"></div>
+          </div>
+
+          <div class="wb-col-right">
+            <div class="panel-header">
+              <span id="playerTitle">播放器 -</span>
+            </div>
+
+            <div class="player-wrapper">
+              <video id="detailVideoPlayer" class="html-video" controls preload="metadata"></video>
+              <div class="player-controls">
+                <span class="time-display" id="playerTimeText">00:00</span>
+                <div class="quick-seek">
+                  <button class="el-button el-button--small" id="btnSeekMinus5" type="button">-5s</button>
+                  <button class="el-button el-button--small" id="btnSeekPlus5" type="button">+5s</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="upload-panel">
+              <div class="panel-header small">
+                <span>持续上传</span>
+              </div>
+
+              <div class="upload-box">
+                <div id="uploadDropzone" class="upload-dropzone">
+                  <input id="uploadInput" type="file" accept="video/*" multiple hidden />
+                  <div class="el-upload__text">
+                    拖拽视频到此处或点击上传<br />
+                    <span class="upload-sub">单文件上传完成后立即入队分析</span>
+                  </div>
+                </div>
+
+                <div class="upload-actions">
+                  <button class="el-button" id="btnOpenFilePicker" type="button">选择视频</button>
+                  <button class="el-button el-button--warning" id="btnCloseUpload" type="button">关闭上传</button>
+                </div>
+
+                <div class="upload-hint">
+                  <span id="uploadStatsText">已上传 0 个</span>
+                  <span class="divider-line"></span>
+                  <span id="finishStatsText">完成/失败: 0/0</span>
+                </div>
+
+                <div id="uploadQueueList" class="upload-queue-list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="helpDialog">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">使用说明</div>
+        <button class="el-dialog__close" data-dialog-close="helpDialog" type="button">×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="help-content">
+          <h4>1. 视频清单</h4>
+          <ul>
+            <li>左侧表格可按“仅异常”筛选；右侧支持 4 / 9 / 16 多画面预览。</li>
+            <li>右侧画面右上角 🔥 表示该视频存在异常事件。</li>
+            <li>多画面数量与左侧分页保持同步。</li>
+          </ul>
+
+          <h4>2. 视频分析详情</h4>
+          <ul>
+            <li>置信度、事件类型等筛选器只在详情页生效，用于筛选事件墙与详情查看。</li>
+            <li>点击事件卡片可定位播放器到事件发生前约 2 秒的位置。</li>
+          </ul>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button el-button--primary" data-dialog-close="helpDialog" type="button">我知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="algoDialog">
+    <div class="el-dialog el-dialog--xl">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">参数设置</div>
+        <button class="el-dialog__close" data-dialog-close="algoDialog" type="button">×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="dialog-tip">修改后会立即影响“重新分析”的入队参数；新建会话也会沿用本地缓存。</div>
+        <div id="algoGroupsWrap" class="algo-groups"></div>
+        <div class="algo-tools">
+          <button class="el-button" id="btnResetAlgoParams" type="button">恢复默认</button>
+        </div>
+        <pre id="algoJsonPreview" class="algo-json"></pre>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button el-button--primary" data-dialog-close="algoDialog" type="button">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./assets/video-analytics-workbench.js"></script>
+</body>
+
+</html>

@@ -178,23 +178,7 @@ CREATE TABLE IF NOT EXISTS Tb_CoachMemberRelation (
    CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
    UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间',
 )ENGINE=INNODB DEFAULT CHARSET=utf8;
-/*==============================================================*/
-/* 健身预约: Tb_BookTask  预约课程表                              */
-/*==============================================================*/
-CREATE TABLE IF NOT EXISTS Tb_BookTask (
-   Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
-   CoachId            	INT                   NOT NULL COMMENT '教练Id',
-   MemberId             INT                   NOT NULL COMMENT '会员Id',
-   BookDate             DATETIME              NOT NULL COMMENT '预约日期',
-   BookTimeSlot         VARCHAR(20)           NOT NULL COMMENT '预约时间段',
-   SeqNo                INT    DEFAULT 0      NOT NULL COMMENT '排序号',
-   CrtTime              DATETIME              NOT NULL COMMENT '创建时间',
-   UpdTime              DATETIME              NOT NULL COMMENT '最后修改时间'
-)ENGINE=INNODB DEFAULT CHARSET=utf8;
 
-/*==============================================================*/
-/* 录波分析: Tb_ZwavFile  ZWAV原始文件表                          */
-/*==============================================================*/
 /*==============================================================*/
 /* 健身预约APP: Tb_ReservationClub  门店基础信息表                */
 /*==============================================================*/
@@ -583,7 +567,9 @@ CREATE TABLE IF NOT EXISTS Tb_ReservationCheckInRecord (
    KEY IDX_Tb_ReservationCheckInRecord_Member_Time (MemberId, CheckInTime),
    KEY IDX_Tb_ReservationCheckInRecord_Coach_Time (CoachUserId, CheckInTime)
 )ENGINE=INNODB DEFAULT CHARSET=utf8mb4 COMMENT='预约APP到店签到记录表';
-
+/*==============================================================*/
+/* 录波分析: Tb_ZwavFile  ZWAV原始文件表                          */
+/*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_ZwavFile (
    Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '唯一标识',
    OriginalName 	 	VARCHAR(255)         NOT NULL COMMENT '原始文件名',
