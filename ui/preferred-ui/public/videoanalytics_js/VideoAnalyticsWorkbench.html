@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 
 <head>
@@ -19,6 +19,7 @@
           <span class="job-title" id="currentJobNo">-</span>
           <span id="currentJobStatus"></span>
           <span id="uploadClosedTag"></span>
+          <span class="sub-text" id="sessionExpireText"></span>
         </div>
 
         <div class="meta-right">
@@ -131,6 +132,7 @@
                   <input type="checkbox" id="selectAllVideosToggle" />
                   <span>全选</span>
                 </label>
+                <button class="el-button el-button--danger el-button--small" id="btnDeleteSelected" type="button">批量删除</button>
                 <button class="el-button el-button--danger el-button--small" id="btnReanalyzeSelected" type="button">重新分析</button>
               </div>
             </div>
@@ -159,6 +161,13 @@
                   <button class="el-button el-button--small" id="btnSeekPlus5" type="button">+5s</button>
                 </div>
               </div>
+            </div>
+
+            <div class="error-panel" id="videoErrorPanel">
+              <div class="panel-header small">
+                <span>错误信息</span>
+              </div>
+              <div class="error-panel-body" id="videoErrorText">当前视频暂无错误信息</div>
             </div>
 
             <div class="upload-panel">
@@ -206,14 +215,14 @@
           <h4>1. 视频清单</h4>
           <ul>
             <li>左侧表格可按“仅异常”筛选；右侧支持 4 / 9 / 16 多画面预览。</li>
-            <li>右侧画面右上角 🔥 表示该视频存在异常事件。</li>
             <li>多画面数量与左侧分页保持同步。</li>
           </ul>
 
           <h4>2. 视频分析详情</h4>
           <ul>
-            <li>置信度、事件类型等筛选器只在详情页生效，用于筛选事件墙与详情查看。</li>
+            <li>置信度、事件类型等筛选器仅在详情页生效，用于筛选事件墙与详情查看。</li>
             <li>点击事件卡片可定位播放器到事件发生前约 2 秒的位置。</li>
+            <li>视频处理失败时，可在右侧“错误信息”面板查看原因。</li>
           </ul>
         </div>
       </div>

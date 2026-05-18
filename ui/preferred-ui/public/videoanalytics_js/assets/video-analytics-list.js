@@ -1,4 +1,4 @@
-import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, getApiBaseUrl, openDialog, setApiBaseUrl, setHtml } from './common.js'
+﻿import { bindDialog, byId, closeDialog, escapeHtml, formatDateTime, getApiBaseUrl, openDialog, setApiBaseUrl, setHtml } from './common.js'
 import { videoAnalyticsApi } from './video-analytics-api.js'
 import { buildWorkbenchUrl, calcProgress, createTag, getJobHistory, getJobStatusText, getStatusType, pushJobHistory, removeJobHistory, showToast } from './video-analytics-shared.js'
 
@@ -108,7 +108,7 @@ async function createJobAndEnter() {
 }
 
 async function deleteJob(jobNo) {
-  if (!window.confirm(`确认删除任务 ${jobNo} ?`)) return
+  if (!window.confirm(`确认删除任务 ${jobNo} 吗？`)) return
   try {
     const res = await videoAnalyticsApi.deleteJob(jobNo)
     if (!res?.success) {
@@ -119,7 +119,7 @@ async function deleteJob(jobNo) {
     showToast('删除成功', 'success')
     await fetchJobList()
   } catch {
-    showToast('删除请求失败', 'error')
+    showToast('删除失败', 'error')
   }
 }
 
@@ -127,59 +127,56 @@ function bindEvents() {
   bindDialog('apiDialog')
   bindDialog('createDialog')
 
-  byId('searchJobNo').addEventListener('input', (e) => {
-    state.searchJobNo = e.target.value
-  })
-  byId('searchJobNo').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') fetchJobList()
-  })
-  byId('btnSearchJob').addEventListener('click', fetchJobList)
-  byId('btnResetSearch').addEventListener('click', () => {
-    state.searchJobNo = ''
-    byId('searchJobNo').value = ''
-    fetchJobList()
-  })
-
-  byId('btnOpenCreateDialog').addEventListener('click', () => openDialog('createDialog'))
-  byId('btnCreateJob').addEventListener('click', createJobAndEnter)
-
   byId('btnOpenApiConfig').addEventListener('click', () => {
-    byId('apiBaseInput').value = getApiBaseUrl()
+    byId('apiBaseInput').value = getApiBaseUrl() || ''
     openDialog('apiDialog')
   })
-
   byId('btnSaveApiBase').addEventListener('click', () => {
-    const value = byId('apiBaseInput').value.trim()
-    if (!value) {
-      showToast('请输入 API Base URL', 'warning')
-      return
-    }
-    setApiBaseUrl(value)
+    setApiBaseUrl(byId('apiBaseInput').value.trim())
     closeDialog('apiDialog')
     showToast('接口配置已保存', 'success')
     fetchJobList()
   })
 
-  document.addEventListener('click', async (e) => {
+  byId('btnOpenCreateDialog').addEventListener('click', () => openDialog('createDialog'))
+  byId('btnCreateJob').addEventListener('click', createJobAndEnter)
+  byId('btnSearchJob').addEventListener('click', () => {
+    state.searchJobNo = byId('searchJobNo').value.trim()
+    fetchJobList()
+  })
+  byId('btnResetSearch').addEventListener('click', () => {
+    state.searchJobNo = ''
+    byId('searchJobNo').value = ''
+    fetchJobList()
+  })
+  byId('searchJobNo').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      state.searchJobNo = byId('searchJobNo').value.trim()
+      fetchJobList()
+    }
+  })
+
+  document.addEventListener('click', (e) => {
     const target = e.target
     if (!(target instanceof HTMLElement)) return
     const actionEl = target.closest('[data-action]')
     if (!actionEl) return
-
     const action = actionEl.getAttribute('data-action')
     const jobNo = actionEl.getAttribute('data-job-no') || ''
+    if (!jobNo) return
     if (action === 'enter-workbench') {
       pushJobHistory(jobNo)
       window.location.href = buildWorkbenchUrl(jobNo)
     }
     if (action === 'delete-job') {
-      await deleteJob(jobNo)
+      deleteJob(jobNo)
     }
   })
 }
 
 async function init() {
   bindEvents()
+  byId('apiBaseInput').value = getApiBaseUrl() || ''
   await fetchJobList()
 }
 

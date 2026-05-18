@@ -1,4 +1,4 @@
-export const DEFAULT_ALGO_PARAMS = {
+﻿export const DEFAULT_ALGO_PARAMS = {
   SampleFps: 18,
   DiffThreshold: 36,
   DiffThresholdMin: 12,
@@ -43,8 +43,8 @@ export const ALGO_FIELDS = [
   { key: 'AdaptiveDiffK', label: 'AdaptiveDiffK', labelZh: '自适应系数 K', desc: '自适应差分强度，越大越不容易触发。', group: '差分候选', min: 0, max: 10, step: 0.1, precision: 2 },
   { key: 'MinContourArea', label: 'MinContourArea', labelZh: '最小轮廓面积', desc: '过滤微小噪点轮廓，单位为像素面积。', group: '差分候选', min: 1, max: 2000, step: 1 },
 
-  { key: 'MeanDeltaRise', label: 'MeanDeltaRise', labelZh: '亮度上升阈值', desc: '全局亮度上升到该幅度时，更倾向识别为脉冲开始。', group: '亮度判别', min: 0, max: 50, step: 0.1, precision: 2 },
-  { key: 'MeanDeltaFall', label: 'MeanDeltaFall', labelZh: '亮度回落阈值', desc: '全局亮度回落到该幅度时，更倾向识别为脉冲结束。', group: '亮度判别', min: 0, max: 50, step: 0.1, precision: 2 },
+  { key: 'MeanDeltaRise', label: 'MeanDeltaRise', labelZh: '亮度上升阈值', desc: '全局亮度上升达到该幅度时，更倾向识别为脉冲开始。', group: '亮度判别', min: 0, max: 50, step: 0.1, precision: 2 },
+  { key: 'MeanDeltaFall', label: 'MeanDeltaFall', labelZh: '亮度回落阈值', desc: '全局亮度回落达到该幅度时，更倾向识别为脉冲结束。', group: '亮度判别', min: 0, max: 50, step: 0.1, precision: 2 },
   { key: 'BrightStdK', label: 'BrightStdK', labelZh: '动态高亮 K', desc: '高亮阈值中的标准差系数 K。', group: '亮度判别', min: 0, max: 10, step: 0.1, precision: 2 },
   { key: 'BrightThrMin', label: 'BrightThrMin', labelZh: '高亮阈值最小值', desc: '动态高亮阈值的下限。', group: '亮度判别', min: 0, max: 255, step: 1 },
   { key: 'BrightThrMax', label: 'BrightThrMax', labelZh: '高亮阈值最大值', desc: '动态高亮阈值的上限。', group: '亮度判别', min: 0, max: 255, step: 1 },
@@ -61,8 +61,8 @@ export const ALGO_FIELDS = [
 
   { key: 'RequireConsecutiveHits', label: 'RequireConsecutiveHits', labelZh: '连续命中帧数', desc: '需要连续命中多少次才确认事件。', group: '抑制策略', min: 1, max: 10, step: 1 },
   { key: 'CooldownSec', label: 'CooldownSec', labelZh: '冷却时间(秒)', desc: '事件结束后冷却 N 秒内不再触发新事件。', group: '抑制策略', min: 0, max: 30, step: 1 },
-  { key: 'MergeGapSec', label: 'MergeGapSec', labelZh: '合并间隔(秒)', desc: '相邻事件时间间隔小于该值时合并。', group: '抑制策略', min: 0, max: 30, step: 1 },
-  { key: 'MaxMotionRatioPerSec', label: 'MaxMotionRatioPerSec', labelZh: '最大运动比例/秒', desc: '大范围运动超出该比例时，更倾向抑制误报。', group: '抑制策略', min: 0, max: 1, step: 0.01, precision: 3 }
+  { key: 'MergeGapSec', label: 'MergeGapSec', labelZh: '合并间隔(秒)', desc: '相邻事件时间间隔小于该值时自动合并。', group: '抑制策略', min: 0, max: 30, step: 1 },
+  { key: 'MaxMotionRatioPerSec', label: 'MaxMotionRatioPerSec', labelZh: '最大运动比例/秒', desc: '大范围运动超过该比例时，更倾向抑制误报。', group: '抑制策略', min: 0, max: 1, step: 0.01, precision: 3 }
 ]
 
 export function normalizeAlgoParams(partial) {

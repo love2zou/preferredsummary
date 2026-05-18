@@ -1,4 +1,4 @@
-import { ALGO_FIELDS, ALGO_FIELD_GROUPS, DEFAULT_ALGO_PARAMS, DEFAULT_ALGO_PARAMS_JSON, parseAlgoParamsJson, toAlgoParamsJson } from './video-algo-params.js'
+﻿import { ALGO_FIELDS, ALGO_FIELD_GROUPS, DEFAULT_ALGO_PARAMS, DEFAULT_ALGO_PARAMS_JSON, parseAlgoParamsJson, toAlgoParamsJson } from './video-algo-params.js'
 import { ALGO_STORAGE_KEY, createTag, getJobStatusText, getStatusType, getVideoStatusText, pushJobHistory, removeJobHistory, showToast, toNum } from './video-analytics-shared.js'
 import { bindDialog, byId, closeDialog, downloadBlob, escapeHtml, formatTime, getApiBaseUrl, openDialog, qs, setApiBaseUrl, setHtml, setText } from './common.js'
 import { videoAnalyticsApi } from './video-analytics-api.js'
@@ -18,6 +18,7 @@ const state = {
   listSelectedId: null,
   uploadClosed: false,
   closing: false,
+  deleting: false,
   selectedFileIds: new Set(),
   reanalyzing: false,
   snapshotCache: {},
@@ -143,8 +144,47 @@ function currentVideo() {
   return getEnrichedVideos().find((item) => Number(item.id) === Number(state.currentFileId)) || null
 }
 
+function parseServerDateTime(value) {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  const text = String(value).trim()
+  if (!text) return null
+  const normalized = text.includes('T') ? text : text.replace(' ', 'T')
+  const date = new Date(normalized)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function getUploadExpireAtMs(job = state.currentJob) {
+  const expireAt = parseServerDateTime(job?.uploadExpireTime || job?.crtTime)
+  if (!expireAt) return 0
+  if (job?.uploadExpireTime) return expireAt.getTime()
+  return expireAt.getTime() + 60 * 60 * 1000
+}
+
+function formatSessionExpireText() {
+  const expireMs = getUploadExpireAtMs()
+  if (!expireMs) return ''
+  const remainMs = expireMs - Date.now()
+  if (remainMs <= 0) return '会话已自动关闭'
+  const totalSec = Math.ceil(remainMs / 1000)
+  const hh = String(Math.floor(totalSec / 3600)).padStart(2, '0')
+  const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, '0')
+  const ss = String(totalSec % 60).padStart(2, '0')
+  return `会话将在 ${hh}:${mm}:${ss} 后自动关闭`
+}
+
+function pruneSelection() {
+  const validIds = new Set((state.currentJob?.videos || []).map((item) => Number(item.id)))
+  state.selectedFileIds = new Set(Array.from(state.selectedFileIds).filter((id) => validIds.has(Number(id))))
+  if (state.currentFileId && !validIds.has(Number(state.currentFileId))) {
+    state.currentFileId = state.currentJob?.videos?.[0]?.id ?? null
+  }
+  if (state.listSelectedId && !validIds.has(Number(state.listSelectedId))) {
+    state.listSelectedId = state.currentJob?.videos?.[0]?.id ?? null
+  }
+}
 function syncUploadClosed() {
-  state.uploadClosed = Number(state.currentJob?.totalVideoCount ?? 0) > 0
+  state.uploadClosed = Boolean(state.currentJob?.uploadClosed) || Date.now() >= getUploadExpireAtMs()
 }
 
 function setActiveTab(tab) {
@@ -159,6 +199,7 @@ function renderHeader() {
   setText('currentJobNo', state.currentJob?.jobNo || '-')
   setHtml('currentJobStatus', state.currentJob ? createTag(escapeHtml(getJobStatusText(state.currentJob)), getStatusType(state.currentJob.status)) : '')
   setHtml('uploadClosedTag', state.uploadClosed ? createTag('已关闭上传', 'info') : '')
+  setText('sessionExpireText', formatSessionExpireText())
 }
 
 function renderListTab() {
@@ -168,8 +209,8 @@ function renderListTab() {
   const pageVideos = getListPageVideos()
 
   setText('listSummaryText', `（共 ${listAll.length} 条）`)
-  setText('gridSummaryText', `（本页 ${pageVideos.length} / ${getListPageSize()}）`)
-  setText('listPagerText', `每页 ${getListPageSize()} 条，随 ${state.gridMode} 画面自动变化`)
+  setText('gridSummaryText', `(${pageVideos.length} / ${getListPageSize()})`)
+  setText('listPagerText', `每页 ${getListPageSize()} 条，网格数量随布局变化`)
   setText('listPageText', `${state.listPageNo} / ${pageCount}`)
   byId('btnListPrev').disabled = state.listPageNo <= 1
   byId('btnListNext').disabled = state.listPageNo >= pageCount
@@ -185,7 +226,7 @@ function renderListTab() {
         <tr class="${selected}" data-action="select-list-row" data-file-id="${row.id}">
           <td class="cell-center">${(state.listPageNo - 1) * getListPageSize() + index + 1}</td>
           <td class="file-name-cell">${escapeHtml(row.fileName || '-')}</td>
-          <td>${row.stats.total > 0 ? createTag('有异常', 'danger') : createTag('正常', 'success')}</td>
+          <td>${row.stats.total > 0 ? createTag('异常', 'danger') : createTag('正常', 'success')}</td>
           <td>
             <span class="mini-kpi">
               <span class="kpi kpi-danger">火花 ${row.stats.spark}</span>
@@ -204,7 +245,7 @@ function renderListTab() {
   const emptyCount = Math.max(0, getListPageSize() - pageVideos.length)
   const cells = pageVideos.map((item) => `
     <div class="grid-cell ${Number(state.listSelectedId) === Number(item.id) ? 'active' : ''}" data-action="select-grid-video" data-file-id="${item.id}">
-      ${item.stats.total > 0 ? '<div class="grid-flame" title="存在异常事件">🔥</div>' : ''}
+      ${item.stats.total > 0 ? '<div class="grid-flame" title="存在异常事件">⚠</div>' : ''}
       <video class="grid-video" controls muted playsinline preload="metadata" src="${escapeHtml(videoAnalyticsApi.getVideoContentUrl(item.id))}"></video>
     </div>
   `).join('')
@@ -223,8 +264,10 @@ function renderDetailVideoList() {
   allBox.indeterminate = hit > 0 && hit < videos.length
 
   setText('detailVideoSummary', `视频列表 (${videos.length})`)
-  byId('btnReanalyzeSelected').disabled = state.selectedFileIds.size === 0 || state.reanalyzing || !state.currentJob
+  byId('btnReanalyzeSelected').disabled = state.selectedFileIds.size === 0 || state.reanalyzing || state.deleting || !state.currentJob
   byId('btnReanalyzeSelected').textContent = `重新分析 (${state.selectedFileIds.size})`
+  byId('btnDeleteSelected').disabled = state.selectedFileIds.size === 0 || state.reanalyzing || state.deleting || !state.currentJob
+  byId('btnDeleteSelected').textContent = state.deleting ? `删除中 (${state.selectedFileIds.size})` : `批量删除 (${state.selectedFileIds.size})`
 
   if (!videos.length) {
     setHtml('detailVideoList', '<div class="empty-panel">当前筛选条件下没有视频</div>')
@@ -259,11 +302,12 @@ function renderDetailVideoList() {
       <div class="vc-row3">
         <span class="vc-meta">${Number(vid.status) === 1 ? '处理中...' : ''}</span>
       </div>
+
+      ${vid.errorMessage ? `<div class="vc-error">${escapeHtml(vid.errorMessage)}</div>` : ''}
     </div>
   `).join('')
   setHtml('detailVideoList', html)
 }
-
 function renderEventWall() {
   const groups = getEventGroups()
   setText('eventWallSummary', `（筛选后共 ${getAllFilteredEvents().length} 个事件，${groups.length} 个视频分组）`)
@@ -297,7 +341,7 @@ function renderEventWall() {
                 ? `<img class="ec-img" src="${escapeHtml(state.snapshotCache[evt.id])}" alt="snapshot-${evt.id}" />`
                 : `<div class="ec-placeholder">${state.snapshotLoading[evt.id] ? '加载中...' : '暂无截图'}</div>`}
               <div class="ec-time">${escapeHtml(formatTime(evt.peakTimeSec))}</div>
-              <button class="ec-dl" title="下载截图" data-action="download-snapshot" data-event-id="${evt.id}" type="button">⬇</button>
+              <button class="ec-dl" title="下载截图" data-action="download-snapshot" data-event-id="${evt.id}" type="button">下载</button>
             </div>
             <div class="ec-info">
               <div class="ec-row">
@@ -331,6 +375,8 @@ function renderPlayerAndUpload() {
   }
 
   setText('playerTimeText', formatTime(state.currentTime))
+  setText('videoErrorText', video?.errorMessage ? video.errorMessage : '当前视频暂无错误信息')
+  byId('videoErrorPanel').classList.toggle('has-error', Boolean(video?.errorMessage))
 
   const disabled = state.uploadClosed || !state.currentJob
   byId('btnOpenFilePicker').disabled = disabled
@@ -355,7 +401,6 @@ function renderPlayerAndUpload() {
     `).join(''))
   }
 }
-
 function renderAlgoDialog() {
   const html = ALGO_FIELD_GROUPS.map((group) => `
     <div class="algo-group">
@@ -425,6 +470,7 @@ async function refreshDetail() {
       if (first?.id) selectVideo(first.id, false)
     }
     if (state.listPageNo > getListPageCount()) state.listPageNo = getListPageCount()
+    pruneSelection()
     render()
     preloadSnapshots(getAllFilteredEvents().slice(0, 60))
     if (![0, 1].includes(Number(state.currentJob?.status))) stopPolling()
@@ -564,11 +610,48 @@ async function downloadEventSnapshot(eventId) {
   }
 }
 
+async function deleteSelectedVideos() {
+  if (!state.currentJob?.jobNo) return
+  const ids = Array.from(state.selectedFileIds).filter((item) => Number(item) > 0).map(Number)
+  if (!ids.length) return
+  if (!window.confirm(`确认删除选中的 ${ids.length} 个视频吗？这会同时删除视频文件、事件和截图。`)) return
+  state.deleting = true
+  renderDetailVideoList()
+  try {
+    const res = await videoAnalyticsApi.deleteVideos(state.currentJob.jobNo, ids)
+    if (!res?.success) {
+      showToast(res?.message || '删除失败', 'error')
+      return
+    }
+    const deletedCount = Number(res.data?.deletedVideoCount || 0)
+    const skippedCount = Number(res.data?.skippedProcessingCount || 0)
+    state.selectedFileIds = new Set(Array.from(state.selectedFileIds).filter((id) => !ids.includes(Number(id))))
+    state.snapshotCache = {}
+    state.snapshotLoading = {}
+    await refreshDetail()
+    pruneSelection()
+    render()
+    if (deletedCount > 0 && skippedCount > 0) {
+      showToast(`已删除 ${deletedCount} 个视频，另有 ${skippedCount} 个处理中视频未删除`, 'warning')
+    } else if (deletedCount > 0) {
+      showToast(`已删除 ${deletedCount} 个视频`, 'success')
+    } else if (skippedCount > 0) {
+      showToast(`有 ${skippedCount} 个视频正在处理中，暂未删除`, 'warning')
+    } else {
+      showToast('没有可删除的视频', 'warning')
+    }
+  } catch {
+    showToast('删除失败', 'error')
+  } finally {
+    state.deleting = false
+    renderDetailVideoList()
+  }
+}
 async function reanalyzeSelected() {
   if (!state.currentJob?.jobNo) return
   const ids = Array.from(state.selectedFileIds).filter((item) => Number(item) > 0).map(Number)
   if (!ids.length) return
-  if (!window.confirm(`将重新分析 ${ids.length} 个视频，是否继续？`)) return
+  if (!window.confirm(`确认重新分析 ${ids.length} 个视频吗？`)) return
   state.reanalyzing = true
   renderDetailVideoList()
   try {
@@ -680,7 +763,7 @@ function handleKeyboard(e) {
 async function deleteCurrentJob() {
   const jobNo = state.currentJob?.jobNo
   if (!jobNo) return
-  if (!window.confirm(`确认删除任务 ${jobNo} ?`)) return
+  if (!window.confirm(`确认删除任务 ${jobNo} 吗？`)) return
   try {
     const res = await videoAnalyticsApi.deleteJob(jobNo)
     if (!res?.success) {
@@ -711,6 +794,7 @@ function bindEvents() {
   })
   byId('btnResetAlgoParams').addEventListener('click', resetAlgoParams)
   byId('btnReanalyzeSelected').addEventListener('click', reanalyzeSelected)
+  byId('btnDeleteSelected').addEventListener('click', deleteSelectedVideos)
   byId('btnCloseUpload').addEventListener('click', closeUploadTask)
 
   byId('onlyAbnormalToggle').addEventListener('change', (e) => {
@@ -885,8 +969,12 @@ async function init() {
     showToast('任务加载失败', 'error')
   }
 
-  document.title = `${state.currentJob?.jobNo || '工作台'} - 智能分析工作台`
+  document.title = `${state.currentJob?.jobNo || '工作台'} - 视频分析工作台`
   byId('btnDeleteCurrentJob')?.addEventListener('click', deleteCurrentJob)
 }
 
 init()
+
+
+
+

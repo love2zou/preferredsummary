@@ -1,4 +1,4 @@
-export const JOB_HISTORY_KEY = 'video_analytics_jobs'
+﻿export const JOB_HISTORY_KEY = 'video_analytics_jobs'
 export const ALGO_STORAGE_KEY = 'video_analytics_algo_params_json'
 
 export function getJobHistory() {

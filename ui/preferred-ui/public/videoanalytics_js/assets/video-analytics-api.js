@@ -1,4 +1,4 @@
-import { apiBlob, apiForm, apiJson, buildUrl, getApiBaseUrl } from './common.js'
+﻿import { apiBlob, apiForm, apiJson, buildUrl, getApiBaseUrl } from './common.js'
 
 function normalizeVideo(video) {
   const item = { ...(video || {}) }
@@ -25,6 +25,8 @@ function normalizeJob(job) {
   item.totalEventCount = Number(item.totalEventCount ?? item.TotalEventCount ?? 0)
   item.progress = Number(item.progress ?? item.Progress ?? 0)
   item.status = Number(item.status ?? item.Status ?? 0)
+  item.uploadClosed = Boolean(item.uploadClosed ?? item.UploadClosed ?? false)
+  item.uploadExpireTime = item.uploadExpireTime ?? item.UploadExpireTime ?? ''
   return item
 }
 
@@ -90,6 +92,14 @@ export const videoAnalyticsApi = {
     })
   },
 
+  async deleteVideos(jobNo, fileIds) {
+    return apiJson(`/api/VideoAnalytics/job/${encodeURIComponent(jobNo)}/delete-files`, {
+      method: 'POST',
+      body: {
+        fileIds: Array.from(new Set((fileIds || []).filter((x) => Number(x) > 0))).map(Number)
+      }
+    })
+  },
   async getJob(jobNo) {
     const res = await apiJson(`/api/VideoAnalytics/job/${encodeURIComponent(jobNo)}`)
     if (res && res.success && res.data) {
@@ -126,3 +136,6 @@ export const videoAnalyticsApi = {
     return buildUrl(getApiBaseUrl(), `/api/VideoAnalytics/video/${fileId}/stream`)
   }
 }
+
+
+

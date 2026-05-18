@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 
 <head>
@@ -56,7 +56,7 @@
           <span>API Base URL</span>
           <input id="apiBaseInput" class="el-input" placeholder="例如：http://159.75.184.108:8080" />
         </label>
-        <div class="dialog-tip">优先读取 `?apiBase=...`，其次读取 localStorage。本静态页默认直连后端接口。</div>
+        <div class="dialog-tip">优先读取 URL 中的 <code>?apiBase=...</code>，其次读取 <code>localStorage</code>。本静态页默认直连后端接口。</div>
       </div>
       <div class="el-dialog__footer">
         <button class="el-button" data-dialog-close="apiDialog" type="button">关闭</button>
@@ -74,12 +74,12 @@
       <div class="el-dialog__body">
         <div class="el-alert el-alert--info">
           <div class="tip-text">
-            该会话支持<strong>持续上传</strong>：你可以不断上传视频，服务端收到视频后立即入队分析；
-            当你确认不再上传时，在工作台点击<strong>关闭上传</strong>即可完成收尾。
+            该会话支持 <strong>持续上传</strong>：你可以不断上传视频，服务端收到视频后立即入队分析；
+            当你确认不再上传时，在工作台点击 <strong>关闭上传</strong> 即可完成收尾。
           </div>
           <div class="tip-sub">
-            本页创建会话<strong>不上传算法参数</strong>，后端将使用默认参数。
-            如需调整“重新分析”的入队参数，可在工作台的<strong>参数设置</strong>里临时修改。
+            本页创建会话<strong>不上送算法参数</strong>，后端将使用默认参数。
+            如需调整“重新分析”的入队参数，可在工作台的 <strong>参数设置</strong> 中临时修改。
           </div>
         </div>
       </div>
