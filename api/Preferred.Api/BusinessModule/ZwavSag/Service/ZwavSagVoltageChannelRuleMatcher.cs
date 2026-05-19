@@ -27,6 +27,14 @@ namespace Preferred.Api.Services
         {
             public string Keyword { get; set; }
             public string PhaseName { get; set; }
+            public bool Enabled { get; set; }
+        }
+
+        public sealed class RuleMatchResult
+        {
+            public bool HasMatch { get; set; }
+            public string PhaseName { get; set; }
+            public bool Enabled { get; set; }
         }
 
         /// <summary>
@@ -144,10 +152,20 @@ namespace Preferred.Api.Services
             if (!string.IsNullOrWhiteSpace(builtIn))
                 return builtIn;
 
-            if (rules == null || rules.Length == 0)
-                return string.Empty;
+            var matchedRule = MatchRule(channelName, channelCode, unit, rules);
+            if (matchedRule.HasMatch)
+                return matchedRule.Enabled ? matchedRule.PhaseName ?? string.Empty : string.Empty;
 
-            string bestPhase = string.Empty;
+            return string.Empty;
+        }
+
+        public static RuleMatchResult MatchRule(string channelName, string channelCode, string unit, RuleItem[] rules)
+        {
+            var text = BuildMatchText(channelName, channelCode, unit);
+            if (text.Length == 0 || rules == null || rules.Length == 0)
+                return new RuleMatchResult();
+
+            RuleMatchResult best = null;
             int bestScore = -1;
 
             for (int i = 0; i < rules.Length; i++)
@@ -156,18 +174,23 @@ namespace Preferred.Api.Services
                 if (rule == null || string.IsNullOrEmpty(rule.Keyword) || string.IsNullOrEmpty(rule.PhaseName))
                     continue;
 
-                if (!text.Contains(rule.Keyword, StringComparison.Ordinal))
+                if (!ContainsKeyword(text, rule.Keyword))
                     continue;
 
                 int score = rule.Keyword.Length;
-                if (score > bestScore)
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                best = new RuleMatchResult
                 {
-                    bestScore = score;
-                    bestPhase = rule.PhaseName;
-                }
+                    HasMatch = true,
+                    PhaseName = rule.PhaseName,
+                    Enabled = rule.Enabled
+                };
             }
 
-            return bestPhase ?? string.Empty;
+            return best ?? new RuleMatchResult();
         }
 
         /// <summary>
@@ -193,7 +216,7 @@ namespace Preferred.Api.Services
                     if (rule == null || string.IsNullOrEmpty(rule.Keyword) || string.IsNullOrEmpty(rule.GroupName))
                         continue;
 
-                    if (!text.Contains(rule.Keyword, StringComparison.Ordinal))
+                    if (!ContainsKeyword(text, rule.Keyword))
                         continue;
 
                     int score = rule.Keyword.Length;
@@ -270,7 +293,8 @@ namespace Preferred.Api.Services
                     .Select(x => new
                     {
                         x.RuleName,
-                        x.PhaseName
+                        x.PhaseName,
+                        x.Enabled
                     })
                     .ToListAsync()
                     .ConfigureAwait(false);
@@ -280,7 +304,8 @@ namespace Preferred.Api.Services
                     .Select(x => new RuleItem
                     {
                         Keyword = NormalizeKeyword(x.RuleName),
-                        PhaseName = NormalizePhaseName(x.PhaseName)
+                        PhaseName = NormalizePhaseName(x.PhaseName),
+                        Enabled = x.Enabled
                     })
                     .Where(x => !string.IsNullOrWhiteSpace(x.Keyword) && !string.IsNullOrWhiteSpace(x.PhaseName))
                     .OrderByDescending(x => x.Keyword.Length)
@@ -337,8 +362,8 @@ namespace Preferred.Api.Services
             for (int i = 0; i < BuiltInPhasePatterns.Length; i++)
             {
                 var item = BuiltInPhasePatterns[i];
-                if (text.Contains(item.Keyword, StringComparison.Ordinal))
-                {
+                    if (ContainsKeyword(text, item.Keyword))
+                    {
                     int score = item.Keyword.Length;
                     if (score > bestScore)
                     {
@@ -419,6 +444,33 @@ namespace Preferred.Api.Services
             }
 
             return false;
+        }
+
+        private static bool ContainsKeyword(string text, string keyword)
+        {
+            if (string.IsNullOrWhiteSpace(text) || string.IsNullOrWhiteSpace(keyword))
+                return false;
+
+            if (text.Contains(keyword, StringComparison.Ordinal))
+                return true;
+
+            var compactText = CompactMatchText(text);
+            var compactKeyword = CompactMatchText(keyword);
+            if (compactText.Length == 0 || compactKeyword.Length == 0)
+                return false;
+
+            return compactText.Contains(compactKeyword, StringComparison.Ordinal);
+        }
+
+        private static string CompactMatchText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            return new string(value
+                .Where(ch => !char.IsWhiteSpace(ch) && ch != '_' && ch != '-' && ch != '/' && ch != '\\')
+                .ToArray())
+                .ToUpperInvariant();
         }
 
         private static string BuildMatchText(string channelName, string channelCode, string unit)

@@ -213,12 +213,13 @@ namespace Preferred.Api.Controllers
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> GetChannelRuleListAsync(
             [FromQuery] string keyword,
+            [FromQuery] bool? enabled,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20)
         {
             try
             {
-                var data = await _svc.QueryChannelRuleAsync(keyword, page, pageSize);
+                var data = await _svc.QueryChannelRuleAsync(keyword, enabled, page, pageSize);
 
                 return Ok(new ApiResponse<PagedResult<ZwavSagChannelRuleDto>>
                 {

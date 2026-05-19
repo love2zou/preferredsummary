@@ -536,6 +536,17 @@
       vertical-align: middle;
     }
 
+    .raw-legend-item.is-hidden {
+      opacity: 0.45;
+    }
+
+    .raw-legend-item[data-kind="raw"],
+    .raw-legend-item[data-kind="rms"],
+    .raw-legend-item[data-kind="threshold"] {
+      cursor: pointer;
+      user-select: none;
+    }
+
     .sag-bottom-row {
       display: flex;
       gap: 12px;

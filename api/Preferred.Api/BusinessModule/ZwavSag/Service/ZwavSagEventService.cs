@@ -214,7 +214,9 @@ namespace Preferred.Api.Services
                         FileId = e.FileId,
                         OriginalName = e.OriginalName,
                         Status = e.Status,
-                        Progress = e.Progress,
+                        Progress = e.Status == 2 || e.Status == 3
+                            ? 100
+                            : e.Progress,
                         ErrorMessage = e.ErrorMessage,
                         HasSag = e.HasSag,
                         EventType = e.EventType,
@@ -841,7 +843,7 @@ namespace Preferred.Api.Services
             };
         }
 
-        public async Task<PagedResult<ZwavSagChannelRuleDto>> QueryChannelRuleAsync(string keyword, int page, int pageSize)
+        public async Task<PagedResult<ZwavSagChannelRuleDto>> QueryChannelRuleAsync(string keyword, bool? enabled, int page, int pageSize)
         {
             if (page <= 0)
                 page = 1;
@@ -860,6 +862,9 @@ namespace Preferred.Api.Services
                 query = query.Where(x => x.RuleName.Contains(keyword));
             }
 
+            if (enabled.HasValue)
+                query = query.Where(x => x.Enabled == enabled.Value);
+
             var total = await query.CountAsync().ConfigureAwait(false);
 
             var items = await query
@@ -873,6 +878,7 @@ namespace Preferred.Api.Services
                     RuleName = x.RuleName,
                     PhaseName = x.PhaseName,
                     SeqNo = x.SeqNo,
+                    Enabled = x.Enabled,
                     CrtTime = x.CrtTime
                 })
                 .ToListAsync()
@@ -918,6 +924,7 @@ namespace Preferred.Api.Services
                 RuleName = ruleName,
                 PhaseName = phaseName,
                 SeqNo = req.SeqNo,
+                Enabled = req.Enabled,
                 CrtTime = now,
                 UpdTime = now
             };
@@ -931,6 +938,7 @@ namespace Preferred.Api.Services
                 RuleName = entity.RuleName,
                 PhaseName = entity.PhaseName,
                 SeqNo = entity.SeqNo,
+                Enabled = entity.Enabled,
                 CrtTime = entity.CrtTime
             };
         }
@@ -974,6 +982,9 @@ namespace Preferred.Api.Services
 
             if (req.SeqNo.HasValue)
                 entity.SeqNo = req.SeqNo.Value;
+
+            if (req.Enabled.HasValue)
+                entity.Enabled = req.Enabled.Value;
 
             entity.UpdTime = DateTime.UtcNow;
 
@@ -1421,6 +1432,16 @@ namespace Preferred.Api.Services
             }
 
             return list
+                .GroupBy(x => new
+                {
+                    x.EventType,
+                    x.ChannelIndex,
+                    x.Phase,
+                    x.ChannelName,
+                    x.StartMs,
+                    x.EndMs
+                })
+                .Select(g => g.First())
                 .OrderBy(x => x.StartMs)
                 .ThenBy(x => x.Phase)
                 .ToArray();
@@ -1444,25 +1465,56 @@ namespace Preferred.Api.Services
             ZwavSagComputedEventDto[] computedEvents = null)
         {
             var list = new List<ZwavSagMarkerDto>();
+            bool hasComputedMarkers = computedEvents != null && computedEvents.Length > 0;
+            bool hasPhaseMarkers = phases != null && phases.Length > 0;
 
-            if (computedEvents != null && computedEvents.Length > 0)
+            if (hasComputedMarkers)
             {
                 foreach (var evt in computedEvents)
                 {
                     list.Add(new ZwavSagMarkerDto
                     {
                         Kind = "EventStart",
+                        ChannelIndex = evt.ChannelIndex,
+                        ChannelName = evt.ChannelName,
                         Phase = evt.Phase,
                         TimeMs = evt.StartMs,
-                        Label = $"{evt.Phase} 开始"
+                        Label = $"{evt.Phase} 相开始"
                     });
 
                     list.Add(new ZwavSagMarkerDto
                     {
                         Kind = "EventEnd",
+                        ChannelIndex = evt.ChannelIndex,
+                        ChannelName = evt.ChannelName,
                         Phase = evt.Phase,
                         TimeMs = evt.EndMs,
-                        Label = $"{evt.Phase} 结束"
+                        Label = $"{evt.Phase} 相结束"
+                    });
+                }
+            }
+            else if (hasPhaseMarkers)
+            {
+                foreach (var p in phases)
+                {
+                    list.Add(new ZwavSagMarkerDto
+                    {
+                        Kind = "PhaseStart",
+                        ChannelIndex = p.ChannelIndex,
+                        ChannelName = p.ChannelName,
+                        Phase = p.Phase,
+                        TimeMs = (p.StartTimeUtc - waveStartTimeUtc).TotalMilliseconds,
+                        Label = $"{p.Phase} 相开始"
+                    });
+
+                    list.Add(new ZwavSagMarkerDto
+                    {
+                        Kind = "PhaseEnd",
+                        ChannelIndex = p.ChannelIndex,
+                        ChannelName = p.ChannelName,
+                        Phase = p.Phase,
+                        TimeMs = (p.EndTimeUtc - waveStartTimeUtc).TotalMilliseconds,
+                        Label = $"{p.Phase} 相结束"
                     });
                 }
             }
@@ -1473,6 +1525,7 @@ namespace Preferred.Api.Services
                     list.Add(new ZwavSagMarkerDto
                     {
                         Kind = "EventStart",
+                        ChannelName = detail.TriggerPhase,
                         Phase = detail.TriggerPhase,
                         TimeMs = (detail.StartTimeUtc.Value - waveStartTimeUtc).TotalMilliseconds,
                         Label = "事件开始"
@@ -1484,31 +1537,10 @@ namespace Preferred.Api.Services
                     list.Add(new ZwavSagMarkerDto
                     {
                         Kind = "EventEnd",
+                        ChannelName = detail.EndPhase,
                         Phase = detail.EndPhase,
                         TimeMs = (detail.EndTimeUtc.Value - waveStartTimeUtc).TotalMilliseconds,
                         Label = "事件结束"
-                    });
-                }
-            }
-
-            if (phases != null && phases.Length > 0)
-            {
-                foreach (var p in phases)
-                {
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "PhaseStart",
-                        Phase = p.Phase,
-                        TimeMs = (p.StartTimeUtc - waveStartTimeUtc).TotalMilliseconds,
-                        Label = $"{p.Phase} 相开始"
-                    });
-
-                    list.Add(new ZwavSagMarkerDto
-                    {
-                        Kind = "PhaseEnd",
-                        Phase = p.Phase,
-                        TimeMs = (p.EndTimeUtc - waveStartTimeUtc).TotalMilliseconds,
-                        Label = $"{p.Phase} 相结束"
                     });
                 }
             }
@@ -1525,6 +1557,7 @@ namespace Preferred.Api.Services
                     list.Add(new ZwavSagMarkerDto
                     {
                         Kind = "Worst",
+                        ChannelIndex = worst.ChannelIndex,
                         Phase = worst.Phase,
                         TimeMs = worst.TimeMs,
                         Label = "最小RMS%",
@@ -1536,6 +1569,17 @@ namespace Preferred.Api.Services
             return list
                 .Where(x => x != null)
                 .Where(x => !double.IsNaN(x.TimeMs) && !double.IsInfinity(x.TimeMs))
+                .GroupBy(x => new
+                {
+                    x.Kind,
+                    x.ChannelIndex,
+                    x.ChannelName,
+                    x.Phase,
+                    x.TimeMs,
+                    x.Label,
+                    x.Value
+                })
+                .Select(g => g.First())
                 .OrderBy(x => x.TimeMs)
                 .ToArray();
         }
@@ -1664,7 +1708,9 @@ namespace Preferred.Api.Services
                 Samples = sampleBuildResult.Samples,
                 TimeAxisMs = sampleBuildResult.TimeAxisMs,
                 ChannelSeriesMap = sampleBuildResult.ChannelSeriesMap,
-                PhaseRules = await ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context).ConfigureAwait(false),
+                PhaseRules = (await ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(_context).ConfigureAwait(false))
+                    .Where(x => x != null && x.Enabled)
+                    .ToArray(),
             };
 
             ctx.AnalyzableSegments = BuildAnalyzableSegments(ctx);
@@ -1704,8 +1750,13 @@ namespace Preferred.Api.Services
                 var channelCode = (ch.ChannelCode ?? string.Empty).Trim();
                 var unit = (ch.Unit ?? string.Empty).Trim();
 
-                // 先过滤掉明显不是电压量的通道，减少后续误识别。
-                if (!ZwavSagVoltageChannelRuleMatcher.IsVoltageChannel(channelName, channelCode, unit))
+                var matchedRule = ZwavSagVoltageChannelRuleMatcher.MatchRule(channelName, channelCode, unit, rules);
+                if (matchedRule.HasMatch && !matchedRule.Enabled)
+                    continue;
+
+                // 显式启用的规则可以强制纳入分析；没有命中规则时再回退到内置电压通道识别。
+                if (!matchedRule.HasMatch &&
+                    !ZwavSagVoltageChannelRuleMatcher.IsVoltageChannel(channelName, channelCode, unit))
                     continue;
 
                 // 相别识别不到时无法参与后续排序和事件归类，因此直接跳过。

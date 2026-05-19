@@ -78,7 +78,7 @@ namespace Preferred.Api.Services
         /// <summary>
         /// 分页查询电压通道相别匹配规则。
         /// </summary>
-        Task<PagedResult<ZwavSagChannelRuleDto>> QueryChannelRuleAsync(string keyword, int page, int pageSize);
+        Task<PagedResult<ZwavSagChannelRuleDto>> QueryChannelRuleAsync(string keyword, bool? enabled, int page, int pageSize);
 
         /// <summary>
         /// 新增电压通道相别匹配规则。

@@ -56,6 +56,8 @@ namespace Zwav.Application.Sag
     public class ZwavSagMarkerDto
     {
         public string Kind { get; set; }
+        public int? ChannelIndex { get; set; }
+        public string ChannelName { get; set; }
         public string Phase { get; set; }
         public double TimeMs { get; set; }
         public string Label { get; set; }

@@ -220,6 +220,11 @@
           <div class="inner-search-left">
             <span class="search-label">规则名称</span>
             <input id="ruleKeyword" class="el-input" placeholder="请输入规则名称" style="width: 220px" />
+            <select id="ruleEnabledFilter" class="el-select" style="width: 140px">
+              <option value="">全部状态</option>
+              <option value="true">仅启用</option>
+              <option value="false">仅排除</option>
+            </select>
           </div>
           <div class="inner-search-right">
             <button class="el-button el-button--primary" id="btnRuleSearch">查询</button>
@@ -232,6 +237,7 @@
               <th class="cell-center" style="width: 60px">序号</th>
               <th style="width: 220px">规则名称</th>
               <th style="width: 120px" id="ruleValueHeader">相别</th>
+              <th class="cell-center" style="width: 90px" id="ruleEnabledHeader">启用</th>
               <th style="width: 70px">排序号</th>
               <th style="width: 120px">创建时间</th>
               <th class="cell-center" style="width: 120px">操作</th>
@@ -281,6 +287,13 @@
               <option value="BC">BC</option>
               <option value="CA">CA</option>
             </select>
+          </div>
+          <div class="search-item" id="enabledFieldWrap">
+            <label>启用</label>
+            <label class="rule-enabled-toggle">
+              <input id="enabledInput" type="checkbox" checked />
+              <span>勾选后参与暂降分析，取消勾选后排除匹配到的电压通道</span>
+            </label>
           </div>
           <div class="search-item" id="groupFieldWrap" style="display: none;">
             <label>分组名称</label>
@@ -473,6 +486,18 @@
       width: auto;
       flex: 1 1 auto;
       min-width: 0;
+    }
+
+    .rule-enabled-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--el-text-color-regular);
+      font-size: 13px;
+    }
+
+    .rule-enabled-toggle input {
+      margin: 0;
     }
 
     .page-actions {

@@ -39,6 +39,11 @@ const state = {
   selected: new Set(),
   hidden: new Set(),
   rmsHidden: new Set(),
+  thresholdHidden: {
+    sag: false,
+    recover: false,
+    interrupt: false
+  },
   rawZoomApplied: false,
   rawZoomState: null,
   rawUserZoomed: false,
@@ -157,11 +162,28 @@ function formatAbsTimeFromOffsetMs(offsetMs) {
 }
 
 function getSagRowKey(evt) {
+  const channelIndex = Number(evt?.channelIndex ?? 0)
   const phase = String(evt?.phase || '')
   const startMs = Number(evt?.startMs ?? 0)
   const endMs = Number(evt?.endMs ?? 0)
   const kind = String(evt?.eventType || '')
-  return `${phase}-${kind}-${startMs}-${endMs}`
+  return `${channelIndex}-${phase}-${kind}-${startMs}-${endMs}`
+}
+
+function isMarkerForChannel(entry, channelIndex, phase, channelName) {
+  const entryChannelIndex = Number(entry?.channelIndex)
+  if (Number.isFinite(entryChannelIndex) && entryChannelIndex > 0) {
+    return entryChannelIndex === Number(channelIndex)
+  }
+
+  const entryChannelName = String(entry?.channelName || '').trim()
+  if (entryChannelName && channelName && entryChannelName === channelName) {
+    return true
+  }
+
+  // 原始波形上的暂降区间和事件标记必须精确命中通道，
+  // 不能再仅按 A/B/C 相别兜底，否则同相别的其他电压通道也会被误标记。
+  return false
 }
 
 function pickFocusEvent() {
@@ -1340,9 +1362,9 @@ function renderRawLegend() {
     const hiddenCls = state.rmsHidden.has(channelIndex) ? 'style="opacity:0.45"' : ''
     items.push(`<span class="raw-legend-item" data-kind="rms" data-idx="${escapeHtml(channelIndex)}" ${hiddenCls}><span class="legend-line rms" style="background:${RMS_COLORS[i % RMS_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
   })
-  items.push(`<span class="raw-legend-item"><span class="legend-dash dash-sag"></span><span class="legend-text">暂降阈值</span></span>`)
-  items.push(`<span class="raw-legend-item"><span class="legend-dash dash-recover"></span><span class="legend-text">恢复阈值</span></span>`)
-  items.push(`<span class="raw-legend-item"><span class="legend-dash dash-interrupt"></span><span class="legend-text">中断阈值</span></span>`)
+  items.push(`<span class="raw-legend-item ${state.thresholdHidden.sag ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="sag"><span class="legend-dash dash-sag"></span><span class="legend-text">暂降阈值</span></span>`)
+  items.push(`<span class="raw-legend-item ${state.thresholdHidden.recover ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="recover"><span class="legend-dash dash-recover"></span><span class="legend-text">恢复阈值</span></span>`)
+  items.push(`<span class="raw-legend-item ${state.thresholdHidden.interrupt ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="interrupt"><span class="legend-dash dash-interrupt"></span><span class="legend-text">中断阈值</span></span>`)
   items.push(`<span class="raw-legend-item"><span class="legend-area"></span><span class="legend-text">暂降区间</span></span>`)
   items.push(`<span class="raw-legend-item"><span class="legend-vline"></span><span class="legend-text">开始/结束</span></span>`)
   setHtml('rawLegend', items.join(''))
@@ -1364,6 +1386,17 @@ function renderRawLegend() {
       const idx = Number(el.getAttribute('data-idx'))
       if (state.rmsHidden.has(idx)) state.rmsHidden.delete(idx)
       else state.rmsHidden.add(idx)
+      renderRawLegend()
+      updateRawChart()
+    })
+  })
+
+  byId('rawLegend').querySelectorAll('.raw-legend-item[data-kind="threshold"]').forEach((el) => {
+    el.addEventListener('click', () => {
+      saveRawZoomState()
+      const threshold = String(el.getAttribute('data-threshold') || '')
+      if (!threshold) return
+      state.thresholdHidden[threshold] = !state.thresholdHidden[threshold]
       renderRawLegend()
       updateRawChart()
     })
@@ -1414,7 +1447,7 @@ function updateRawChart() {
 
   selected.forEach((channelIndex, i) => {
     const top = topBase + i * (gridHeight + gridGap)
-    grids.push({ left: 100, right: 20, top, height: gridHeight - 18, containLabel: true })
+    grids.push({ left: 130, right: 20, top, height: gridHeight - 18, containLabel: true })
 
     xAxis.push({
       type: 'value',
@@ -1436,9 +1469,9 @@ function updateRawChart() {
       gridIndex: i,
       name: '',
       nameLocation: 'middle',
-      nameRotate: 90,
-      nameGap: 55,
-      nameTextStyle: { fontSize: 12, color: '#606266' },
+      nameRotate: 0,
+      nameGap: 5,
+      nameTextStyle: { fontSize: 12, fontWeight: 700, color: '#303133' },
       axisLabel: { show: false },
       axisTick: { show: false },
       scale: true
@@ -1461,6 +1494,7 @@ function updateRawChart() {
     const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
     const phase = String(ch?.phase || '').toUpperCase()
     const name = ch ? `${ch.channelIndex}. ${ch.channelName || ''}` : `CH${channelIndex}`
+    const channelName = String(ch?.channelName || '').trim()
     const channelRefV = getRefVoltageForChannel(channelIndex, phase)
     yAxis[i].name = name
 
@@ -1502,47 +1536,62 @@ function updateRawChart() {
       const sagY = (channelRefV * sagPct) / 100
       const recoverY = (channelRefV * recoverPct) / 100
       const interruptY = (channelRefV * interruptPct) / 100
-      series.push({
-        id: `sag-threshold-${channelIndex}`,
-        name: `暂降阈值-${channelIndex}`,
-        type: 'line',
-        xAxisIndex: i,
-        yAxisIndex: i,
-        showSymbol: false,
-        lineStyle: { type: 'dashed', width: 1.5, color: '#1677ff' },
-        data: buildHorizontalLineData(xTimes, sagY)
-      })
-      series.push({
-        id: `recover-threshold-${channelIndex}`,
-        name: `恢复阈值-${channelIndex}`,
-        type: 'line',
-        xAxisIndex: i,
-        yAxisIndex: i,
-        showSymbol: false,
-        lineStyle: { type: 'dashed', width: 1.5, color: '#52c41a' },
-        data: buildHorizontalLineData(xTimes, recoverY)
-      })
-      series.push({
-        id: `interrupt-threshold-${channelIndex}`,
-        name: `中断阈值-${channelIndex}`,
-        type: 'line',
-        xAxisIndex: i,
-        yAxisIndex: i,
-        showSymbol: false,
-        lineStyle: { type: 'dashed', width: 1.5, color: '#fa8c16' },
-        data: buildHorizontalLineData(xTimes, interruptY)
-      })
+      if (!state.thresholdHidden.sag) {
+        series.push({
+          id: `sag-threshold-${channelIndex}`,
+          name: `暂降阈值-${channelIndex}`,
+          type: 'line',
+          xAxisIndex: i,
+          yAxisIndex: i,
+          showSymbol: false,
+          silent: true,
+          z: 8,
+          lineStyle: { type: 'dashed', width: 2, color: '#1677ff', opacity: 1 },
+          data: buildHorizontalLineData(xTimes, sagY)
+        })
+      }
+      if (!state.thresholdHidden.recover) {
+        series.push({
+          id: `recover-threshold-${channelIndex}`,
+          name: `恢复阈值-${channelIndex}`,
+          type: 'line',
+          xAxisIndex: i,
+          yAxisIndex: i,
+          showSymbol: false,
+          silent: true,
+          z: 7,
+          lineStyle: { type: 'dashed', width: 1.5, color: '#52c41a', opacity: 0.95 },
+          data: buildHorizontalLineData(xTimes, recoverY)
+        })
+      }
+      if (!state.thresholdHidden.interrupt) {
+        series.push({
+          id: `interrupt-threshold-${channelIndex}`,
+          name: `中断阈值-${channelIndex}`,
+          type: 'line',
+          xAxisIndex: i,
+          yAxisIndex: i,
+          showSymbol: false,
+          silent: true,
+          z: 7,
+          lineStyle: { type: 'dashed', width: 1.5, color: '#fa8c16', opacity: 0.95 },
+          data: buildHorizontalLineData(xTimes, interruptY)
+        })
+      }
     }
 
     const markAreas = []
+    const markAreaKeys = new Set()
     for (const evt of state.process?.computedEvents || []) {
-      const evtPhase = String(evt?.phase || '').toUpperCase()
-      if (evtPhase && phase && evtPhase !== phase) continue
+      if (!isMarkerForChannel(evt, channelIndex, phase, channelName)) continue
       const s = Number(evt?.startMs)
       const e = Number(evt?.endMs)
       if (!Number.isFinite(s) || !Number.isFinite(e)) continue
       const si = findNearestIndex(xTimes, s)
       const ei = findNearestIndex(xTimes, e)
+      const areaKey = `${Number(evt?.channelIndex ?? 0)}-${s}-${e}-${String(evt?.eventType || '')}`
+      if (markAreaKeys.has(areaKey)) continue
+      markAreaKeys.add(areaKey)
       markAreas.push([{ xAxis: xTimes[si] }, { xAxis: xTimes[ei] }])
     }
     if (markAreas.length) {
@@ -1554,12 +1603,15 @@ function updateRawChart() {
     }
 
     const lines = []
+    const lineKeys = new Set()
     for (const m of state.process?.markers || []) {
-      const mp = String(m?.phase || '').toUpperCase()
-      if (mp && phase && mp !== phase) continue
+      if (!isMarkerForChannel(m, channelIndex, phase, channelName)) continue
       const t = Number(m?.timeMs)
       if (!Number.isFinite(t)) continue
       const idx2 = findNearestIndex(xTimes, t)
+      const lineKey = `${String(m?.kind || '')}-${Number(m?.channelIndex ?? 0)}-${t}-${String(m?.label || '')}`
+      if (lineKeys.has(lineKey)) continue
+      lineKeys.add(lineKey)
       lines.push({
         xAxis: xTimes[idx2],
         name: String(m?.label || m?.kind || ''),

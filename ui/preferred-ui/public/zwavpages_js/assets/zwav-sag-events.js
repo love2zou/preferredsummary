@@ -224,6 +224,7 @@ function getRuleListState(tab = state.rules.activeTab) {
 function syncRuleEditUi(tab = state.ruleEditing.tab || state.rules.activeTab) {
   const isPhase = tab === RULE_TAB_PHASE
   byId('phaseFieldWrap').style.display = isPhase ? '' : 'none'
+  byId('enabledFieldWrap').style.display = isPhase ? '' : 'none'
   byId('groupFieldWrap').style.display = isPhase ? 'none' : ''
 }
 
@@ -238,6 +239,10 @@ function syncRuleTabUi() {
   })
 
   setText('ruleValueHeader', meta.valueHeader)
+  const enabledHeader = byId('ruleEnabledHeader')
+  if (enabledHeader) enabledHeader.style.display = activeTab === RULE_TAB_PHASE ? '' : 'none'
+  const enabledFilter = byId('ruleEnabledFilter')
+  if (enabledFilter) enabledFilter.style.display = activeTab === RULE_TAB_PHASE ? '' : 'none'
   syncRuleEditUi(activeTab)
 }
 
@@ -278,7 +283,9 @@ function render() {
     const disabledAttr = state.deleting ? 'disabled' : ''
     const statusType = getAnalyzeStatusType(row.status)
     const statusText = getAnalyzeStatusText(row.status)
-    const progress = normalizeProgress(row.progress)
+    const progress = Number(row.status) === 2 || Number(row.status) === 3
+      ? 100
+      : normalizeProgress(row.progress)
     const progressInnerClass = row.status === 3 ? 'is-exception' : row.status === 2 ? 'is-success' : ''
     const progressBar = `
       <div class="el-progress">
@@ -892,8 +899,10 @@ async function loadRules() {
   const ruleState = getRuleListState()
   ruleState.loading = true
   try {
+    const enabledRaw = String(byId('ruleEnabledFilter')?.value || '').trim()
     const params = {
       keyword: (byId('ruleKeyword').value || '').trim() || undefined,
+      enabled: meta === RULE_TAB_META[RULE_TAB_PHASE] && enabledRaw !== '' ? enabledRaw : undefined,
       page: ruleState.page,
       pageSize: ruleState.pageSize
     }
@@ -930,11 +939,13 @@ function renderRules() {
   const tbody = ruleState.data.map((row, idx) => {
     const name = row.ruleName || '-'
     const valueText = row[meta.valueProp] || '-'
+    const enabledText = row.enabled === false ? '排除' : '启用'
     return `
       <tr>
         <td class="cell-center">${idx + 1 + (ruleState.page - 1) * ruleState.pageSize}</td>
         <td class="file-name-cell" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
         <td class="cell-center">${escapeHtml(valueText)}</td>
+        ${state.rules.activeTab === RULE_TAB_PHASE ? `<td class="cell-center">${escapeHtml(enabledText)}</td>` : ''}
         <td class="cell-center">${escapeHtml(String(row.seqNo ?? 0))}</td>
         <td>${escapeHtml(row.crtTime ? formatDateTime(row.crtTime) : '-')}</td>
         <td class="cell-actions">
@@ -985,6 +996,7 @@ function openRuleEdit(row) {
   setText('ruleEditTitle', row ? meta.editTitle : meta.addTitle)
   byId('ruleNameInput').value = row ? (row.ruleName || '') : ''
   byId('phaseNameSelect').value = row ? (row.phaseName || 'A') : 'A'
+  byId('enabledInput').checked = row ? row.enabled !== false : true
   byId('groupNameInput').value = row ? (row.groupName || '') : ''
   byId('seqNoInput').value = row ? String(row.seqNo ?? 0) : String(computeLocalNextRuleSeqNo())
   syncRuleEditUi(tab)
@@ -996,6 +1008,7 @@ async function saveRule() {
   const meta = getRuleTabMeta(tab)
   const ruleName = String(byId('ruleNameInput').value || '').trim()
   const phaseName = String(byId('phaseNameSelect').value || '').trim()
+  const enabled = !!byId('enabledInput').checked
   const groupName = String(byId('groupNameInput').value || '').trim()
   const seqNo = Number(byId('seqNoInput').value || 0)
 
@@ -1018,7 +1031,7 @@ async function saveRule() {
 
   try {
     const body = tab === RULE_TAB_PHASE
-      ? { ruleName, phaseName, seqNo }
+      ? { ruleName, phaseName, seqNo, enabled }
       : { ruleName, groupName, seqNo }
 
     let res
@@ -1238,6 +1251,7 @@ function bindEvents() {
     state.rules.activeTab = RULE_TAB_PHASE
     getRuleListState(RULE_TAB_PHASE).page = 1
     byId('ruleKeyword').value = ''
+    byId('ruleEnabledFilter').value = ''
     byId('rulePageSize').value = String(getRuleListState(RULE_TAB_PHASE).pageSize)
     syncRuleTabUi()
     openDialog('channelRuleModal')
@@ -1253,6 +1267,12 @@ function bindEvents() {
   })
 
   on('btnRuleSearch', 'click', () => {
+    getRuleListState().page = 1
+    loadRules()
+  })
+
+  on('ruleEnabledFilter', 'change', () => {
+    if (state.rules.activeTab !== RULE_TAB_PHASE) return
     getRuleListState().page = 1
     loadRules()
   })
