@@ -7,6 +7,7 @@ namespace Zwav.Application.Sag
     {
         public int AnalysisId { get; set; }
         public string AnalysisGuid { get; set; }
+        public string FaultStartTime { get; set; }
         public DateTime WaveStartTimeUtc { get; set; }
         public decimal FrequencyHz { get; set; }
         public decimal TimeMul { get; set; }

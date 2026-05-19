@@ -130,6 +130,16 @@ function formatUtcMs(str) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
 }
 
+function formatSagOccurTime(evt) {
+  const base = state.process?.faultStartTime || state.process?.waveStartTimeUtc
+  const offsetMs = Number(evt?.startMs)
+  if (base && Number.isFinite(offsetMs)) {
+    const d = new Date(base)
+    if (!Number.isNaN(d.getTime())) return formatUtcMs(new Date(d.getTime() + offsetMs).toISOString())
+  }
+  return evt?.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt?.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-')
+}
+
 function formatAbsTimeFromOffsetMs(offsetMs) {
   const n = Number(offsetMs)
   if (!Number.isFinite(n)) return '-'
@@ -310,6 +320,37 @@ function getRefVoltage() {
   const pv = Number(p[0]?.referenceVoltage)
   if (Number.isFinite(pv) && pv > 0) return pv
   return 0
+}
+
+function getRefVoltageForChannel(channelIndex, phase) {
+  const pushIfValid = (list, value) => {
+    const n = Number(value)
+    if (Number.isFinite(n) && n > 0) list.push(n)
+  }
+
+  const candidates = []
+  pushIfValid(candidates, state.params.referenceVoltage)
+  pushIfValid(candidates, state.process?.event?.referenceVoltage)
+
+  const phases = Array.isArray(state.process?.phases) ? state.process.phases : []
+  const phaseText = String(phase || '').trim().toUpperCase()
+
+  for (const item of phases) {
+    if (Number(item?.channelIndex) === Number(channelIndex)) pushIfValid(candidates, item?.referenceVoltage)
+  }
+  for (const item of phases) {
+    if (String(item?.phase || '').trim().toUpperCase() === phaseText) pushIfValid(candidates, item?.referenceVoltage)
+  }
+
+  const rmsPoints = Array.isArray(state.process?.rmsPoints) ? state.process.rmsPoints : []
+  for (const item of rmsPoints) {
+    if (Number(item?.channelIndex) === Number(channelIndex)) {
+      pushIfValid(candidates, item?.referenceVoltage)
+      if (candidates.length) break
+    }
+  }
+
+  return candidates.length ? candidates[0] : 0
 }
 
 function renderHeader() {
@@ -814,7 +855,7 @@ function renderSagTable() {
     .map((evt, idx) => {
       const key = getSagRowKey(evt)
       const checked = state.sagSelectedKeys.has(key) ? 'checked' : ''
-      const occur = evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-')
+      const occur = formatSagOccurTime(evt)
       const typeText = evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : String(evt.eventType || '-')
       const chText = evt.channelName ? String(evt.channelName) : '-'
       return `
@@ -926,7 +967,7 @@ function updateToleranceChart() {
         phase,
         durationMs: evt.durationMs,
         durationSec: x,
-        occurTimeText: evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-'),
+        occurTimeText: formatSagOccurTime(evt),
         eventTypeText: evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : evt.eventType || '-',
         residualVoltage: evt.residualVoltage,
         residualVoltagePct: evt.residualVoltagePct,
@@ -1365,7 +1406,6 @@ function updateRawChart() {
   const series = []
 
   const topBase = 20
-  const refV = getRefVoltage()
   const sagPct = Number(state.params.sagThresholdPct ?? 90)
   const interruptPct = Number(state.params.interruptThresholdPct ?? 10)
   const hysteresisPct = Number(state.params.hysteresisPct ?? 2)
@@ -1421,6 +1461,7 @@ function updateRawChart() {
     const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
     const phase = String(ch?.phase || '').toUpperCase()
     const name = ch ? `${ch.channelIndex}. ${ch.channelName || ''}` : `CH${channelIndex}`
+    const channelRefV = getRefVoltageForChannel(channelIndex, phase)
     yAxis[i].name = name
 
     const rawSeriesIndex = series.length
@@ -1457,10 +1498,10 @@ function updateRawChart() {
 
     const baseSeriesIndex = rawSeriesIndex
 
-    if (refV > 0) {
-      const sagY = (refV * sagPct) / 100
-      const recoverY = (refV * recoverPct) / 100
-      const interruptY = (refV * interruptPct) / 100
+    if (channelRefV > 0) {
+      const sagY = (channelRefV * sagPct) / 100
+      const recoverY = (channelRefV * recoverPct) / 100
+      const interruptY = (channelRefV * interruptPct) / 100
       series.push({
         id: `sag-threshold-${channelIndex}`,
         name: `暂降阈值-${channelIndex}`,
@@ -1468,7 +1509,7 @@ function updateRawChart() {
         xAxisIndex: i,
         yAxisIndex: i,
         showSymbol: false,
-        lineStyle: { type: 'dashed', width: 1, color: '#1677ff' },
+        lineStyle: { type: 'dashed', width: 1.5, color: '#1677ff' },
         data: buildHorizontalLineData(xTimes, sagY)
       })
       series.push({
@@ -1478,7 +1519,7 @@ function updateRawChart() {
         xAxisIndex: i,
         yAxisIndex: i,
         showSymbol: false,
-        lineStyle: { type: 'dashed', width: 1, color: '#52c41a' },
+        lineStyle: { type: 'dashed', width: 1.5, color: '#52c41a' },
         data: buildHorizontalLineData(xTimes, recoverY)
       })
       series.push({
@@ -1488,7 +1529,7 @@ function updateRawChart() {
         xAxisIndex: i,
         yAxisIndex: i,
         showSymbol: false,
-        lineStyle: { type: 'dashed', width: 1, color: '#fa8c16' },
+        lineStyle: { type: 'dashed', width: 1.5, color: '#fa8c16' },
         data: buildHorizontalLineData(xTimes, interruptY)
       })
     }
@@ -1603,6 +1644,7 @@ function updateRawChart() {
   state.rawChart.resize()
   scheduleMarkerRender()
 
+  const refV = getRefVoltage()
   setText(
     'rawSub',
     `参考电压：${refV ? refV.toFixed(2) : '-'} V，暂降阈值：${formatPercent(sagPct)}%，中断阈值：${formatPercent(interruptPct)}%，迟滞：${formatPercent(hysteresisPct)}%，最小持续：${formatMs(state.params.minDurationMs)} ms`
@@ -1708,7 +1750,7 @@ function buildReportLines() {
     if (Number.isFinite(item.pMinResidual)) lines.push(`- 最低残余电压：${formatPercent(item.pMinResidual)}%。`)
     if (Number.isFinite(item.pMaxDur)) lines.push(`- 最长持续：${formatMs(item.pMaxDur)} ms。`)
     if (item.worstEvt) {
-      const t = item.worstEvt.occurTimeUtc ? formatUtcMs(item.worstEvt.occurTimeUtc) : '-'
+      const t = formatSagOccurTime(item.worstEvt)
       lines.push(`- 最严重事件时间：${t}；持续 ${formatMs(item.worstEvt.durationMs)} ms；幅值 ${formatPercent(item.worstEvt.sagMagnitudePct)}%。`)
     }
   }

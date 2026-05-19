@@ -28,6 +28,8 @@ function createRuleListState() {
 
 const state = {
   loading: false,
+  deleting: false,
+  polling: null,
   selected: new Set(),
   page: 1,
   pageSize: 10,
@@ -149,6 +151,14 @@ function formatNumber(v) {
   return n.toFixed(2)
 }
 
+function normalizeProgress(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 0
+  if (n < 0) return 0
+  if (n > 100) return 100
+  return Math.round(n)
+}
+
 function formatEventType(type) {
   if (!type) return '-'
   if (type === 'Normal') return '正常'
@@ -231,6 +241,11 @@ function syncRuleTabUi() {
   syncRuleEditUi(activeTab)
 }
 
+function getEventNameById(id) {
+  const row = state.data.find((item) => Number(item.id) === Number(id))
+  return row?.originalName || `ID ${id}`
+}
+
 async function switchRuleTab(tab) {
   if (!RULE_TAB_META[tab] || state.rules.activeTab === tab) return
 
@@ -243,21 +258,38 @@ async function switchRuleTab(tab) {
 
 function render() {
   updatePagination(state.total, state.page, state.pageSize, 'totalText', 'pageText', 'btnPrev', 'btnNext')
-  byId('btnBatchDelete').disabled = state.selected.size === 0
+  byId('btnBatchDelete').disabled = state.selected.size === 0 || state.deleting
+  byId('btnSearch').disabled = state.deleting
+  byId('btnReset').disabled = state.deleting
+  byId('pageSize').disabled = state.deleting
+  byId('btnPrev').disabled = state.deleting || byId('btnPrev').disabled
+  byId('btnNext').disabled = state.deleting || byId('btnNext').disabled
 
   const checkAll = byId('checkAll')
   const allIds = state.data.map(x => x.id).filter(x => x !== undefined && x !== null)
   const checkedCount = allIds.filter(id => state.selected.has(id)).length
   checkAll.checked = allIds.length > 0 && checkedCount === allIds.length
   checkAll.indeterminate = checkedCount > 0 && checkedCount < allIds.length
+  checkAll.disabled = state.deleting
 
   const tbody = state.data.map((row, idx) => {
     const id = row.id
     const checked = state.selected.has(id) ? 'checked' : ''
+    const disabledAttr = state.deleting ? 'disabled' : ''
     const statusType = getAnalyzeStatusType(row.status)
     const statusText = getAnalyzeStatusText(row.status)
+    const progress = normalizeProgress(row.progress)
+    const progressInnerClass = row.status === 3 ? 'is-exception' : row.status === 2 ? 'is-success' : ''
+    const progressBar = `
+      <div class="el-progress">
+        <div class="el-progress-bar">
+          <div class="el-progress-bar__inner ${progressInnerClass}" style="width:${progress}%"></div>
+        </div>
+        <div class="el-progress__text">${progress}%</div>
+      </div>
+    `
     const hasSag = !!row.hasSag
-    const occur = row.occurTimeUtc ? formatDateTimeMs(row.occurTimeUtc) : '-'
+    const occur = row.occurTimeText ? String(row.occurTimeText) : (row.occurTimeUtc ? formatDateTimeMs(row.occurTimeUtc) : '-')
     const errorRaw = row.errorMessage ? String(row.errorMessage) : ''
     const errorText = errorRaw
       ? `<span class="error-text" title="${escapeHtml(errorRaw)}">${escapeHtml(errorRaw)}</span>`
@@ -268,10 +300,11 @@ function render() {
 
     return `
       <tr>
-        <td class="cell-center"><input type="checkbox" class="row-check" data-id="${escapeHtml(id)}" ${checked}></td>
+        <td class="cell-center"><input type="checkbox" class="row-check" data-id="${escapeHtml(id)}" ${checked} ${disabledAttr}></td>
         <td class="cell-center">${idx + 1 + (state.page - 1) * state.pageSize}</td>
         <td class="file-name-cell" title="${escapeHtml(row.originalName || '')}">${escapeHtml(row.originalName || '-')}</td>
         <td><span class="el-tag el-tag--${statusType}">${escapeHtml(statusText)}</span></td>
+        <td class="sag-progress-cell">${progressBar}</td>
         <td class="cell-center">
           <span class="el-tag ${hasSag ? 'el-tag--danger' : 'el-tag--success'}">${hasSag ? '有' : '无'}</span>
         </td>
@@ -283,18 +316,24 @@ function render() {
         <td>${escapeHtml(formatPercent(row.residualVoltagePct))}</td>
         <td class="file-name-cell">${errorText}</td>
         <td class="cell-actions">
-          <button class="el-button is-link action-process" data-id="${escapeHtml(id)}">暂降分析</button>
-          <button class="el-button is-link action-view" data-fileid="${escapeHtml(row.fileId)}">录波浏览</button>
-          <button class="el-button is-link action-delete" data-id="${escapeHtml(id)}" style="color: var(--el-color-danger)">删除</button>
+          <button class="el-button is-link action-process" data-id="${escapeHtml(id)}" ${disabledAttr}>暂降分析</button>
+          <button class="el-button is-link action-view" data-fileid="${escapeHtml(row.fileId)}" ${disabledAttr}>录波浏览</button>
+          <button class="el-button is-link action-delete" data-id="${escapeHtml(id)}" style="color: var(--el-color-danger)" ${disabledAttr}>删除</button>
         </td>
       </tr>
     `
   }).join('')
 
   setHtml('tbody', tbody)
+
+  if (state.deleting) {
+    byId('tbody')?.querySelectorAll('button').forEach((button) => {
+      button.disabled = true
+    })
+  }
 }
 
-async function loadList() {
+async function loadList(silent = false) {
   state.loading = true
   try {
     const params = {
@@ -308,7 +347,7 @@ async function loadList() {
 
     const res = await zwavApi.sagList(params)
     if (!res || !res.success) {
-      showAlert('error', res?.message || '查询失败')
+      if (!silent) showAlert('error', res?.message || '查询失败')
       return
     }
 
@@ -322,13 +361,26 @@ async function loadList() {
 
     render()
   } catch (e) {
-    showAlert('error', e.message || '查询失败')
+    if (!silent) showAlert('error', e.message || '查询失败')
   } finally {
     state.loading = false
   }
 }
 
-async function batchDelete() {
+function hasRunningSagAnalysis() {
+  return state.data.some((row) => Number(row.status) === 1 || (normalizeProgress(row.progress) > 0 && normalizeProgress(row.progress) < 100))
+}
+
+function startPolling() {
+  if (state.polling) clearInterval(state.polling)
+  state.polling = setInterval(() => {
+    if (state.loading || state.deleting) return
+    if (!hasRunningSagAnalysis()) return
+    loadList(true)
+  }, 5000)
+}
+
+async function batchDeleteLegacy() {
   const ids = Array.from(state.selected)
   if (!ids.length) return
 
@@ -386,7 +438,7 @@ async function viewOnline(fileId) {
   }
 }
 
-async function handleDelete(id) {
+async function handleDeleteLegacy(id) {
   if (!id) return
 
   const confirmed = await showConfirmDialog('确认删除', '确定要删除该事件吗？', '此操作不可恢复')
@@ -466,6 +518,215 @@ function showConfirmDialog(title, message, warningText = '') {
       if (e.target === confirmDialog) cleanup(false)
     })
   })
+}
+
+function renderDeleteProgressStats(total, successCount, failCount) {
+  return `
+    <div class="delete-progress-stat">
+      <div class="delete-progress-stat__label">总文件数</div>
+      <div class="delete-progress-stat__value">${total}</div>
+    </div>
+    <div class="delete-progress-stat">
+      <div class="delete-progress-stat__label">成功删除</div>
+      <div class="delete-progress-stat__value">${successCount}</div>
+    </div>
+    <div class="delete-progress-stat">
+      <div class="delete-progress-stat__label">删除失败</div>
+      <div class="delete-progress-stat__value">${failCount}</div>
+    </div>
+  `
+}
+
+function closeDeleteProgressModal() {
+  if (state.deleting) return
+  closeDialog('deleteProgressModal')
+}
+
+function updateDeleteProgressView({
+  title,
+  summary,
+  completed,
+  total,
+  successCount,
+  failCount,
+  currentName,
+  failures,
+  done
+}) {
+  setText('deleteProgressTitle', title)
+  setText('deleteProgressSummary', summary)
+
+  const percent = total > 0 ? Math.round((completed / total) * 100) : 0
+  const progressBar = byId('deleteProgressBar')
+  if (progressBar) {
+    progressBar.style.width = `${percent}%`
+    progressBar.classList.remove('is-success', 'is-exception')
+    if (done && failCount > 0) progressBar.classList.add('is-exception')
+    if (done && failCount === 0) progressBar.classList.add('is-success')
+  }
+
+  setText('deleteProgressText', `${percent}%`)
+
+  const stats = byId('deleteProgressStats')
+  if (stats) {
+    stats.innerHTML = renderDeleteProgressStats(total, successCount, failCount)
+  }
+
+  setText('deleteProgressCurrent', `当前文件：${currentName || '-'}`)
+
+  const failureBox = byId('deleteProgressFailures')
+  if (failureBox) {
+    if (failures.length > 0) {
+      failureBox.style.display = 'block'
+      failureBox.innerHTML = `
+        <strong>失败详情：</strong><br />
+        ${failures.map((item) => `${escapeHtml(item.name)}：${escapeHtml(item.message)}`).join('<br />')}
+      `
+    } else {
+      failureBox.style.display = 'none'
+      failureBox.innerHTML = ''
+    }
+  }
+
+  const closeButton = byId('btnCloseDeleteProgress')
+  const doneButton = byId('btnDeleteProgressDone')
+  if (closeButton) closeButton.disabled = !done
+  if (doneButton) doneButton.disabled = !done
+}
+
+async function runDeleteWithProgress(items) {
+  if (state.deleting || !items.length) return
+
+  state.deleting = true
+  render()
+  openDialog('deleteProgressModal')
+  updateDeleteProgressView({
+    title: items.length > 1 ? '批量删除中' : '删除中',
+    summary: `准备删除 ${items.length} 个文件，请稍候...`,
+    completed: 0,
+    total: items.length,
+    successCount: 0,
+    failCount: 0,
+    currentName: '-',
+    failures: [],
+    done: false
+  })
+
+  let successCount = 0
+  let failCount = 0
+  const failures = []
+  const successIds = []
+
+  try {
+    for (let index = 0; index < items.length; index++) {
+      const item = items[index]
+
+      updateDeleteProgressView({
+        title: items.length > 1 ? '批量删除中' : '删除中',
+        summary: `正在删除第 ${index + 1} / ${items.length} 个文件...`,
+        completed: index,
+        total: items.length,
+        successCount,
+        failCount,
+        currentName: item.name,
+        failures,
+        done: false
+      })
+
+      try {
+        const res = await zwavApi.sagDelete(item.id)
+        if (res?.success) {
+          successCount++
+          successIds.push(item.id)
+        } else {
+          failCount++
+          failures.push({
+            id: item.id,
+            name: item.name,
+            message: res?.message || '删除失败'
+          })
+        }
+      } catch (error) {
+        failCount++
+        failures.push({
+          id: item.id,
+          name: item.name,
+          message: error.message || '删除失败'
+        })
+      }
+
+      updateDeleteProgressView({
+        title: items.length > 1 ? '批量删除中' : '删除中',
+        summary: `正在删除第 ${Math.min(index + 1, items.length)} / ${items.length} 个文件...`,
+        completed: index + 1,
+        total: items.length,
+        successCount,
+        failCount,
+        currentName: item.name,
+        failures,
+        done: false
+      })
+    }
+
+    successIds.forEach((id) => state.selected.delete(id))
+    await loadList()
+  } finally {
+    state.deleting = false
+    render()
+  }
+
+  updateDeleteProgressView({
+    title: failCount > 0 ? '删除完成（部分失败）' : '删除完成',
+    summary: failCount > 0 ? `删除已完成，成功 ${successCount} 个，失败 ${failCount} 个。` : `删除已完成，${successCount} 个文件已全部删除成功。`,
+    completed: items.length,
+    total: items.length,
+    successCount,
+    failCount,
+    currentName: failCount > 0 ? '请查看失败详情后再决定是否重试。' : '删除完成',
+    failures,
+    done: true
+  })
+}
+
+function bindDeleteProgressEvents() {
+  const mask = byId('deleteProgressModal')
+  const closeButton = byId('btnCloseDeleteProgress')
+  const doneButton = byId('btnDeleteProgressDone')
+
+  if (mask) {
+    mask.addEventListener('click', (event) => {
+      if (event.target !== mask) return
+      closeDeleteProgressModal()
+    })
+  }
+
+  if (closeButton) closeButton.addEventListener('click', closeDeleteProgressModal)
+  if (doneButton) doneButton.addEventListener('click', closeDeleteProgressModal)
+}
+
+async function batchDelete() {
+  const ids = Array.from(state.selected)
+  if (!ids.length) return
+
+  const confirmed = await showConfirmDialog('确认删除', `确定要批量删除选中的 ${ids.length} 个事件吗？`, '此操作不可恢复')
+  if (!confirmed) return
+
+  await runDeleteWithProgress(ids.map((id) => ({
+    id,
+    name: getEventNameById(id)
+  })))
+}
+
+async function handleDelete(id) {
+  if (!id) return
+
+  const confirmed = await showConfirmDialog('确认删除', '确定要删除该事件吗？', '此操作不可恢复')
+  if (!confirmed) return
+
+  await runDeleteWithProgress([{
+    id,
+    name: getEventNameById(id)
+  }])
 }
 
 async function loadAnalyses() {
@@ -605,9 +866,16 @@ async function startAnalyze() {
 
   try {
     const res = await zwavApi.sagAnalyze(body)
-    if (res?.success) {
-      const createdCount = res.data?.createdEventCount || 0
-      showAlert('success', `已生成结果记录：${createdCount} 条`)
+      if (res?.success) {
+        const queuedCount = res.data?.queuedCount ?? res.data?.createdEventCount ?? 0
+        const createdCount = queuedCount
+        state.analysis.selected.clear()
+        showAlert('success', `已加入分析队列：${queuedCount} 条，列表将自动刷新分析进度`)
+        closeDialog('analyzeModal')
+        state.page = 1
+        await loadList()
+        return
+      showAlert('success', `已生成结果记录：${createdCount} 条，列表将自动刷新分析进度`)
       closeDialog('analyzeModal')
       state.page = 1
       await loadList()
@@ -777,6 +1045,7 @@ function bindTableDelegation() {
   if (!tbody) return
 
   tbody.addEventListener('click', async (e) => {
+    if (state.deleting) return
     const target = e.target
     const processBtn = target.closest?.('.action-process')
     const viewBtn = target.closest?.('.action-view')
@@ -802,6 +1071,7 @@ function bindTableDelegation() {
   })
 
   tbody.addEventListener('change', (e) => {
+    if (state.deleting) return
     const target = e.target
     if (!target.classList.contains('row-check')) return
 
@@ -866,6 +1136,7 @@ function bindEvents() {
   bindDialog('analyzeModal')
   bindDialog('channelRuleModal')
   bindDialog('channelRuleEditModal')
+  bindDeleteProgressEvents()
 
   bindTableDelegation()
   bindAnalysisDelegation()
@@ -893,17 +1164,20 @@ function bindEvents() {
   })
 
   on('btnPrev', 'click', () => {
+    if (state.deleting) return
     if (state.page > 1) state.page--
     loadList()
   })
 
   on('btnNext', 'click', () => {
+    if (state.deleting) return
     const totalPages = Math.max(1, Math.ceil(state.total / state.pageSize))
     if (state.page < totalPages) state.page++
     loadList()
   })
 
   on('checkAll', 'change', () => {
+    if (state.deleting) return
     const allIds = state.data.map(x => x.id).filter(x => x !== undefined && x !== null)
     if (byId('checkAll').checked) allIds.forEach(id => state.selected.add(id))
     else allIds.forEach(id => state.selected.delete(id))
@@ -1013,6 +1287,7 @@ function bindEvents() {
 async function init() {
   bindEvents()
   syncRuleTabUi()
+  startPolling()
 
   state.pageSize = Number(byId('pageSize').value || 10)
   byId('referenceVoltage').value = '57.74'

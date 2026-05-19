@@ -19,12 +19,20 @@ namespace Preferred.Api.Services
     /// </summary>
     public static class ZwavSagVoltageChannelRuleMatcher
     {
+        /// <summary>
+        /// 通道相别匹配规则。
+        /// Keyword 表示匹配关键字，PhaseName 表示识别出的标准相名。
+        /// </summary>
         public sealed class RuleItem
         {
             public string Keyword { get; set; }
             public string PhaseName { get; set; }
         }
 
+        /// <summary>
+        /// 通道分组匹配规则。
+        /// Keyword 表示匹配关键字，GroupName 表示识别出的标准分组名。
+        /// </summary>
         public sealed class GroupRuleItem
         {
             public string Keyword { get; set; }
@@ -103,18 +111,29 @@ namespace Preferred.Api.Services
         private static RuleItem[] Cache = Array.Empty<RuleItem>();
         private static GroupRuleItem[] GroupCache = Array.Empty<GroupRuleItem>();
 
+        /// <summary>
+        /// 加载相别匹配规则。
+        /// 使用短时缓存减少同一批分析任务重复访问规则表的开销。
+        /// </summary>
         public static async Task<RuleItem[]> LoadRulesAsync(ApplicationDbContext context)
         {
             await EnsureCacheAsync(context).ConfigureAwait(false);
             return Cache;
         }
 
+        /// <summary>
+        /// 加载分组匹配规则。
+        /// </summary>
         public static async Task<GroupRuleItem[]> LoadGroupRulesAsync(ApplicationDbContext context)
         {
             await EnsureCacheAsync(context).ConfigureAwait(false);
             return GroupCache;
         }
 
+        /// <summary>
+        /// 根据通道名称、编码和单位匹配相别。
+        /// 优先使用内置高置信模式，其次再使用数据库规则做补充。
+        /// </summary>
         public static string MatchPhase(string channelName, string channelCode, string unit, RuleItem[] rules)
         {
             var text = BuildMatchText(channelName, channelCode, unit);
@@ -192,6 +211,10 @@ namespace Preferred.Api.Services
             return MatchBuiltInGroup(channelName, channelCode, unit);
         }
 
+        /// <summary>
+        /// 判断一个模拟量通道是否可视为电压通道。
+        /// 该判断尽量保守，宁可少识别，也尽量避免把电流或杂项通道误当成电压。
+        /// </summary>
         public static bool IsVoltageChannel(string channelName, string channelCode, string unit)
         {
             string name = (channelName ?? string.Empty).Trim().ToUpperInvariant();

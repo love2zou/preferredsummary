@@ -435,6 +435,139 @@ body {
   align-items: center;
 }
 
+.upload-dropzone {
+  border: 1px dashed rgba(64, 158, 255, 0.45);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(64, 158, 255, 0.08), rgba(64, 158, 255, 0.02));
+  padding: 28px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.upload-dropzone:hover,
+.upload-dropzone:focus {
+  border-color: var(--el-color-primary);
+  background: linear-gradient(180deg, rgba(64, 158, 255, 0.12), rgba(64, 158, 255, 0.04));
+  outline: none;
+}
+
+.upload-dropzone.is-dragover {
+  border-color: var(--el-color-primary);
+  background: linear-gradient(180deg, rgba(64, 158, 255, 0.16), rgba(64, 158, 255, 0.06));
+  transform: translateY(-1px);
+}
+
+.upload-dropzone__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.upload-dropzone__hint {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.upload-toolbar {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.upload-summary {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.upload-list-empty {
+  padding: 18px 16px;
+  border: 1px dashed var(--el-border-color);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  background: #fafafa;
+}
+
+.upload-file-card {
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fff;
+}
+
+.upload-file-name {
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-file-meta {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  white-space: nowrap;
+}
+
+.delete-progress-summary {
+  font-size: 14px;
+  color: var(--el-text-color-primary);
+}
+
+.delete-progress-stats {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.delete-progress-stat {
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--el-fill-color-light);
+}
+
+.delete-progress-stat__label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.delete-progress-stat__value {
+  margin-top: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--el-text-color-primary);
+}
+
+.delete-progress-current {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--el-text-color-regular);
+}
+
+.delete-progress-failures {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 108, 108, 0.22);
+  background: rgba(245, 108, 108, 0.08);
+  color: #c45656;
+  font-size: 12px;
+  line-height: 1.7;
+  max-height: 180px;
+  overflow: auto;
+  word-break: break-all;
+}
+
+.delete-progress-failures strong {
+  color: #b25252;
+}
+
 .error-text {
   color: var(--el-color-danger);
   font-size: 12px;
@@ -1253,4 +1386,20 @@ body {
 
 .seq-tree-item.is-start .seq-tree-item__time {
   color: #334155;
+}
+
+@media (max-width: 768px) {
+  .upload-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .delete-progress-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-file-card > div:first-child {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
 }

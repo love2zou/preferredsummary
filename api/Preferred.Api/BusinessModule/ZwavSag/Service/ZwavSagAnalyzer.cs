@@ -393,7 +393,7 @@ namespace Zwav.Application.Sag
         /// 2）RmsPct 明显低于阈值；
         /// 3）当前点和下一点连续都低于阈值。
         ///
-        /// 这样比单纯 “当前点 < 阈值” 更稳健。
+        /// 这样比单纯 “当前点 &lt; 阈值” 更稳健。
         /// </summary>
         private static bool IsSagStartPoint(ChannelRmsSeries series, int index, decimal sagThreshold)
         {
@@ -815,7 +815,7 @@ namespace Zwav.Application.Sag
         /// - 同一通道；
         /// - 同一相；
         /// - 同一组；
-        /// - 两窗口间隔 gap <= 6ms；
+        /// - 两窗口间隔 gap &lt;= 6ms；
         ///
         /// 注意：这不是你之前不需要的那种“多通道大合并”，
         /// 这里只是对同一条通道的碎片窗口做连续性修补。
@@ -933,6 +933,8 @@ namespace Zwav.Application.Sag
 
             decimal sagDepth = Math.Max(0m, decimal.Round(eventReferenceVoltage - minRms, 6));
             decimal sagPercent = Math.Max(0m, decimal.Round(100m - eventResidualPct, 3));
+            double occurMs = series.Points[minIndex].TimeMs;
+            occurMs = Clamp(occurMs, startMs, endMs);
 
             return new ChannelEventWindow
             {
@@ -942,6 +944,7 @@ namespace Zwav.Application.Sag
                 Phase = NormalizePhase(series.Phase),
                 StartMs = startMs,
                 EndMs = endMs,
+                OccurMs = occurMs,
                 DurationMs = durationMs,
                 ReferenceVoltage = eventReferenceVoltage,
                 ResidualVoltage = decimal.Round(minRms, 6),
@@ -1008,7 +1011,7 @@ namespace Zwav.Application.Sag
                 EventType = isInterruption ? "Interruption" : "Sag",
                 StartTimeUtc = ConvertToUtc(context, window.StartMs),
                 EndTimeUtc = ConvertToUtc(context, window.EndMs),
-                OccurTimeUtc = ConvertToUtc(context, window.StartMs),
+                OccurTimeUtc = ConvertToUtc(context, window.OccurMs),
                 DurationMs = window.DurationMs,
                 TriggerPhase = channelName,
                 EndPhase = channelName,
@@ -2386,6 +2389,9 @@ namespace Zwav.Application.Sag
 
             /// <summary>事件结束时间（相对 ms）。</summary>
             public double EndMs { get; set; }
+
+            /// <summary>事件发生时间（相对 ms，取最严重点时间）。</summary>
+            public double OccurMs { get; set; }
 
             /// <summary>时长 ms。</summary>
             public decimal DurationMs { get; set; }

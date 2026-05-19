@@ -41,6 +41,14 @@ namespace Preferred.Api.Services
         /// </summary>
         private readonly ILogger<SparkDetectionService> _logger;
 
+        /// <summary>
+        /// 构造检测服务。
+        ///
+        /// 依赖说明：
+        /// - db：负责访问任务、视频文件、事件、截图等业务表；
+        /// - logger：记录分析过程中的诊断信息；
+        /// - fs：提供视频及截图的根目录配置。
+        /// </summary>
         public SparkDetectionService(
             ApplicationDbContext db,
             ILogger<SparkDetectionService> logger,
@@ -63,16 +71,20 @@ namespace Preferred.Api.Services
         /// </summary>
         public async Task ProcessFileAsync(int fileId)
         {
+            // 先取视频文件记录；文件不存在时直接返回，避免无意义的异常。
             var vf = await _db.VideoAnalysisFiles.FirstOrDefaultAsync(x => x.Id == fileId);
             if (vf == null) return;
 
+            // 再取所属任务；任务被删除或不存在时同样直接结束。
             var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == vf.JobId);
             if (job == null) return;
 
+            // 已取消、已完成、已失败的任务不再重复进入分析。
             if (job.Status == 4 || job.Status == 2 || job.Status == 3) return;
             // 成功文件不重复分析；失败文件允许被 Worker 重试队列重新投递后再次分析。
             if (vf.Status == 2) return;
 
+            // 标记为“分析中”，这样外部查询能及时看到该文件正在被处理。
             vf.Status = 1;
             vf.UpdTime = DateTime.Now;
             await _db.SaveChangesAsync();
@@ -81,11 +93,13 @@ namespace Preferred.Api.Services
 
             try
             {
+                // 每个任务都可以携带单独的算法参数；缺失时回落到默认值。
                 var algo = AlgoParams.ParseOrDefault(job.AlgoParamsJson);
 
                 var (eventCount, durationSec, width, height, analyzeSec) =
                     await ProcessSingleVideoAsync(job, vf, algo);
 
+                // 回写分析产出的元数据，便于列表页、详情页直接展示。
                 vf.DurationSec = durationSec;
                 vf.Width = width;
                 vf.Height = height;
@@ -99,12 +113,14 @@ namespace Preferred.Api.Services
                 vf.UpdTime = DateTime.Now;
 
                 await _db.SaveChangesAsync();
+                // 文件状态落库成功后，再刷新任务级聚合统计。
                 await UpdateJobAggregateAsync(job.Id);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "ProcessFile failed. fileId={FileId}", fileId);
 
+                // 失败时保留错误信息，方便后续排查具体文件的问题。
                 vf.Status = 3;
                 vf.ErrorMessage = ex.Message;
 
@@ -114,6 +130,7 @@ namespace Preferred.Api.Services
                 vf.UpdTime = DateTime.Now;
                 await _db.SaveChangesAsync();
 
+                // 即使单文件失败，也要更新任务进度，让任务整体状态保持准确。
                 await UpdateJobAggregateAsync(vf.JobId);
                 throw;
             }
@@ -128,9 +145,11 @@ namespace Preferred.Api.Services
             var job = await _db.VideoAnalysisJobs.FirstOrDefaultAsync(x => x.Id == jobId);
             if (job == null) return;
 
+            // 已取消 / 已终态的任务不再重复覆盖状态。
             if (job.Status == 4) return;
             if (job.Status == 2 || job.Status == 3) return;
 
+            // 只读取聚合计算真正需要的字段，减少数据库和 EF 跟踪开销。
             var files = await _db.VideoAnalysisFiles.AsNoTracking()
                 .Where(x => x.JobId == jobId)
                 .Select(x => new { x.Status })
@@ -150,9 +169,11 @@ namespace Preferred.Api.Services
 
             if (job.TotalVideoCount > 0)
             {
+                // 有总量时以任务声明的视频总数为准计算进度。
                 job.Progress = (int)Math.Round(finished * 100.0 / job.TotalVideoCount);
                 if (finished + failed >= job.TotalVideoCount)
                 {
+                    // 所有文件都进入终态后，将任务标记为完成。
                     job.Status = 2;
                     job.Progress = 100;
                     job.FinishTime = DateTime.Now;
@@ -160,6 +181,7 @@ namespace Preferred.Api.Services
             }
             else
             {
+                // 没有总量时退化为按当前已上传文件数计算进度。
                 job.Progress = totalUploaded <= 0 ? 0 : (int)Math.Round(finished * 100.0 / totalUploaded);
             }
 
@@ -177,21 +199,39 @@ namespace Preferred.Api.Services
             public int TimeMs { get; set; }
             /// <summary>采样点对应的视频帧索引。</summary>
             public int FrameIndex { get; set; }
+            /// <summary>当前帧编码后的 JPEG 二进制内容，用于延迟落盘截图。</summary>
             public byte[] Jpeg { get; set; }
+            /// <summary>截图原始宽度，避免只存 JPEG 后丢失尺寸信息。</summary>
             public int Width { get; set; }
+            /// <summary>截图原始高度，避免只存 JPEG 后丢失尺寸信息。</summary>
             public int Height { get; set; }
         }
 
+        /// <summary>
+        /// 采样帧环形缓存。
+        ///
+        /// 这里缓存的不是 Mat 本身，而是压缩后的 JPEG 字节：
+        /// - 可以降低内存占用；
+        /// - 可以在事件晚于峰值若干帧才确认时，仍然回取到接近峰值的截图。
+        /// </summary>
         private sealed class FrameRingBuffer : IDisposable
         {
             private readonly int _maxItems;
             private readonly Queue<FrameBufferItem> _q = new Queue<FrameBufferItem>();
 
+            /// <summary>
+            /// 初始化环形缓存容量。
+            /// 至少保留 3 帧，避免极小容量导致无法回取峰值附近的历史帧。
+            /// </summary>
             public FrameRingBuffer(int maxItems)
             {
                 _maxItems = Math.Max(3, maxItems);
             }
 
+            /// <summary>
+            /// 将当前采样帧压缩成 JPEG 并放入缓存尾部。
+            /// 如果编码失败，也会保留一条空 JPEG 记录，方便时间轴仍保持连续。
+            /// </summary>
             public void AddJpeg(int timeMs, int frameIndex, Mat srcBgr, int jpegQuality)
             {
                 if (srcBgr == null || srcBgr.Empty()) return;
@@ -217,9 +257,13 @@ namespace Preferred.Api.Services
                     Height = srcBgr.Height
                 });
 
+                // 超出容量时，淘汰最早的旧帧，形成固定长度的时间窗口。
                 while (_q.Count > _maxItems) _q.Dequeue();
             }
 
+            /// <summary>
+            /// 按时间裁剪缓存，只保留最近 keepMs 毫秒内的历史帧。
+            /// </summary>
             public void TrimByTime(int keepMs)
             {
                 if (_q.Count == 0) return;
@@ -236,6 +280,10 @@ namespace Preferred.Api.Services
                 }
             }
 
+            /// <summary>
+            /// 从缓存中取与目标时间最接近的一帧。
+            /// 该方法用于把“事件确认时刻”回映射到“峰值截图时刻”。
+            /// </summary>
             public FrameBufferItem GetNearest(int targetTimeMs)
             {
                 FrameBufferItem best = null;
@@ -253,6 +301,9 @@ namespace Preferred.Api.Services
                 return best;
             }
 
+            /// <summary>
+            /// 释放缓存内容。
+            /// </summary>
             public void Dispose() => _q.Clear();
         }
 
@@ -300,7 +351,7 @@ namespace Preferred.Api.Services
             public Point2d Center { get; set; }    // 原图坐标
         }
 
-                /// <summary>
+        /// <summary>
         /// 物理删除指定事件及其关联截图。
         ///
         /// 使用场景：
@@ -359,7 +410,7 @@ namespace Preferred.Api.Services
             }
         }
 
-                /// <summary>
+        /// <summary>
         /// 安全删除文件。
         ///
         /// 删除失败时只记日志，不向上抛异常，避免“清理失败”影响主流程。
@@ -404,9 +455,11 @@ namespace Preferred.Api.Services
         {
             if (eventId <= 0) return;
 
+            // 业务约束是“一个事件一张图”，因此这里先查旧记录决定是新增还是覆盖。
             var oldSnap = await _db.VideoAnalysisSnapshots
                 .FirstOrDefaultAsync(x => x.EventId == eventId);
 
+            // 文件名带上关键识别信息，便于人工排查；同时加 Guid 避免覆盖同名文件。
             string fileName = $"{vf.Id}_{snapFrameIndex}_e{eventId}_t{timeSec}s_conf{conf:0.000}_{Guid.NewGuid():N}.jpg";
             string imagePath = Path.Combine(snapDir, fileName);
 
@@ -417,12 +470,14 @@ namespace Preferred.Api.Services
             {
                 if (peakFrame?.Jpeg != null && peakFrame.Jpeg.Length > 0)
                 {
+                    // 优先使用峰值附近缓存的 JPEG，使截图更贴近真实高亮瞬间。
                     await File.WriteAllBytesAsync(imagePath, peakFrame.Jpeg);
                     imgW = peakFrame.Width;
                     imgH = peakFrame.Height;
                 }
                 else
                 {
+                    // 缓存缺失时退化为当前帧，保证事件至少能落下一张图。
                     Cv2.ImWrite(imagePath, curr);
                     imgW = curr.Width;
                     imgH = curr.Height;
@@ -438,6 +493,7 @@ namespace Preferred.Api.Services
 
                 if (oldSnap == null)
                 {
+                    // 首次为事件写截图时直接插入新记录。
                     var snap = new VideoAnalysisSnapshot
                     {
                         VideoFileId = vf.Id,
@@ -458,6 +514,7 @@ namespace Preferred.Api.Services
                 }
                 else
                 {
+                    // 已有截图时执行覆盖更新，并在成功后清理旧文件，避免磁盘残留。
                     string oldPath = oldSnap.ImagePath;
 
                     oldSnap.ImagePath = imagePath;
@@ -481,6 +538,7 @@ namespace Preferred.Api.Services
             }
             catch (Exception ex)
             {
+                // 截图失败不影响主分析结果，只记录告警并清理半成品文件。
                 _logger.LogWarning(ex, "Upsert event snapshot failed. eventId={EventId}, path={Path}", eventId, imagePath);
                 SafeDeleteFile(imagePath);
             }
@@ -534,18 +592,28 @@ namespace Preferred.Api.Services
         /// </summary>
         private sealed class RobustBaseline
         {
+            /// <summary>亮度均值的 EWMA 基线。</summary>
             public double MeanEwma { get; private set; }
+            /// <summary>高亮像素占比的 EWMA 基线。</summary>
             public double BrightEwma { get; private set; }
+            /// <summary>是否已经完成基线初始化。</summary>
             public bool HasInit { get; private set; }
 
             private readonly Queue<(double mean, double br)> _hist = new Queue<(double, double)>();
             private readonly int _maxHist;
 
+            /// <summary>
+            /// 创建稳健基线对象。
+            /// maxHist 决定中位数历史样本窗口大小。
+            /// </summary>
             public RobustBaseline(int maxHist = 60)
             {
                 _maxHist = Math.Max(10, maxHist);
             }
 
+            /// <summary>
+            /// 清空当前基线状态，恢复到未初始化状态。
+            /// </summary>
             public void Reset()
             {
                 HasInit = false;
@@ -554,6 +622,10 @@ namespace Preferred.Api.Services
                 _hist.Clear();
             }
 
+            /// <summary>
+            /// 用新的亮度样本更新基线。
+            /// allowUpdate 为 false 时直接跳过，常用于候选事件窗口内防止基线被污染。
+            /// </summary>
             public void Update(double mean, double br, double alpha, bool allowUpdate)
             {
                 if (!allowUpdate) return;
@@ -574,6 +646,10 @@ namespace Preferred.Api.Services
                 while (_hist.Count > _maxHist) _hist.Dequeue();
             }
 
+            /// <summary>
+            /// 获取当前稳健基线。
+            /// 历史样本足够多时，返回 EWMA 与中位数的混合结果，以兼顾平滑性和抗异常值能力。
+            /// </summary>
             public (double meanBase, double brBase) GetRobustBase()
             {
                 if (!HasInit) return (0, 0);
@@ -593,11 +669,6 @@ namespace Preferred.Api.Services
         }
 
         /// <summary>
-        /// 核心视频分析流程。
-        /// 这里不再接收取消标记参数，分析一旦开始就按完整视频跑完，避免 OpenCV 读帧、
-        /// 截图落盘、数据库写入在中途被取消后留下半截状态。
-        /// </summary>
-                /// <summary>
         /// 单个视频的核心分析流程。
         ///
         /// 整体步骤：
@@ -624,6 +695,7 @@ namespace Preferred.Api.Services
             if (!cap.IsOpened())
                 throw new InvalidOperationException("VideoCapture open failed: " + vf.FilePath);
 
+            // 某些视频容器可能读不到准确 FPS，这里给一个保守兜底值避免后续除零。
             int fps = (int)Math.Round(cap.Fps);
             if (fps <= 0) fps = 25;
 
@@ -657,6 +729,7 @@ namespace Preferred.Api.Services
             using var curr = new Mat();
 
             int frameCounter = 0;
+            // 先读取第一帧作为“上一采样帧”，若视频为空则直接返回。
             if (!cap.Read(prev) || prev.Empty())
                 return (0, null, w0, h0, sw.Elapsed.TotalSeconds);
 
@@ -687,17 +760,21 @@ namespace Preferred.Api.Services
 
                 int timeMs = (int)Math.Round(frameCounter * 1000.0 / fps);
 
+                // 当前采样帧先进入截图缓存，供稍后按 peakTime 回取。
                 frameBuf.AddJpeg(timeMs, frameCounter, curr, jpegQuality: 85);
                 frameBuf.TrimByTime(keepMs: 5200);
 
+                // 基于 prev/curr 计算整帧级亮度统计。
                 var stats = BuildStatsPoint(prev, curr, algo);
                 stats.FrameIndex = frameCounter;
                 stats.TimeMs = timeMs;
 
+                // 用稳健基线将“当前亮度”转换为“相对环境的抬升量”。
                 var (baseMean, baseBR) = baseline.GetRobustBase();
                 stats.MeanRise = stats.Mean - baseMean;
                 stats.BrightRise = stats.BrightRatio - baseBR;
 
+                // 候选检测只负责回答“这里像不像亮度突增”，不直接创建事件。
                 bool isCandidate = TryDetectCandidate(prev, curr, algo, stats, out var cand);
                 if (isCandidate && cand != null)
                 {
@@ -715,6 +792,7 @@ namespace Preferred.Api.Services
                     stats.Candidate = isCandidate;
                 }
 
+                // 无论是否命中候选，都把统计点推入确认窗口，供后续 rise/fall 判断。
                 EnqueueWindow(window, stats, windowMaxMs);
 
                 // 候选事件期间暂停更新基线，防止闪光本身污染环境亮度基准。
@@ -732,6 +810,7 @@ namespace Preferred.Api.Services
 
                     if (consecutiveHits >= needHits)
                     {
+                        // cooldown 用于限制两个独立事件的最小帧间隔，减少同一事件被重复拆分。
                         int cooldownFrames = Math.Max(0, algo.CooldownSec) * fps;
                         if (frameCounter - lastEventFrame >= cooldownFrames)
                         {
@@ -773,6 +852,7 @@ namespace Preferred.Api.Services
                     {
                         if (!sustainReject && !motionReject)
                         {
+                            // 事件截图尽量取峰值附近的历史帧，而不是当前确认时刻的滞后帧。
                             var peakFrame = frameBuf.GetNearest(peakTimeMs);
                             int snapTimeMs = peakFrame?.TimeMs ?? peakTimeMs;
                             int snapFrameIndex = peakFrame?.FrameIndex ?? frameCounter;
@@ -795,6 +875,7 @@ namespace Preferred.Api.Services
                                 openEvent.EventType == eventType &&
                                 (timeSec - openEvent.EndTimeSec) <= Math.Max(0, algo.MergeGapSec))
                             {
+                                // 只有置信度更高时，才更新峰值时刻、截图和 bbox，避免被较弱命中覆盖。
                                 bool confidenceImproved = conf > (double)openEvent.Confidence;
 
                                 openEvent.EndTimeSec = timeSec;
@@ -886,9 +967,11 @@ namespace Preferred.Api.Services
 
                     pendingPulse = false;
                     consecutiveHits = 0;
+                    // 本轮脉冲处理结束后保留少量近期点，既方便下一轮确认，也避免窗口无限“拖尾”。
                     TrimWindowToRecent(window, keepMs: 2200);
                 }
 
+                // 当前帧成为下一轮计算中的 prev。
                 curr.CopyTo(prev);
             }
 
@@ -906,11 +989,6 @@ namespace Preferred.Api.Services
         }
 
         /// <summary>
-        /// 根据视频原始 FPS 和算法配置计算采样间隔。
-        /// 例如原视频 25fps、目标采样 5fps，则每 5 帧分析一次；这样能保留短脉冲特征，
-        /// 又能显著减少每帧灰度化、差分、轮廓查找带来的 CPU 消耗。
-        /// </summary>
-                /// <summary>
         /// 根据原始视频 FPS 和算法配置，计算“每隔多少帧采样一次”。
         ///
         /// 例如：
@@ -932,15 +1010,11 @@ namespace Preferred.Api.Services
 
             if (targetFps > fps) targetFps = fps;
 
+            // 返回值最小为 1，表示“每帧都分析”。
             return Math.Max(1, (int)Math.Round(fps * 1.0 / targetFps));
         }
 
         /// <summary>
-        /// 计算当前采样点的全局亮度特征。
-        /// Mean/Std 反映整帧灰度水平，MeanDelta 反映相邻采样帧整体亮度变化，
-        /// BrightRatio/BrightDelta 反映高亮像素比例及其变化，用于捕捉火花、闪光这类短时强亮区域。
-        /// </summary>
-                /// <summary>
         /// 从前一帧和当前帧构建单个采样点的统计特征。
         ///
         /// 这里会计算：
@@ -954,6 +1028,7 @@ namespace Preferred.Api.Services
         /// </summary>
         private static SamplePoint BuildStatsPoint(Mat prev, Mat curr, AlgoParams algo)
         {
+            // 统计特征允许在缩小图上计算，以换取更低的 CPU 成本。
             using var p = ResizeIfNeeded(prev, algo.ResizeMaxWidth, out _);
             using var c = ResizeIfNeeded(curr, algo.ResizeMaxWidth, out _);
 
@@ -962,6 +1037,7 @@ namespace Preferred.Api.Services
             Cv2.CvtColor(p, g1, ColorConversionCodes.BGR2GRAY);
             Cv2.CvtColor(c, g2, ColorConversionCodes.BGR2GRAY);
 
+            // 高斯模糊用于抹平少量随机噪点，避免单像素闪烁带来误判。
             int k = algo.BlurKernel <= 1 ? 1 : (algo.BlurKernel % 2 == 1 ? algo.BlurKernel : algo.BlurKernel + 1);
             if (k >= 3)
             {
@@ -987,6 +1063,7 @@ namespace Preferred.Api.Services
             double br2 = CalcRatioAboveThreshold(g2, thr2);
             double brightDelta = Math.Abs(br2 - br1);
 
+            // 此处只返回“统计事实”，不做候选判断，职责保持单一。
             return new SamplePoint
             {
                 Mean = mean2,
@@ -1007,11 +1084,6 @@ namespace Preferred.Api.Services
         }
 
         /// <summary>
-        /// 粗筛候选事件。
-        /// 如果全局亮度相对基线或相邻帧差分已经达标，直接把当前点作为候选；
-        /// 否则再做局部差分和轮廓提取，尝试定位局部火花区域，并输出 bbox、面积占比和置信度。
-        /// </summary>
-                /// <summary>
         /// 尝试从当前采样点中检测候选火花/闪光目标。
         ///
         /// 候选不等于最终事件。
@@ -1035,6 +1107,7 @@ namespace Preferred.Api.Services
                 stats.MeanDelta >= algo.GlobalBrightnessDelta ||
                 stats.BrightDelta >= algo.BrightRatioDelta;
 
+            // 对于“全局瞬间变亮”的场景，不一定有明显局部框；直接让时间窗口去做后续确认即可。
             if (riseHit || deltaHit)
                 return true;
 
@@ -1087,6 +1160,7 @@ namespace Preferred.Api.Services
             if (maxArea < Math.Max(1.0, algo.MinContourArea))
                 return false;
 
+            // 在缩放图上找到的 bbox，需要映射回原图坐标系后再入库。
             var bboxSmall = Cv2.BoundingRect(contours[maxIdx]);
 
             double s = scaleC;
@@ -1132,15 +1206,6 @@ namespace Preferred.Api.Services
         }
 
         /// <summary>
-        /// 短脉冲确认（召回优先稳健基线版）
-        /// - rise：峰值相对基线抬升（MeanRise/BrightRise）达标，或窗口内出现一次强 delta
-        /// - fall：峰值后 (pulseMaxMs + 400ms) 内回落到 baseline 附近
-        /// - 持续短：高亮跨度不超过 MaxPulseSec
-        /// 抑制：
-        /// - 持续高亮 >= SustainRejectSec
-        /// - 移动光源（bbox 中心位移过大，仅对 bbox 足够的候选生效）
-        /// </summary>
-                /// <summary>
         /// 在最近一段时间窗口内确认是否形成了一个有效短脉冲事件。
         ///
         /// 判定思路：
@@ -1176,6 +1241,7 @@ namespace Preferred.Api.Services
             if (window == null || window.Count < 3)
                 return false;
 
+            // 窗口理论上是按时间顺序入队的，这里再排序一次，避免调用方调整实现后留下隐患。
             var arr = window.ToArray();
             Array.Sort(arr, (a, b) => a.TimeMs.CompareTo(b.TimeMs));
             int n = arr.Length;
@@ -1210,6 +1276,7 @@ namespace Preferred.Api.Services
             double peakMeanRise = peak.Mean - baseMean;
             double peakBrRise = peak.BrightRatio - baseBR;
 
+            // rise 要求“相对基线明显抬升”；实在不够时，允许强 delta 作为兜底触发。
             bool hasRise =
                 peakMeanRise >= algo.MeanDeltaRise ||
                 peakBrRise >= algo.BrightRatioDelta;
@@ -1263,6 +1330,8 @@ namespace Preferred.Api.Services
 
             int highSpanMs = (firstHigh >= 0 && lastHigh >= 0) ? (lastHigh - firstHigh) : 0;
 
+            // sustainReject / motionReject 不一定直接返回 false；
+            // 调用方可以拿到拒绝原因，用于决定是否生成事件。
             sustainReject = (highSpanMs >= (int)(algo.SustainRejectSec * 1000));
             motionReject = CheckMotionReject(arr, peakTimeMs, algo);
 

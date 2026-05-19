@@ -81,6 +81,7 @@
             <th class="cell-center" style="width: 52px">序号</th>
             <th style="width: 260px">录波文件名</th>
             <th style="width: 70px">状态</th>
+            <th style="width: 100px">进度</th>
             <th style="width: 70px">是否暂降</th>
             <th style="width: 80px">事件类型</th>
             <th style="width: 70px">最严重相</th>
@@ -298,6 +299,30 @@
     </div>
   </div>
 
+  <div class="el-dialog-mask" id="deleteProgressModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title" id="deleteProgressTitle">删除中</div>
+        <button class="el-dialog__close" id="btnCloseDeleteProgress" type="button">×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div id="deleteProgressSummary" class="delete-progress-summary">正在准备删除任务...</div>
+        <div class="el-progress" style="margin-top:12px;">
+          <div class="el-progress-bar">
+            <div class="el-progress-bar__inner" id="deleteProgressBar" style="width:0%"></div>
+          </div>
+          <div class="el-progress__text" id="deleteProgressText">0%</div>
+        </div>
+        <div id="deleteProgressStats" class="delete-progress-stats"></div>
+        <div id="deleteProgressCurrent" class="delete-progress-current">当前文件：-</div>
+        <div id="deleteProgressFailures" class="delete-progress-failures" style="display:none"></div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button el-button--primary" id="btnDeleteProgressDone" type="button">我知道了</button>
+      </div>
+    </div>
+  </div>
+
   <style>
     .el-table th,
     .el-table td {
@@ -341,30 +366,46 @@
 
     .rule-tabs {
       display: flex;
-      gap: 10px;
-      margin-bottom: 12px;
+      gap: 24px;
+      margin-bottom: 16px;
       flex-wrap: wrap;
+      border-bottom: 1px solid #ebeef5;
     }
 
     .rule-tab {
-      border: 1px solid var(--el-border-color);
-      background: #fff;
+      position: relative;
+      border: none;
+      background: transparent;
       color: var(--el-text-color-regular);
-      border-radius: 999px;
-      padding: 8px 14px;
+      border-radius: 0;
+      padding: 10px 2px 12px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: color 0.2s ease;
+      font-size: 14px;
     }
 
     .rule-tab:hover {
-      border-color: var(--el-color-primary-light-5);
       color: var(--el-color-primary);
     }
 
     .rule-tab.is-active {
+      color: var(--el-color-primary);
+      font-weight: 700;
+    }
+
+    .rule-tab::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -1px;
+      height: 2px;
+      background: transparent;
+      transition: background 0.2s ease;
+    }
+
+    .rule-tab.is-active::after {
       background: var(--el-color-primary);
-      border-color: var(--el-color-primary);
-      color: #fff;
     }
 
     .el-button--success {
@@ -449,9 +490,102 @@
       gap: 10px;
     }
 
+    .data-table {
+      overflow-x: hidden;
+      border: 1px solid #ebeef5;
+      border-radius: 8px;
+      background: #fff;
+      padding-bottom: 16px;
+    }
+
+    .data-table .el-table {
+      width: 100%;
+      min-width: 0;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+    }
+
+    .data-table .el-table th,
+    .data-table .el-table td {
+      padding: 8px 6px;
+      font-size: 12px;
+    }
+
+    .data-table .el-table th:nth-child(3),
+    .data-table .el-table td:nth-child(3) {
+      width: 220px;
+    }
+
+    .data-table .el-table th:nth-child(5),
+    .data-table .el-table td:nth-child(5) {
+      width: 140px;
+    }
+
+    .data-table .el-table th:nth-child(9),
+    .data-table .el-table td:nth-child(9) {
+      width: 150px;
+    }
+
+    .data-table .el-table th:nth-child(10),
+    .data-table .el-table td:nth-child(10),
+    .data-table .el-table th:nth-child(11),
+    .data-table .el-table td:nth-child(11),
+    .data-table .el-table th:nth-child(12),
+    .data-table .el-table td:nth-child(12) {
+      width: 88px;
+    }
+
+    .data-table .el-table th:nth-child(13),
+    .data-table .el-table td:nth-child(13) {
+      width: 120px;
+    }
+
+    .data-table .el-table th:nth-child(14),
+    .data-table .el-table td:nth-child(14) {
+      width: 150px;
+    }
+
+    .data-table .pagination {
+      padding: 0 16px;
+    }
+
     .error-text {
       color: #f56c6c;
       font-size: 12px;
+    }
+
+    .sag-progress-cell {
+      min-width: 0;
+    }
+
+    .sag-progress-cell .el-progress {
+      width: 100%;
+      min-width: 0;
+      gap: 4px;
+    }
+
+    .sag-progress-cell .el-progress-bar {
+      min-width: 0;
+    }
+
+    .sag-progress-cell .el-progress__text {
+      flex: 0 0 32px;
+      min-width: 32px;
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .cell-actions {
+      justify-content: flex-start;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .cell-actions .el-button.is-link {
+      white-space: nowrap;
+      font-size: 11px;
+      line-height: 1.4;
     }
 
     .el-alert {

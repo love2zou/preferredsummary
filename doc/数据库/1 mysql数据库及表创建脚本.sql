@@ -793,6 +793,7 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagEvent (
    OriginalName              VARCHAR(255)        NULL COMMENT '录波文件名',
 
    Status                    TINYINT             NOT NULL COMMENT '分析状态：0=待处理，1=处理中，2=成功，3=失败',
+   Progress                  INT      DEFAULT 0  NOT NULL COMMENT '解析进度(0-100)',
    ErrorMessage              TEXT                NULL COMMENT '分析失败原因',
 
    HasSag                    TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否存在暂降/中断事件（1是 0否）',

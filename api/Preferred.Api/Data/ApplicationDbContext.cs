@@ -433,7 +433,11 @@ namespace Preferred.Api.Data
 
                 entity.Property(e => e.AnalysisGuid).IsRequired().HasMaxLength(36);
                 entity.Property(e => e.Status).IsRequired().HasMaxLength(16);
-                entity.Property(e => e.Progress).HasDefaultValue(0);
+                entity.Property(e => e.Progress)
+                    .IsRequired()
+                    .HasDefaultValue(0)
+                    .HasComment("解析进度（0-100）");
+
                 entity.Property(e => e.ErrorMessage).HasColumnType("TEXT");
 
                 entity.Property(e => e.FileId).IsRequired();
@@ -673,6 +677,11 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.Status)
                     .IsRequired()
                     .HasComment("分析状态：0=待处理，1=处理中，2=成功，3=失败");
+
+                entity.Property(e => e.Progress)
+                    .IsRequired()
+                    .HasDefaultValue(0)
+                    .HasComment("解析进度（0-100）");
 
                 entity.Property(e => e.ErrorMessage).HasColumnType("TEXT");
 

@@ -18,6 +18,8 @@ namespace Zwav.Application.Sag
 
         public DateTime? TriggerTimeUtc { get; set; }
 
+        public DateTime? FaultStartTime { get; set; }
+
         /// <summary>参考电压类型（Declared / Sliding）</summary>
         public string ReferenceType { get; set; }
 

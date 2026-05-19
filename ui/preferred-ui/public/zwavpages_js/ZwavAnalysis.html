@@ -116,10 +116,17 @@
         <button class="el-dialog__close" data-dialog-close>×</button>
       </div>
       <div class="el-dialog__body">
-        <input id="fileInput" type="file" multiple accept=".zwav,.zip" class="el-input"
-          style="width:100%; height: 34px; padding-top: 6px" />
+        <input id="fileInput" type="file" multiple accept=".zwav,.zip" style="display:none" />
+        <div id="uploadDropzone" class="upload-dropzone" tabindex="0">
+          <div class="upload-dropzone__title">拖拽文件到这里</div>
+          <div class="upload-dropzone__hint">支持 .zwav、.zip，也可以点击这里选择多个文件</div>
+        </div>
         <div style="margin-top:8px; font-size:12px; color: var(--el-text-color-secondary);">
           支持 .zwav, .zip。上传完成后自动创建解析任务。
+        </div>
+        <div class="upload-toolbar">
+          <span id="uploadSummary" class="upload-summary">未选择文件</span>
+          <button class="el-button" id="btnClearUploadFiles" type="button">清空列表</button>
         </div>
         <div style="margin-top:12px;">
           <div id="uploadList" style="display:grid; gap:10px;"></div>
@@ -128,6 +135,30 @@
       <div class="el-dialog__footer">
         <button class="el-button" data-dialog-close>关闭</button>
         <button class="el-button el-button--primary" id="btnStartUpload">开始上传</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="deleteProgressModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title" id="deleteProgressTitle">删除中</div>
+        <button class="el-dialog__close" id="btnCloseDeleteProgress" type="button">脳</button>
+      </div>
+      <div class="el-dialog__body">
+        <div id="deleteProgressSummary" class="delete-progress-summary">正在准备删除任务...</div>
+        <div class="el-progress" style="margin-top:12px;">
+          <div class="el-progress-bar">
+            <div class="el-progress-bar__inner" id="deleteProgressBar" style="width:0%"></div>
+          </div>
+          <div class="el-progress__text" id="deleteProgressText">0%</div>
+        </div>
+        <div id="deleteProgressStats" class="delete-progress-stats"></div>
+        <div id="deleteProgressCurrent" class="delete-progress-current">当前文件：-</div>
+        <div id="deleteProgressFailures" class="delete-progress-failures" style="display:none"></div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button el-button--primary" id="btnDeleteProgressDone" type="button">我知道了</button>
       </div>
     </div>
   </div>

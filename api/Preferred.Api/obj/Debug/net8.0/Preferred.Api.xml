@@ -58,6 +58,16 @@
             用于记录分析过程中的错误、警告以及关键运行信息，便于排查问题。
             </summary>
         </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.#ctor(Preferred.Api.Data.ApplicationDbContext,Microsoft.Extensions.Logging.ILogger{Preferred.Api.Services.SparkDetectionService},Microsoft.Extensions.Options.IOptions{Preferred.Api.Models.FileStorageConfig})">
+             <summary>
+             构造检测服务。
+            
+             依赖说明：
+             - db：负责访问任务、视频文件、事件、截图等业务表；
+             - logger：记录分析过程中的诊断信息；
+             - fs：提供视频及截图的根目录配置。
+             </summary>
+        </member>
         <member name="F:Preferred.Api.Services.SparkDetectionService.MaxKeepEvents">
             <summary>
             单个视频最终最多保留的事件数。
@@ -83,6 +93,52 @@
         </member>
         <member name="P:Preferred.Api.Services.SparkDetectionService.FrameBufferItem.FrameIndex">
             <summary>采样点对应的视频帧索引。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.FrameBufferItem.Jpeg">
+            <summary>当前帧编码后的 JPEG 二进制内容，用于延迟落盘截图。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.FrameBufferItem.Width">
+            <summary>截图原始宽度，避免只存 JPEG 后丢失尺寸信息。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.FrameBufferItem.Height">
+            <summary>截图原始高度，避免只存 JPEG 后丢失尺寸信息。</summary>
+        </member>
+        <member name="T:Preferred.Api.Services.SparkDetectionService.FrameRingBuffer">
+             <summary>
+             采样帧环形缓存。
+            
+             这里缓存的不是 Mat 本身，而是压缩后的 JPEG 字节：
+             - 可以降低内存占用；
+             - 可以在事件晚于峰值若干帧才确认时，仍然回取到接近峰值的截图。
+             </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.FrameRingBuffer.#ctor(System.Int32)">
+            <summary>
+            初始化环形缓存容量。
+            至少保留 3 帧，避免极小容量导致无法回取峰值附近的历史帧。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.FrameRingBuffer.AddJpeg(System.Int32,System.Int32,OpenCvSharp.Mat,System.Int32)">
+            <summary>
+            将当前采样帧压缩成 JPEG 并放入缓存尾部。
+            如果编码失败，也会保留一条空 JPEG 记录，方便时间轴仍保持连续。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.FrameRingBuffer.TrimByTime(System.Int32)">
+            <summary>
+            按时间裁剪缓存，只保留最近 keepMs 毫秒内的历史帧。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.FrameRingBuffer.GetNearest(System.Int32)">
+            <summary>
+            从缓存中取与目标时间最接近的一帧。
+            该方法用于把“事件确认时刻”回映射到“峰值截图时刻”。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.FrameRingBuffer.Dispose">
+            <summary>
+            释放缓存内容。
+            </summary>
         </member>
         <member name="T:Preferred.Api.Services.SparkDetectionService.SamplePoint">
              <summary>
@@ -198,12 +254,39 @@
              防止一次瞬时闪光把“正常亮度”抬高，从而影响后续 rise/fall 判断。
              </summary>
         </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.RobustBaseline.MeanEwma">
+            <summary>亮度均值的 EWMA 基线。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.RobustBaseline.BrightEwma">
+            <summary>高亮像素占比的 EWMA 基线。</summary>
+        </member>
+        <member name="P:Preferred.Api.Services.SparkDetectionService.RobustBaseline.HasInit">
+            <summary>是否已经完成基线初始化。</summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.RobustBaseline.#ctor(System.Int32)">
+            <summary>
+            创建稳健基线对象。
+            maxHist 决定中位数历史样本窗口大小。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.RobustBaseline.Reset">
+            <summary>
+            清空当前基线状态，恢复到未初始化状态。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.RobustBaseline.Update(System.Double,System.Double,System.Double,System.Boolean)">
+            <summary>
+            用新的亮度样本更新基线。
+            allowUpdate 为 false 时直接跳过，常用于候选事件窗口内防止基线被污染。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.SparkDetectionService.RobustBaseline.GetRobustBase">
+            <summary>
+            获取当前稳健基线。
+            历史样本足够多时，返回 EWMA 与中位数的混合结果，以兼顾平滑性和抗异常值能力。
+            </summary>
+        </member>
         <member name="M:Preferred.Api.Services.SparkDetectionService.ProcessSingleVideoAsync(Preferred.Api.Models.VideoAnalysisJob,Preferred.Api.Models.VideoAnalysisFile,Video.Application.Dto.AlgoParams)">
-             <summary>
-             核心视频分析流程。
-             这里不再接收取消标记参数，分析一旦开始就按完整视频跑完，避免 OpenCV 读帧、
-             截图落盘、数据库写入在中途被取消后留下半截状态。
-             </summary>
              <summary>
              单个视频的核心分析流程。
             
@@ -223,11 +306,6 @@
         </member>
         <member name="M:Preferred.Api.Services.SparkDetectionService.CalcSampleEveryFrames(System.Int32,Video.Application.Dto.AlgoParams,Microsoft.Extensions.Logging.ILogger)">
              <summary>
-             根据视频原始 FPS 和算法配置计算采样间隔。
-             例如原视频 25fps、目标采样 5fps，则每 5 帧分析一次；这样能保留短脉冲特征，
-             又能显著减少每帧灰度化、差分、轮廓查找带来的 CPU 消耗。
-             </summary>
-             <summary>
              根据原始视频 FPS 和算法配置，计算“每隔多少帧采样一次”。
             
              例如：
@@ -239,11 +317,6 @@
              </summary>
         </member>
         <member name="M:Preferred.Api.Services.SparkDetectionService.BuildStatsPoint(OpenCvSharp.Mat,OpenCvSharp.Mat,Video.Application.Dto.AlgoParams)">
-             <summary>
-             计算当前采样点的全局亮度特征。
-             Mean/Std 反映整帧灰度水平，MeanDelta 反映相邻采样帧整体亮度变化，
-             BrightRatio/BrightDelta 反映高亮像素比例及其变化，用于捕捉火花、闪光这类短时强亮区域。
-             </summary>
              <summary>
              从前一帧和当前帧构建单个采样点的统计特征。
             
@@ -259,11 +332,6 @@
         </member>
         <member name="M:Preferred.Api.Services.SparkDetectionService.TryDetectCandidate(OpenCvSharp.Mat,OpenCvSharp.Mat,Video.Application.Dto.AlgoParams,Preferred.Api.Services.SparkDetectionService.SamplePoint,Preferred.Api.Services.SparkDetectionService.SamplePoint@)">
              <summary>
-             粗筛候选事件。
-             如果全局亮度相对基线或相邻帧差分已经达标，直接把当前点作为候选；
-             否则再做局部差分和轮廓提取，尝试定位局部火花区域，并输出 bbox、面积占比和置信度。
-             </summary>
-             <summary>
              尝试从当前采样点中检测候选火花/闪光目标。
             
              候选不等于最终事件。
@@ -277,15 +345,6 @@
              </summary>
         </member>
         <member name="M:Preferred.Api.Services.SparkDetectionService.ConfirmPulse(System.Collections.Generic.Queue{Preferred.Api.Services.SparkDetectionService.SamplePoint},Video.Application.Dto.AlgoParams,System.Int32,System.Boolean@,System.Double@,OpenCvSharp.Rect@,System.Int32@,System.Boolean@,System.Boolean@)">
-             <summary>
-             短脉冲确认（召回优先稳健基线版）
-             - rise：峰值相对基线抬升（MeanRise/BrightRise）达标，或窗口内出现一次强 delta
-             - fall：峰值后 (pulseMaxMs + 400ms) 内回落到 baseline 附近
-             - 持续短：高亮跨度不超过 MaxPulseSec
-             抑制：
-             - 持续高亮 >= SustainRejectSec
-             - 移动光源（bbox 中心位移过大，仅对 bbox 足够的候选生效）
-             </summary>
              <summary>
              在最近一段时间窗口内确认是否形成了一个有效短脉冲事件。
             
@@ -412,6 +471,196 @@
             查询任务状态（直接查 Tb_ZwavAnalysis）
             </summary>
         </member>
+        <member name="T:Preferred.Api.Services.IZwavSagEventService">
+            <summary>
+            暂降事件应用服务。
+            负责录波文件暂降分析的发起、后台处理、结果查询、过程预览以及规则维护。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.QueryAsync(System.String,System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>
+            分页查询暂降分析结果列表，默认返回每个录波文件最新的一条事件记录。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.AnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            发起暂降分析请求，将满足条件的录波文件加入后台分析队列。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.ProcessQueuedAnalyzeAsync(Zwav.Application.Sag.ZwavSagAnalysisQueueItem,System.Threading.CancellationToken)">
+            <summary>
+            后台消费一条暂降分析任务，完成上下文构建、分析执行以及结果落库。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetDetailAsync(System.Int32)">
+            <summary>
+            获取单个暂降事件详情。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetPhasesAsync(System.Int32)">
+            <summary>
+            获取指定暂降事件关联的相别明细。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetByFileIdAsync(System.Int32)">
+            <summary>
+            根据录波文件 ID 查询其对应的暂降事件记录。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.UpdateAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagEventRequest)">
+            <summary>
+            更新暂降事件基础信息。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteAsync(System.Int32)">
+            <summary>
+            删除指定暂降事件。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteByFileIdAsync(System.Int32)">
+            <summary>
+            删除某个录波文件下的全部暂降事件及其关联数据。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetProcessAsync(System.Int32)">
+            <summary>
+            获取暂降处理过程视图所需的完整上下文。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.PreviewProcessAsync(System.Int32,Zwav.Application.Sag.ZwavSagProcessPreviewRequest)">
+            <summary>
+            基于前端指定参数临时预览暂降处理效果，不修改已持久化结果。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.QueryChannelRuleAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            分页查询电压通道相别匹配规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.CreateChannelRuleAsync(Zwav.Application.Sag.CreateZwavSagChannelRuleRequest)">
+            <summary>
+            新增电压通道相别匹配规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.UpdateChannelRuleAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest)">
+            <summary>
+            更新电压通道相别匹配规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteChannelRuleAsync(System.Int32)">
+            <summary>
+            删除电压通道相别匹配规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.QueryGroupRuleAsync(System.String,System.Int32,System.Int32)">
+            <summary>
+            分页查询电压通道分组规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.CreateGroupRuleAsync(Zwav.Application.Sag.CreateZwavSagGroupRuleRequest)">
+            <summary>
+            新增电压通道分组规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.UpdateGroupRuleAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagGroupRuleRequest)">
+            <summary>
+            更新电压通道分组规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteGroupRuleAsync(System.Int32)">
+            <summary>
+            删除电压通道分组规则。
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Services.ZwavSagEventService">
+            <summary>
+            暂降事件应用服务。
+            负责把“录波解析结果”组织成“可分析上下文”，调用分析器完成识别，并将结果转换成查询、展示和持久化所需的数据结构。
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Services.ZwavSagEventService.ListPhaseProjection">
+            <summary>
+            列表页使用的轻量相别投影。
+            只保留挑选主相时需要的字段，避免列表查询把完整相别实体全部加载到内存。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.ZwavSagEventService.MaxVoltageDbValue">
+            <summary>
+            持久化到数据库前的电压安全上限，避免异常计算值写入 decimal 列时溢出。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.ZwavSagEventService.MaxPercentDbValue">
+            <summary>
+            百分比类字段的数据库安全上限。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.ZwavSagEventService.MaxDurationDbValue">
+            <summary>
+            时长类字段的数据库安全上限。
+            </summary>
+        </member>
+        <member name="F:Preferred.Api.Services.ZwavSagEventService.MaxAngleDbValue">
+            <summary>
+            相角类字段的数据库安全上限。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.QueryAsync(System.String,System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
+            <summary>
+            查询暂降事件列表。
+            返回口径为“每个录波文件最新的一条暂降记录”，避免同一文件的处理中、失败、成功历史同时出现在主列表中。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.AnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            发起暂降分析请求。
+            该方法只负责校验、去重和入队，不在接口线程中直接执行耗时分析。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.ProcessQueuedAnalyzeAsync(Zwav.Application.Sag.ZwavSagAnalysisQueueItem,System.Threading.CancellationToken)">
+            <summary>
+            后台处理单个暂降分析任务。
+            整体流程是：读取解析结果、构建分析上下文、调用分析器、清理旧结果、写入新结果。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.GetProcessAsync(System.Int32)">
+            <summary>
+            获取过程展示页所需的完整分析上下文。
+            包括录波配置、识别到的电压通道、原始采样点、RMS 点以及事件结果。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.ResolveFileIdsAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            从前端请求中解析出本次需要处理的录波文件 ID 集合。
+            支持直接传 FileIds，也支持先传 AnalysisGuid 再反查 FileId。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.BuildAnalyzeContextAsync(Preferred.Api.Models.ZwavAnalysis,Zwav.Application.Sag.AnalyzeZwavSagRequest)">
+            <summary>
+            构建分析器可直接消费的暂降分析上下文。
+            这里负责把数据库中的解析产物和前端传入参数整合成纯计算对象。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.BuildVoltageChannelsAsync(System.Int32)">
+            <summary>
+            从解析得到的模拟量通道里筛选出可参与暂降分析的电压通道，并补齐相别和分组信息。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.LoadWaveRowsAsync(System.Int32)">
+            <summary>
+            加载指定分析记录对应的全部录波行数据，并保持样本号升序。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.BuildSamplesAndSeries(System.Collections.Generic.List{Zwav.Application.Parsing.WaveRowRaw},Zwav.Application.Sag.ZwavVoltageChannelContext[],System.Decimal)">
+            <summary>
+            把逐行录波数据转换成分析器需要的采样点集合、时间轴以及按通道索引的原始序列映射。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagEventService.BuildAnalyzableSegments(Zwav.Application.Sag.ZwavSagAnalyzeContext)">
+            <summary>
+            按采样间隔变化切分可分析区段。
+            仅保留采样密度足够支撑周波 RMS 计算的片段，避免低密度数据干扰暂降识别。
+            </summary>
+        </member>
         <member name="T:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher">
             <summary>
             暂降电压通道规则匹配器
@@ -422,9 +671,38 @@
             4、减少三侧录波场景下的误归组。
             </summary>
         </member>
+        <member name="T:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.RuleItem">
+            <summary>
+            通道相别匹配规则。
+            Keyword 表示匹配关键字，PhaseName 表示识别出的标准相名。
+            </summary>
+        </member>
+        <member name="T:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.GroupRuleItem">
+            <summary>
+            通道分组匹配规则。
+            Keyword 表示匹配关键字，GroupName 表示识别出的标准分组名。
+            </summary>
+        </member>
         <member name="F:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.BuiltInPhasePatterns">
             <summary>
             注意顺序：先匹配线电压，再匹配相电压，避免 UA 抢先匹配 UAB。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.LoadRulesAsync(Preferred.Api.Data.ApplicationDbContext)">
+            <summary>
+            加载相别匹配规则。
+            使用短时缓存减少同一批分析任务重复访问规则表的开销。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.LoadGroupRulesAsync(Preferred.Api.Data.ApplicationDbContext)">
+            <summary>
+            加载分组匹配规则。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.MatchPhase(System.String,System.String,System.String,Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.RuleItem[])">
+            <summary>
+            根据通道名称、编码和单位匹配相别。
+            优先使用内置高置信模式，其次再使用数据库规则做补充。
             </summary>
         </member>
         <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.MatchGroup(System.String,System.String,System.String,Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.GroupRuleItem[])">
@@ -433,6 +711,12 @@
             1、优先规则表；
             2、再走内置侧别识别；
             3、不再宽松地用“清洗后的通道名”当组名，避免三侧误归组。
+            </summary>
+        </member>
+        <member name="M:Preferred.Api.Services.ZwavSagVoltageChannelRuleMatcher.IsVoltageChannel(System.String,System.String,System.String)">
+            <summary>
+            判断一个模拟量通道是否可视为电压通道。
+            该判断尽量保守，宁可少识别，也尽量避免把电流或杂项通道误当成电压。
             </summary>
         </member>
         <member name="T:Preferred.Api.Services.CategoryService">
@@ -1449,8 +1733,8 @@
         </member>
         <member name="T:Preferred.Api.Models.ZwavSagEvent">
             <summary>
-            暂降分析结果（按录波文件维度）
-            一条记录对应一个录波文件的一次分析结果；若未检测到暂降/中断，仍会生成记录（HasSag=false，EventType=Normal）。
+            暂降分析结果（按录波文件维度）。
+            一条记录对应一个录波文件的一次分析结果；若未检测到暂降/中断，也会生成记录。
             </summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.Id">
@@ -1460,13 +1744,16 @@
             <summary>录波文件ID（关联 Tb_ZwavFile）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.OriginalName">
-            <summary>录波文件原始名称（冗余字段，便于列表展示/检索）</summary>
+            <summary>录波文件原始名称</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.Status">
             <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
         </member>
+        <member name="P:Preferred.Api.Models.ZwavSagEvent.Progress">
+            <summary>解析进度（0-100）</summary>
+        </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.ErrorMessage">
-            <summary>失败原因/错误信息（失败时填写）</summary>
+            <summary>失败原因/错误信息</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.HasSag">
             <summary>是否检测到暂降/中断事件</summary>
@@ -1475,7 +1762,7 @@
             <summary>结果类型：Normal=正常，Sag=暂降，Interruption=中断</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.EventCount">
-            <summary>事件数量（若未检测到事件则为 0）</summary>
+            <summary>事件数量</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.StartTime">
             <summary>分析开始时间（UTC）</summary>
@@ -1493,10 +1780,10 @@
             <summary>事件结束时间（UTC）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.OccurTimeUtc">
-            <summary>事件发生时间（UTC，一般取事件开始时间）</summary>
+            <summary>事件发生时间（UTC）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.DurationMs">
-            <summary>事件持续时间（毫秒）</summary>
+            <summary>事件持续时长（毫秒）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.TriggerPhase">
             <summary>触发相别</summary>
@@ -1505,31 +1792,31 @@
             <summary>恢复/结束相别</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.WorstPhase">
-            <summary>最严重相别（按最小残余电压或最大暂降幅值确定）</summary>
+            <summary>最严重相别</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.ReferenceType">
-            <summary>参考电压类型（Declared=公称，Sliding=滑动参考）</summary>
+            <summary>参考电压类型（Declared/Sliding）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.ReferenceVoltage">
-            <summary>参考电压（单位同通道单位）</summary>
+            <summary>参考电压</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.ResidualVoltage">
-            <summary>残余电压（单位同通道单位）</summary>
+            <summary>残余电压</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.ResidualVoltagePct">
             <summary>残余电压占比（%）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.SagDepth">
-            <summary>暂降深度（参考电压-残余电压）</summary>
+            <summary>暂降深度</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.SagPercent">
-            <summary>暂降幅值（%）</summary>
+            <summary>暂降百分比（%）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.PhaseJumpDeg">
-            <summary>相角跳变（度，可选）</summary>
+            <summary>相角跳变</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.StartAngleDeg">
-            <summary>起始相角（度，可选）</summary>
+            <summary>起始相角</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.SagThresholdPct">
             <summary>暂降阈值（%）</summary>
@@ -1541,16 +1828,16 @@
             <summary>迟滞（%）</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.IsMergedStatEvent">
-            <summary>是否为合并统计事件（保留字段）</summary>
+            <summary>是否为合并统计事件</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.MergeGroupId">
-            <summary>合并分组ID（保留字段）</summary>
+            <summary>合并分组ID</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.RawEventCount">
-            <summary>原始事件数量（保留字段）</summary>
+            <summary>原始事件数量</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.SeqNo">
-            <summary>序号（用于排序）</summary>
+            <summary>序号</summary>
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagEvent.Remark">
             <summary>备注</summary>
@@ -4287,6 +4574,9 @@
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.Status">
             <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.Progress">
+            <summary>解析进度（0-100）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.ErrorMessage">
             <summary>失败原因/错误信息（失败时填写）</summary>
         </member>
@@ -4314,6 +4604,9 @@
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.OccurTimeUtc">
             <summary>事件发生时间（UTC）</summary>
         </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.OccurTimeText">
+            <summary>事件发生时间文本（与明细页显示口径保持一致）</summary>
+        </member>
         <member name="P:Zwav.Application.Sag.ZwavSagListItemDto.CrtTime">
             <summary>创建时间（UTC）</summary>
         </member>
@@ -4331,6 +4624,9 @@
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.Status">
             <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.Progress">
+            <summary>解析进度（0-100）</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagDetailDto.ErrorMessage">
             <summary>失败原因/错误信息（失败时填写）</summary>
@@ -4838,8 +5134,14 @@
         </member>
         <member name="T:Zwav.Application.Sag.IZwavSagAnalyzer">
             <summary>
-            电压暂降分析器
-            只负责纯计算，不负责读取波形数据
+            电压暂降分析器。
+            只负责纯计算，不承担录波文件读取、数据库访问或任务编排职责。
+            </summary>
+        </member>
+        <member name="M:Zwav.Application.Sag.IZwavSagAnalyzer.AnalyzeAsync(Zwav.Application.Sag.ZwavSagAnalyzeContext)">
+            <summary>
+            基于已准备好的分析上下文执行暂降识别，并返回事件与 RMS 明细结果。
+            调用方需要提前完成采样点、通道信息、参考参数等上下文准备。
             </summary>
         </member>
         <member name="T:Zwav.Application.Sag.ZwavSagAnalyzer">
@@ -4952,7 +5254,18 @@
              不是跨通道合并。
              </summary>
         </member>
-        <!-- Badly formed XML comment ignored for member "M:Zwav.Application.Sag.ZwavSagAnalyzer.IsSagStartPoint(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal)" -->
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.IsSagStartPoint(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal)">
+             <summary>
+             判断某个点是否可作为暂降起点。
+            
+             判定较为宽松，是为了尽量“别漏掉真正的暂降”：
+             1）DetectPct 明显低于阈值；
+             2）RmsPct 明显低于阈值；
+             3）当前点和下一点连续都低于阈值。
+            
+             这样比单纯 “当前点 &lt; 阈值” 更稳健。
+             </summary>
+        </member>
         <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.IsRecoveredPoint(Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Decimal,System.Nullable{System.Decimal})">
              <summary>
              判断某个点是否可作为“恢复点”。
@@ -5044,7 +5357,22 @@
             用于尾部恢复裁剪。
             </summary>
         </member>
-        <!-- Badly formed XML comment ignored for member "M:Zwav.Application.Sag.ZwavSagAnalyzer.MergeVeryCloseWindows(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow})" -->
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.MergeVeryCloseWindows(System.Collections.Generic.List{Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow})">
+             <summary>
+             合并“非常接近”的事件窗口。
+            
+             这里只做很轻量的修补性合并，适用于同一通道因噪声/抖动被切成两个极近窗口的情况。
+            
+             合并条件：
+             - 同一通道；
+             - 同一相；
+             - 同一组；
+             - 两窗口间隔 gap &lt;= 6ms；
+            
+             注意：这不是你之前不需要的那种“多通道大合并”，
+             这里只是对同一条通道的碎片窗口做连续性修补。
+             </summary>
+        </member>
         <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.BuildSingleChannelWindow(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRmsSeries,System.Int32,System.Int32)">
              <summary>
              把单通道的事件窗口转为内部事件对象。
@@ -5411,6 +5739,9 @@
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.EndMs">
             <summary>事件结束时间（相对 ms）。</summary>
+        </member>
+        <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.OccurMs">
+            <summary>事件发生时间（相对 ms，取最严重点时间）。</summary>
         </member>
         <member name="P:Zwav.Application.Sag.ZwavSagAnalyzer.ChannelEventWindow.DurationMs">
             <summary>时长 ms。</summary>

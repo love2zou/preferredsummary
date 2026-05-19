@@ -18,6 +18,9 @@ namespace Zwav.Application.Sag
         /// <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
         public int Status { get; set; }
 
+        /// <summary>解析进度（0-100）</summary>
+        public int Progress { get; set; }
+
         /// <summary>失败原因/错误信息（失败时填写）</summary>
         public string ErrorMessage { get; set; }
 
@@ -45,6 +48,9 @@ namespace Zwav.Application.Sag
         /// <summary>事件发生时间（UTC）</summary>
         public DateTime? OccurTimeUtc { get; set; }
 
+        /// <summary>事件发生时间文本（与明细页显示口径保持一致）</summary>
+        public string OccurTimeText { get; set; }
+
         /// <summary>创建时间（UTC）</summary>
         public DateTime CrtTime { get; set; }
     }
@@ -63,6 +69,9 @@ namespace Zwav.Application.Sag
 
         /// <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
         public int Status { get; set; }
+
+        /// <summary>解析进度（0-100）</summary>
+        public int Progress { get; set; }
 
         /// <summary>失败原因/错误信息（失败时填写）</summary>
         public string ErrorMessage { get; set; }
@@ -280,6 +289,10 @@ namespace Zwav.Application.Sag
     {
         /// <summary>参与分析的文件数量</summary>
         public int AnalyzedCount { get; set; }
+
+        public int QueuedCount { get; set; }
+
+        public int[] QueuedEventIds { get; set; }
 
         /// <summary>创建的结果记录数量</summary>
         public int CreatedEventCount { get; set; }
