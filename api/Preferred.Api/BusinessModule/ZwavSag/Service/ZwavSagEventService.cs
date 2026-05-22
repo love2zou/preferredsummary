@@ -97,17 +97,12 @@ namespace Preferred.Api.Services
             if (page <= 0) page = 1;
             if (pageSize <= 0) pageSize = 20;
 
-            // 第一步：先取每个文件最新的一条事件 ID
-            var latestEventIds = await _context.ZwavSagEvents
-                .AsNoTracking()
-                .GroupBy(x => x.FileId)
-                .Select(g => g.Max(x => x.Id))
-                .ToListAsync()
-                .ConfigureAwait(false);
-
+            // 直接按事件记录查询列表。
+            // 同一录波文件允许重复分析，每次分析都应保留并展示为一条独立记录。
+            // 直接按事件记录查询列表。
+            // 同一录波文件允许重复分析，每次分析都应保留并展示为一条独立记录。
             var eventQuery = _context.ZwavSagEvents
-                .AsNoTracking()
-                .Where(x => latestEventIds.Contains(x.Id));
+                .AsNoTracking();
 
             if (!string.IsNullOrWhiteSpace(keyword))
             {
@@ -334,6 +329,8 @@ namespace Preferred.Api.Services
             if (req == null)
                 throw new ArgumentNullException(nameof(req));
 
+            ValidateAnalyzeReferenceRequest(req);
+
             // 统一把 FileIds / AnalysisGuids 映射成文件维度，后续所有幂等控制都围绕 FileId 进行。
             var fileIds = await ResolveFileIdsAsync(req).ConfigureAwait(false);
             if (fileIds.Count == 0)
@@ -439,7 +436,7 @@ namespace Preferred.Api.Services
 
         /// <summary>
         /// 后台处理单个暂降分析任务。
-        /// 整体流程是：读取解析结果、构建分析上下文、调用分析器、清理旧结果、写入新结果。
+        /// 整体流程是：读取解析结果、构建分析上下文、调用分析器、保留历史结果并写入本次新结果。
         /// </summary>
         public async Task ProcessQueuedAnalyzeAsync(ZwavSagAnalysisQueueItem item, CancellationToken cancellationToken = default)
         {
@@ -488,8 +485,6 @@ namespace Preferred.Api.Services
                 using var tx = await _context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
                 await UpdateProgressAsync(item.ProcessingEventId, 85).ConfigureAwait(false);
-                // 同一文件只保留本次分析的最新结果，所以在落库前先清理旧快照。
-                await DeleteByFileIdInternalAsync(item.FileId).ConfigureAwait(false);
 
                 var persistPackages = BuildPersistPackages(
                     item.FileId,
@@ -542,6 +537,9 @@ namespace Preferred.Api.Services
                     fileCreatedRmsCount += pkg.RmsPoints.Count;
                 }
 
+                if (item.ProcessingEventId > 0)
+                    await DeleteProcessingEventAsync(item.ProcessingEventId, cancellationToken).ConfigureAwait(false);
+
                 await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
 
                 _logger.LogInformation(
@@ -570,11 +568,7 @@ namespace Preferred.Api.Services
                     originalName);
 
                 _context.ChangeTracker.Clear();
-                // 失败时也要清理掉可能已部分写入的新结果，避免数据库中出现半成品分析数据。
-                await DeleteByFileIdInternalAsync(item.FileId).ConfigureAwait(false);
-
-                _context.ZwavSagEvents.Add(CreateFailedEvent(item.FileId, originalName, startAt, failAt, ex.Message));
-                await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+                await MarkProcessingEventFailedAsync(item.ProcessingEventId, ex.Message).ConfigureAwait(false);
             }
         }
 
@@ -620,7 +614,7 @@ namespace Preferred.Api.Services
                 .Select(x => new ZwavSagVoltageChannelDto
                 {
                     ChannelIndex = x.ChannelIndex,
-                    Phase = x.Phase,
+                    Phase = ResolveDisplayPhase(x.Phase, x.ChannelName, x.ChannelCode),
                     ChannelCode = x.ChannelCode,
                     ChannelName = x.ChannelName,
                     Unit = x.Unit
@@ -654,7 +648,7 @@ namespace Preferred.Api.Services
                     ChannelIndex = x.ChannelIndex,
                     GroupName = x.GroupName,
                     ChannelName = x.ChannelName,
-                    Phase = x.Phase,
+                    Phase = ResolveDisplayPhase(x.Phase, x.ChannelName),
                     StartTimeUtc = x.StartTimeUtc,
                     EndTimeUtc = x.EndTimeUtc,
                     DurationMs = x.DurationMs,
@@ -807,7 +801,10 @@ namespace Preferred.Api.Services
                 .Where(x => x != null)
                 .Select(x => new ZwavSagProcessPhaseDto
                 {
-                    Phase = x.Phase,
+                    ChannelIndex = x.ChannelIndex,
+                    GroupName = x.GroupName,
+                    ChannelName = x.ChannelName,
+                    Phase = ResolveDisplayPhase(x.Phase, x.ChannelName),
                     StartTimeUtc = x.StartTimeUtc,
                     EndTimeUtc = x.EndTimeUtc,
                     DurationMs = x.DurationMs,
@@ -877,6 +874,8 @@ namespace Preferred.Api.Services
                     Id = x.Id,
                     RuleName = x.RuleName,
                     PhaseName = x.PhaseName,
+                    PhaseType = x.PhaseType,
+                    PhaseValue = x.PhaseValue,
                     SeqNo = x.SeqNo,
                     Enabled = x.Enabled,
                     CrtTime = x.CrtTime
@@ -910,6 +909,9 @@ namespace Preferred.Api.Services
             if (string.IsNullOrWhiteSpace(phaseName))
                 throw new ArgumentException("PhaseName 必须为 A/B/C/AB/BC/CA");
 
+            var phaseType = NormalizeChannelRulePhaseType(req.PhaseType, phaseName);
+            var phaseValue = NormalizeChannelRulePhaseValue(req.PhaseValue, phaseType);
+
             var exists = await _context.ZwavSagChannelRules
                 .AnyAsync(x => x.RuleName == ruleName)
                 .ConfigureAwait(false);
@@ -923,6 +925,8 @@ namespace Preferred.Api.Services
             {
                 RuleName = ruleName,
                 PhaseName = phaseName,
+                PhaseType = phaseType,
+                PhaseValue = phaseValue,
                 SeqNo = req.SeqNo,
                 Enabled = req.Enabled,
                 CrtTime = now,
@@ -937,6 +941,8 @@ namespace Preferred.Api.Services
                 Id = entity.Id,
                 RuleName = entity.RuleName,
                 PhaseName = entity.PhaseName,
+                PhaseType = entity.PhaseType,
+                PhaseValue = entity.PhaseValue,
                 SeqNo = entity.SeqNo,
                 Enabled = entity.Enabled,
                 CrtTime = entity.CrtTime
@@ -979,6 +985,14 @@ namespace Preferred.Api.Services
                     throw new ArgumentException("PhaseName 必须为 A/B/C/AB/BC/CA");
                 entity.PhaseName = phaseName;
             }
+
+            if (req.PhaseType.HasValue)
+                entity.PhaseType = NormalizeChannelRulePhaseType(req.PhaseType.Value, entity.PhaseName);
+
+            if (req.PhaseValue.HasValue)
+                entity.PhaseValue = NormalizeChannelRulePhaseValue(req.PhaseValue.Value, entity.PhaseType);
+            else if (req.PhaseType.HasValue)
+                entity.PhaseValue = DefaultChannelRulePhaseValue(entity.PhaseType);
 
             if (req.SeqNo.HasValue)
                 entity.SeqNo = req.SeqNo.Value;
@@ -1165,11 +1179,56 @@ namespace Preferred.Api.Services
             return string.Empty;
         }
 
+        private static int NormalizeChannelRulePhaseType(int phaseType, string phaseName)
+        {
+            if (phaseType == 0)
+                return DefaultChannelRulePhaseType(phaseName);
+
+            if (phaseType != 1 && phaseType != 2)
+                throw new ArgumentException("PhaseType 蹇呴』涓?1 鎴?2");
+
+            return phaseType;
+        }
+
+        private static decimal NormalizeChannelRulePhaseValue(decimal phaseValue, int phaseType)
+        {
+            if (phaseValue == 0m)
+                return DefaultChannelRulePhaseValue(phaseType);
+
+            if (phaseValue < 0m)
+                throw new ArgumentException("PhaseValue 涓嶈兘灏忎簬 0");
+
+            return decimal.Round(phaseValue, 6);
+        }
+
+        private static int DefaultChannelRulePhaseType(string phaseName)
+        {
+            var normalized = NormalizePhaseName(phaseName);
+            return normalized == "AB" || normalized == "BC" || normalized == "CA" ? 2 : 1;
+        }
+
+        private static decimal DefaultChannelRulePhaseValue(int phaseType)
+        {
+            return phaseType == 2 ? 100m : 57.74m;
+        }
+
         private static string NormalizeReferenceType(string referenceType, decimal? referenceVoltage)
         {
             var raw = (referenceType ?? string.Empty).Trim();
             if (raw.Length == 0)
                 return referenceVoltage.HasValue && referenceVoltage.Value > 0m ? "Declared" : "Sliding";
+
+            if (string.Equals(raw, "PhaseVoltage", StringComparison.OrdinalIgnoreCase))
+                return "PhaseVoltage";
+
+            if (string.Equals(raw, "LineVoltage", StringComparison.OrdinalIgnoreCase))
+                return "LineVoltage";
+
+            if (string.Equals(raw, "Adaptive", StringComparison.OrdinalIgnoreCase))
+                return "Adaptive";
+
+            if (string.Equals(raw, "CustomVoltage", StringComparison.OrdinalIgnoreCase))
+                return "CustomVoltage";
 
             if (string.Equals(raw, "Declared", StringComparison.OrdinalIgnoreCase))
                 return "Declared";
@@ -1178,6 +1237,43 @@ namespace Preferred.Api.Services
                 return "Sliding";
 
             return referenceVoltage.HasValue && referenceVoltage.Value > 0m ? "Declared" : "Sliding";
+        }
+
+        private static decimal? NormalizeReferenceVoltage(string referenceType, decimal? referenceVoltage)
+        {
+            var normalizedType = NormalizeReferenceType(referenceType, referenceVoltage);
+
+            if (string.Equals(normalizedType, "PhaseVoltage", StringComparison.OrdinalIgnoreCase))
+                return 57.74m;
+
+            if (string.Equals(normalizedType, "LineVoltage", StringComparison.OrdinalIgnoreCase))
+                return 100m;
+
+            if (string.Equals(normalizedType, "Adaptive", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            if (string.Equals(normalizedType, "CustomVoltage", StringComparison.OrdinalIgnoreCase))
+                return referenceVoltage.HasValue && referenceVoltage.Value > 0m
+                    ? decimal.Round(referenceVoltage.Value, 6)
+                    : null;
+
+            if (referenceVoltage.HasValue && referenceVoltage.Value > 0m)
+                return decimal.Round(referenceVoltage.Value, 6);
+
+            return null;
+        }
+
+        private static void ValidateAnalyzeReferenceRequest(AnalyzeZwavSagRequest req)
+        {
+            if (req == null)
+                return;
+
+            string normalizedType = NormalizeReferenceType(req.ReferenceType, req.ReferenceVoltage);
+            if (string.Equals(normalizedType, "CustomVoltage", StringComparison.OrdinalIgnoreCase) &&
+                (!req.ReferenceVoltage.HasValue || req.ReferenceVoltage.Value <= 0m))
+            {
+                throw new ArgumentException("自定义参考电压必须大于 0");
+            }
         }
 
         private static DateTime NormalizeStoredProcessTimes(
@@ -1362,6 +1458,7 @@ namespace Preferred.Api.Services
                     decimal interrupt = p.InterruptThresholdPct ?? interruptThresholdPct;
                     string eventType = worstPct <= interrupt ? "Interruption" : "Sag";
                     decimal sagMagnitude = decimal.Round(100m - worstPct, 3);
+                    string phase = ResolveDisplayPhase(p.Phase, p.ChannelName);
 
                     list.Add(new ZwavSagComputedEventDto
                     {
@@ -1369,7 +1466,7 @@ namespace Preferred.Api.Services
                         ChannelIndex = p.ChannelIndex,
                         GroupName = p.GroupName,
                         ChannelName = p.ChannelName,
-                        Phase = p.Phase,
+                        Phase = phase,
                         OccurTimeUtc = evt.OccurTimeUtc,
                         StartTimeUtc = p.StartTimeUtc,
                         EndTimeUtc = p.EndTimeUtc,
@@ -1411,6 +1508,7 @@ namespace Preferred.Api.Services
                 decimal worstPct = p.ResidualVoltagePct;
                 string eventType = worstPct <= interruptThresholdPct ? "Interruption" : "Sag";
                 decimal sagMagnitude = decimal.Round(100m - worstPct, 3);
+                string phase = ResolveDisplayPhase(p.Phase, p.ChannelName);
 
                 list.Add(new ZwavSagComputedEventDto
                 {
@@ -1418,7 +1516,7 @@ namespace Preferred.Api.Services
                     ChannelIndex = p.ChannelIndex,
                     GroupName = p.GroupName,
                     ChannelName = p.ChannelName,
-                    Phase = p.Phase,
+                    Phase = phase,
                     OccurTimeUtc = ResolvePhaseOccurTimeUtc(detail, p),
                     StartTimeUtc = p.StartTimeUtc,
                     EndTimeUtc = p.EndTimeUtc,
@@ -1445,6 +1543,22 @@ namespace Preferred.Api.Services
                 .OrderBy(x => x.StartMs)
                 .ThenBy(x => x.Phase)
                 .ToArray();
+        }
+
+        private static string ResolveDisplayPhase(string phase, string channelName, string channelCode = null)
+        {
+            var inferred = ZwavSagVoltageChannelRuleMatcher.MatchPhase(
+                channelName,
+                channelCode,
+                null,
+                Array.Empty<ZwavSagVoltageChannelRuleMatcher.RuleItem>());
+
+            if (!string.IsNullOrWhiteSpace(inferred))
+                return inferred;
+
+            return string.IsNullOrWhiteSpace(phase)
+                ? string.Empty
+                : phase.Trim().ToUpperInvariant();
         }
 
         private static DateTime ResolvePhaseOccurTimeUtc(
@@ -1659,6 +1773,8 @@ namespace Preferred.Api.Services
                 throw new ArgumentNullException(nameof(analysis));
 
             int analysisId = analysis.Id;
+            string normalizedReferenceType = NormalizeReferenceType(req.ReferenceType, req.ReferenceVoltage);
+            decimal? normalizedReferenceVoltage = NormalizeReferenceVoltage(normalizedReferenceType, req.ReferenceVoltage);
 
             // cfg/hdr 提供采样频率、时间倍率、故障起始时间等辅助元数据。
             var cfg = await _context.ZwavCfgs
@@ -1696,8 +1812,8 @@ namespace Preferred.Api.Services
                 WaveStartTimeUtc = ResolveWaveStartTimeUtc(analysis, cfg),
                 TriggerTimeUtc = ResolveTriggerTimeUtc(analysis, cfg),
                 FaultStartTime = TryParseFaultStartTime(hdr?.FaultStartTime, out var parsedFaultStartTime) ? parsedFaultStartTime : (DateTime?)null,
-                ReferenceType = NormalizeReferenceType(req.ReferenceType, req.ReferenceVoltage),
-                ReferenceVoltage = req.ReferenceVoltage,
+                ReferenceType = normalizedReferenceType,
+                ReferenceVoltage = normalizedReferenceVoltage,
                 RecoverThresholdPct = req.RecoverThresholdPct,
                 SagThresholdPct = req.SagThresholdPct > 0 ? req.SagThresholdPct : 90m,
                 InterruptThresholdPct = req.InterruptThresholdPct > 0 ? req.InterruptThresholdPct : 10m,
@@ -1750,17 +1866,22 @@ namespace Preferred.Api.Services
                 var channelCode = (ch.ChannelCode ?? string.Empty).Trim();
                 var unit = (ch.Unit ?? string.Empty).Trim();
 
-                var matchedRule = ZwavSagVoltageChannelRuleMatcher.MatchRule(channelName, channelCode, unit, rules);
-                if (matchedRule.HasMatch && !matchedRule.Enabled)
-                    continue;
+                var enabledRule = ZwavSagVoltageChannelRuleMatcher.MatchEnabledRule(channelName, channelCode, unit, rules);
 
-                // 显式启用的规则可以强制纳入分析；没有命中规则时再回退到内置电压通道识别。
-                if (!matchedRule.HasMatch &&
+                // 先识别可参与分析的电压通道，再在候选结果上应用排除规则，
+                // 避免 Ua / nUa 这类存在包含关系的词库被一次“最佳命中”误伤。
+                if (!enabledRule.HasMatch &&
                     !ZwavSagVoltageChannelRuleMatcher.IsVoltageChannel(channelName, channelCode, unit))
                     continue;
 
+                var excludedRule = ZwavSagVoltageChannelRuleMatcher.MatchExcludedRule(channelName, channelCode, unit, rules);
+                if (excludedRule.HasMatch)
+                    continue;
+
                 // 相别识别不到时无法参与后续排序和事件归类，因此直接跳过。
-                var phase = ZwavSagVoltageChannelRuleMatcher.MatchPhase(channelName, channelCode, unit, rules);
+                var phase = enabledRule.HasMatch
+                    ? enabledRule.PhaseName
+                    : ZwavSagVoltageChannelRuleMatcher.MatchPhase(channelName, channelCode, unit, rules);
                 if (string.IsNullOrWhiteSpace(phase))
                     continue;
 
@@ -1776,7 +1897,9 @@ namespace Preferred.Api.Services
                     Phase = phase,
                     ChannelCode = channelCode,
                     ChannelName = channelName,
-                    Unit = unit
+                    Unit = unit,
+                    PhaseType = enabledRule.HasMatch ? enabledRule.PhaseType : (int?)null,
+                    PhaseValue = enabledRule.HasMatch && enabledRule.PhaseValue > 0m ? enabledRule.PhaseValue : (decimal?)null
                 });
             }
 
@@ -2296,7 +2419,7 @@ namespace Preferred.Api.Services
                 Progress = 0,
                 ErrorMessage = null,
                 HasSag = false,
-                EventType = "Processing",
+                EventType = "--",
                 EventCount = 0,
                 StartTime = startAt,
                 FinishTime = null,
@@ -2334,6 +2457,26 @@ namespace Preferred.Api.Services
             await _context.SaveChangesAsync().ConfigureAwait(false);
         }
 
+        private async Task DeleteProcessingEventAsync(int sagEventId, CancellationToken cancellationToken)
+        {
+            if (sagEventId <= 0)
+                return;
+
+            var entity = _context.ZwavSagEvents.Local.FirstOrDefault(x => x.Id == sagEventId);
+            if (entity == null)
+            {
+                entity = await _context.ZwavSagEvents
+                    .FirstOrDefaultAsync(x => x.Id == sagEventId, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            if (entity == null)
+                return;
+
+            _context.ZwavSagEvents.Remove(entity);
+            await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         private async Task MarkProcessingEventFailedAsync(int sagEventId, string errorMessage)
         {
             if (sagEventId <= 0)
@@ -2369,6 +2512,9 @@ namespace Preferred.Api.Services
             if (req == null)
                 return null;
 
+            string normalizedReferenceType = NormalizeReferenceType(req.ReferenceType, req.ReferenceVoltage);
+            decimal? normalizedReferenceVoltage = NormalizeReferenceVoltage(normalizedReferenceType, req.ReferenceVoltage);
+
             return new AnalyzeZwavSagRequest
             {
                 FileIds = req.FileIds?.Where(x => x > 0).Distinct().ToArray(),
@@ -2377,8 +2523,8 @@ namespace Preferred.Api.Services
                     .Select(x => x.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToArray(),
-                ReferenceType = req.ReferenceType,
-                ReferenceVoltage = req.ReferenceVoltage,
+                ReferenceType = normalizedReferenceType,
+                ReferenceVoltage = normalizedReferenceVoltage,
                 SagThresholdPct = req.SagThresholdPct,
                 RecoverThresholdPct = req.RecoverThresholdPct,
                 InterruptThresholdPct = req.InterruptThresholdPct,

@@ -619,7 +619,7 @@
         <member name="M:Preferred.Api.Services.ZwavSagEventService.ProcessQueuedAnalyzeAsync(Zwav.Application.Sag.ZwavSagAnalysisQueueItem,System.Threading.CancellationToken)">
             <summary>
             后台处理单个暂降分析任务。
-            整体流程是：读取解析结果、构建分析上下文、调用分析器、清理旧结果、写入新结果。
+            整体流程是：读取解析结果、构建分析上下文、调用分析器、保留历史结果并写入本次新结果。
             </summary>
         </member>
         <member name="M:Preferred.Api.Services.ZwavSagEventService.GetProcessAsync(System.Int32)">
@@ -5108,7 +5108,7 @@
              - 分析报告可追溯。
              </summary>
         </member>
-        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveChannelReferenceVoltage(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries,System.Nullable{System.Decimal})">
+        <member name="M:Zwav.Application.Sag.ZwavSagAnalyzer.ResolveChannelReferenceVoltage(Zwav.Application.Sag.ZwavSagAnalyzeContext,Zwav.Application.Sag.ZwavVoltageChannelContext,Zwav.Application.Sag.ZwavSagAnalyzer.ChannelRawRmsSeries,System.Nullable{System.Decimal})">
              <summary>
              解析通道参考电压。
             

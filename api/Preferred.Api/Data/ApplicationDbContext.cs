@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Preferred.Api.Models;
 
@@ -931,6 +931,15 @@ namespace Preferred.Api.Data
                     .IsRequired()
                     .HasMaxLength(100)
                     .HasComment("相别名称（A/B/C/AB/BC/CA）");
+
+                entity.Property(e => e.PhaseType)
+                    .IsRequired()
+                    .HasComment("电压类型：1=相电压，2=线电压");
+
+                entity.Property(e => e.PhaseValue)
+                    .IsRequired()
+                    .HasColumnType("decimal(18,6)")
+                    .HasComment("相别电压值：相电压57.74V，线电压100V");
 
                 entity.Property(e => e.SeqNo)
                     .HasDefaultValue(0)

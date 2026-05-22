@@ -92,6 +92,10 @@ namespace Zwav.Application.Sag
 
         /// <summary>单位（如 V/kV 等）</summary>
         public string Unit { get; set; }
+
+        public int? PhaseType { get; set; }
+
+        public decimal? PhaseValue { get; set; }
     }
 
     /// <summary>采样点（包含多通道模拟量）</summary>

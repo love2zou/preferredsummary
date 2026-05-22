@@ -902,6 +902,8 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagChannelRule (
    Id                   INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
    RuleName             VARCHAR(100) NOT NULL COMMENT '规则名称（通道关键词，如A相电压、UA等）',
    PhaseName            VARCHAR(100) NOT NULL COMMENT '相别名称（A/B/C/AB/BC/CA）',
+   PhaseType            INT       NOT NULL COMMENT '电压类型：1=相电压，2=线电压',
+   PhaseValue           DECIMAL(18,6) NOT NULL COMMENT '相别电压值：相电压 = 57.74V; 线电压 = 100V',
    Enabled              BOOLEAN      NOT NULL DEFAULT TRUE COMMENT '是否启用',
    SeqNo                INT DEFAULT 0 NOT NULL COMMENT '排序号',
    CrtTime              DATETIME NOT NULL COMMENT '创建时间',

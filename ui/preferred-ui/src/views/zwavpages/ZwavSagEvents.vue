@@ -161,9 +161,34 @@
             />
           </div>
 
-          <el-form :inline="true" size="small">
-            <el-form-item label="参考电压(V)">
-              <el-input-number v-model="analysisParams.referenceVoltage" :min="0" :step="0.01" :precision="2" />
+          <el-form size="small" label-position="top" class="analysis-form">
+            <el-form-item label="参考电压处理" class="reference-mode-form-item">
+              <el-radio-group v-model="analysisParams.referenceMode" class="reference-mode-group">
+                <label
+                  v-for="option in ANALYSIS_REFERENCE_OPTIONS"
+                  :key="option.value"
+                  class="reference-mode-card"
+                  :class="{ 'is-active': analysisParams.referenceMode === option.value }"
+                >
+                  <el-radio :label="option.value">
+                    <span class="reference-mode-text">
+                      <span class="reference-mode-title">{{ option.label }}</span>
+                      <span v-if="option.description" class="reference-mode-desc">{{ option.description }}</span>
+                    </span>
+                  </el-radio>
+                </label>
+              </el-radio-group>
+
+              <div v-if="analysisParams.referenceMode === 'CustomVoltage'" class="custom-reference-wrap">
+                <span class="custom-reference-label">自定义参考值</span>
+                <el-input-number
+                  v-model="analysisParams.customReferenceVoltage"
+                  :min="0"
+                  :step="0.01"
+                  :precision="2"
+                  placeholder="请输入参考电压"
+                />
+              </div>
             </el-form-item>
 
             <el-form-item label="暂降阈值(%)">
@@ -241,7 +266,7 @@
     <el-dialog
       v-model="channelRuleDialogVisible"
       title="电压暂降通道识别词库"
-      width="800px"
+      width="860px"
       :close-on-click-modal="false"
     >
       <div class="dialog-body">
@@ -262,15 +287,22 @@
           </div>
         </div>
 
-        <el-table :data="channelRuleRows" v-loading="channelRuleLoading" border stripe style="width: 100%">
+        <el-table
+          :data="channelRuleRows"
+          v-loading="channelRuleLoading"
+          border
+          stripe
+          style="width: 100%"
+          class="channel-rule-table"
+        >
           <el-table-column type="index" label="序号" width="60" align="center" />
-          <el-table-column prop="ruleName" label="规则名称 (包含文本)" min-width="200" />
-          <el-table-column prop="phaseName" label="相别" width="90" align="center" />
-          <el-table-column prop="seqNo" label="排序号" width="100" align="center" />
-          <el-table-column prop="crtTime" label="创建时间" width="180">
+          <el-table-column prop="ruleName" label="规则名称 (包含文本)" min-width="180" show-overflow-tooltip />
+          <el-table-column prop="phaseName" label="相别" width="80" align="center" />
+          <el-table-column prop="seqNo" label="排序号" width="84" align="center" />
+          <el-table-column prop="crtTime" label="创建时间" width="168">
             <template #default="{ row }">{{ formatDateTime(row.crtTime) }}</template>
           </el-table-column>
-          <el-table-column label="操作" width="150" align="center">
+          <el-table-column label="操作" width="120" align="center">
             <template #default="{ row }">
               <el-button link type="primary" @click="openChannelRuleEditDialog(row)">编辑</el-button>
               <el-popconfirm title="确定要删除该规则吗？" @confirm="handleChannelRuleDelete(row)">
@@ -353,8 +385,22 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
+type AnalysisReferenceMode = 'PhaseVoltage' | 'LineVoltage' | 'Adaptive' | 'CustomVoltage'
+
+const ANALYSIS_REFERENCE_OPTIONS: Array<{
+  value: AnalysisReferenceMode
+  label: string
+  description: string
+}> = [
+  { value: 'PhaseVoltage', label: '相电压', description: '57.74V' },
+  { value: 'LineVoltage', label: '线电压', description: '100kV' },
+  { value: 'Adaptive', label: '系统自适应处理', description: '' },
+  { value: 'CustomVoltage', label: '自定义输入', description: '' }
+]
+
 const DEFAULT_ANALYSIS_PARAMS = {
-  referenceVoltage: 57.74,
+  referenceMode: 'PhaseVoltage' as AnalysisReferenceMode,
+  customReferenceVoltage: undefined as number | undefined,
   sagThresholdPct: 90,
   interruptThresholdPct: 10,
   hysteresisPct: 2,
@@ -554,8 +600,37 @@ const analysisParams = reactive({
   ...DEFAULT_ANALYSIS_PARAMS
 })
 
+const resolveAnalysisReferenceSelection = () => {
+  if (analysisParams.referenceMode === 'LineVoltage') {
+    return {
+      referenceType: 'LineVoltage',
+      referenceVoltage: 100
+    }
+  }
+
+  if (analysisParams.referenceMode === 'Adaptive') {
+    return {
+      referenceType: 'Adaptive',
+      referenceVoltage: undefined
+    }
+  }
+
+  if (analysisParams.referenceMode === 'CustomVoltage') {
+    return {
+      referenceType: 'CustomVoltage',
+      referenceVoltage: analysisParams.customReferenceVoltage
+    }
+  }
+
+  return {
+    referenceType: 'PhaseVoltage',
+    referenceVoltage: 57.74
+  }
+}
+
 const resetAnalysisParams = () => {
-  analysisParams.referenceVoltage = DEFAULT_ANALYSIS_PARAMS.referenceVoltage
+  analysisParams.referenceMode = DEFAULT_ANALYSIS_PARAMS.referenceMode
+  analysisParams.customReferenceVoltage = DEFAULT_ANALYSIS_PARAMS.customReferenceVoltage
   analysisParams.sagThresholdPct = DEFAULT_ANALYSIS_PARAMS.sagThresholdPct
   analysisParams.interruptThresholdPct = DEFAULT_ANALYSIS_PARAMS.interruptThresholdPct
   analysisParams.hysteresisPct = DEFAULT_ANALYSIS_PARAMS.hysteresisPct
@@ -611,10 +686,13 @@ const handleAnalysisSizeChange = (s: number) => {
 }
 
 const buildAnalyzePayload = (options?: { fileIds?: number[]; analysisGuids?: string[] }) => {
+  const referenceSelection = resolveAnalysisReferenceSelection()
+
   return {
     fileIds: options?.fileIds || [],
     analysisGuids: options?.analysisGuids || [],
-    referenceVoltage: analysisParams.referenceVoltage,
+    referenceType: referenceSelection.referenceType,
+    referenceVoltage: referenceSelection.referenceVoltage,
     sagThresholdPct: analysisParams.sagThresholdPct,
     interruptThresholdPct: analysisParams.interruptThresholdPct,
     hysteresisPct: analysisParams.hysteresisPct,
@@ -624,9 +702,18 @@ const buildAnalyzePayload = (options?: { fileIds?: number[]; analysisGuids?: str
 
 const startSagAnalysis = async () => {
   const analysisGuids = selectedAnalyses.value.map(x => x.analysisGuid).filter(Boolean)
+  const referenceSelection = resolveAnalysisReferenceSelection()
 
   if (analysisGuids.length === 0) {
     ElMessage.warning('请至少选择一个录波文件')
+    return
+  }
+
+  if (
+    referenceSelection.referenceType === 'CustomVoltage' &&
+    (!referenceSelection.referenceVoltage || referenceSelection.referenceVoltage <= 0)
+  ) {
+    ElMessage.warning('请输入大于 0 的自定义参考电压')
     return
   }
 
@@ -942,10 +1029,10 @@ const saveChannelRule = async () => {
   margin-bottom: 15px;
   padding: 10px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   background-color: #f5f7fa;
   border-radius: 6px;
 }
@@ -1021,6 +1108,107 @@ const saveChannelRule = async () => {
   border-radius: 6px;
 }
 
+.analysis-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 16px;
+}
+
+.reference-mode-form-item {
+  grid-column: 1 / -1;
+}
+
+.reference-mode-group {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.reference-mode-card {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 10px 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  box-sizing: border-box;
+}
+
+.reference-mode-card:hover {
+  border-color: var(--el-color-primary-light-5);
+  box-shadow: 0 8px 16px rgba(64, 158, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.reference-mode-card.is-active {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 10px 24px rgba(64, 158, 255, 0.14);
+  background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+}
+
+.reference-mode-card :deep(.el-radio) {
+  margin-right: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+}
+
+.reference-mode-card :deep(.el-radio__label) {
+  padding-left: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.reference-mode-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.reference-mode-title {
+  font-weight: 600;
+  color: #303133;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reference-mode-desc {
+  font-size: 12px;
+  color: #909399;
+  flex: 0 1 auto;
+  white-space: nowrap;
+}
+
+.channel-rule-table {
+  overflow-x: hidden;
+}
+
+.custom-reference-wrap {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px dashed #c0c4cc;
+}
+
+.custom-reference-label {
+  color: #606266;
+  white-space: nowrap;
+}
+
 .fixed-algorithm-tip {
   margin-bottom: 12px;
 }
@@ -1038,5 +1226,20 @@ const saveChannelRule = async () => {
 .dialog-footer {
   display: inline-flex;
   gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .reference-mode-group {
+    grid-template-columns: 1fr;
+  }
+
+  .reference-mode-text {
+    white-space: normal;
+  }
+
+  .custom-reference-wrap {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>

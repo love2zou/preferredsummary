@@ -111,6 +111,9 @@ const RULE_TAB_META = {
   }
 }
 
+const PHASE_TYPE_PHASE = 1
+const PHASE_TYPE_LINE = 2
+
 function on(id, event, handler) {
   const el = byId(id)
   if (!el) return
@@ -221,14 +224,110 @@ function getRuleListState(tab = state.rules.activeTab) {
   return state.rules.tabs[tab] || state.rules.tabs[RULE_TAB_PHASE]
 }
 
+function getDefaultPhaseType(phaseName) {
+  const value = String(phaseName || '').trim().toUpperCase()
+  return value === 'AB' || value === 'BC' || value === 'CA' ? PHASE_TYPE_LINE : PHASE_TYPE_PHASE
+}
+
+function getDefaultPhaseValue(phaseType) {
+  return Number(phaseType) === PHASE_TYPE_LINE ? 100 : 57.74
+}
+
+function getPhaseTypeText(phaseType) {
+  return Number(phaseType) === PHASE_TYPE_LINE ? '绾跨數鍘?' : '鐩哥數鍘?'
+}
+
+function formatPhaseValue(value) {
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) return '-'
+  return n.toFixed(6).replace(/\.?0+$/, '')
+}
+
+function getDisplayPhaseValue(row) {
+  const phaseType = Number(row?.phaseType || getDefaultPhaseType(row?.phaseName))
+  const phaseValue = Number(row?.phaseValue)
+  if (Number.isFinite(phaseValue) && phaseValue > 0) return phaseValue
+  return getDefaultPhaseValue(phaseType)
+}
+
+function getSafePhaseTypeText(phaseType) {
+  return Number(phaseType) === PHASE_TYPE_LINE
+    ? '\u7ebf\u7535\u538b'
+    : '\u76f8\u7535\u538b'
+}
+
+function ensurePhaseRuleExtraHeaders() {
+  const valueHeader = byId('ruleValueHeader')
+  if (!valueHeader || byId('rulePhaseTypeHeader') || !valueHeader.parentNode) return
+
+  valueHeader.insertAdjacentHTML(
+    'afterend',
+    '<th class="cell-center" style="width: 96px" id="rulePhaseTypeHeader">鐢靛帇绫诲瀷</th>' +
+    '<th class="cell-center" style="width: 110px" id="rulePhaseValueHeader">鐩稿埆鐢靛帇鍊?V)</th>'
+  )
+}
+
+function syncPhaseRuleLabels() {
+  const phaseTypeHeader = byId('rulePhaseTypeHeader')
+  if (phaseTypeHeader) phaseTypeHeader.textContent = '\u7535\u538b\u7c7b\u578b'
+
+  const phaseValueHeader = byId('rulePhaseValueHeader')
+  if (phaseValueHeader) phaseValueHeader.textContent = '\u76f8\u522b\u7535\u538b\u503c(V)'
+
+  const phaseTypeWrap = byId('phaseTypeFieldWrap')
+  if (phaseTypeWrap) {
+    const label = phaseTypeWrap.querySelector('label')
+    if (label) label.textContent = '\u7535\u538b\u7c7b\u578b'
+  }
+
+  const phaseTypeSelect = byId('phaseTypeSelect')
+  if (phaseTypeSelect && phaseTypeSelect.options.length >= 2) {
+    phaseTypeSelect.options[0].text = '\u76f8\u7535\u538b'
+    phaseTypeSelect.options[1].text = '\u7ebf\u7535\u538b'
+  }
+
+  const phaseValueWrap = byId('phaseValueFieldWrap')
+  if (phaseValueWrap) {
+    const label = phaseValueWrap.querySelector('label')
+    if (label) label.textContent = '\u76f8\u522b\u7535\u538b\u503c(V)'
+  }
+
+  const phaseValueInput = byId('phaseValueInput')
+  if (phaseValueInput) {
+    phaseValueInput.placeholder = '\u4f8b\u5982\uff1a57.74 \u6216 100'
+  }
+}
+
+function syncPhaseRuleValueByType(force = false) {
+  const phaseTypeEl = byId('phaseTypeSelect')
+  const phaseValueEl = byId('phaseValueInput')
+  if (!phaseTypeEl || !phaseValueEl) return
+
+  const next = getDefaultPhaseValue(Number(phaseTypeEl.value || PHASE_TYPE_PHASE))
+  const current = Number(phaseValueEl.value || 0)
+  if (force || !Number.isFinite(current) || current <= 0) {
+    phaseValueEl.value = String(next)
+  }
+}
+
 function syncRuleEditUi(tab = state.ruleEditing.tab || state.rules.activeTab) {
   const isPhase = tab === RULE_TAB_PHASE
-  byId('phaseFieldWrap').style.display = isPhase ? '' : 'none'
-  byId('enabledFieldWrap').style.display = isPhase ? '' : 'none'
-  byId('groupFieldWrap').style.display = isPhase ? 'none' : ''
+  const phaseFieldWrap = byId('phaseFieldWrap')
+  const phaseTypeFieldWrap = byId('phaseTypeFieldWrap')
+  const phaseValueFieldWrap = byId('phaseValueFieldWrap')
+  const enabledFieldWrap = byId('enabledFieldWrap')
+  const groupFieldWrap = byId('groupFieldWrap')
+
+  if (phaseFieldWrap) phaseFieldWrap.style.display = isPhase ? '' : 'none'
+  if (phaseTypeFieldWrap) phaseTypeFieldWrap.style.display = isPhase ? '' : 'none'
+  if (phaseValueFieldWrap) phaseValueFieldWrap.style.display = isPhase ? '' : 'none'
+  if (enabledFieldWrap) enabledFieldWrap.style.display = isPhase ? '' : 'none'
+  if (groupFieldWrap) groupFieldWrap.style.display = isPhase ? 'none' : ''
 }
 
 function syncRuleTabUi() {
+  ensurePhaseRuleExtraHeaders()
+  syncPhaseRuleLabels()
   const meta = getRuleTabMeta()
   const activeTab = state.rules.activeTab
 
@@ -239,6 +338,10 @@ function syncRuleTabUi() {
   })
 
   setText('ruleValueHeader', meta.valueHeader)
+  const phaseTypeHeader = byId('rulePhaseTypeHeader')
+  if (phaseTypeHeader) phaseTypeHeader.style.display = activeTab === RULE_TAB_PHASE ? '' : 'none'
+  const phaseValueHeader = byId('rulePhaseValueHeader')
+  if (phaseValueHeader) phaseValueHeader.style.display = activeTab === RULE_TAB_PHASE ? '' : 'none'
   const enabledHeader = byId('ruleEnabledHeader')
   if (enabledHeader) enabledHeader.style.display = activeTab === RULE_TAB_PHASE ? '' : 'none'
   const enabledFilter = byId('ruleEnabledFilter')
@@ -818,21 +921,61 @@ function syncAnalyzeRecoverThresholdIfAuto() {
   if (el) el.value = v
 }
 
-async function startAnalyze() {
+function getSelectedAnalyzeReferenceMode() {
+  return String(document.querySelector('input[name="referenceTypeRadio"]:checked')?.value || 'PhaseVoltage').trim()
+}
+
+function updateAnalyzeReferenceModeUi() {
+  const activeMode = getSelectedAnalyzeReferenceMode()
+  document.querySelectorAll('[data-reference-mode]').forEach((el) => {
+    el.classList.toggle('is-active', el.getAttribute('data-reference-mode') === activeMode)
+  })
+
+  const customWrap = byId('customReferenceWrap')
+  if (customWrap) customWrap.classList.toggle('is-visible', activeMode === 'CustomVoltage')
+}
+
+function resolveAnalyzeReferenceSelection() {
+  const raw = getSelectedAnalyzeReferenceMode()
+  if (raw === 'LineVoltage') return { referenceType: 'LineVoltage', referenceVoltage: 100 }
+  if (raw === 'Adaptive') return { referenceType: 'Adaptive', referenceVoltage: null }
+  if (raw === 'CustomVoltage') {
+    return {
+      referenceType: 'CustomVoltage',
+      referenceVoltage: Number(byId('customReferenceVoltage')?.value || 0)
+    }
+  }
+  return { referenceType: 'PhaseVoltage', referenceVoltage: 57.74 }
+}
+
+function legacySyncAnalyzeReferenceUi() {
+  const label = byId('referenceTypeLabel')
+    || byId('referenceOptionGroup')?.closest('.search-item')?.querySelector('label')
+  if (label) label.textContent = '\u53c2\u8003\u7535\u538b\u5904\u7406'
+
+  const legacyLabel = label?.previousElementSibling
+  if (legacyLabel && legacyLabel.tagName === 'LABEL') {
+    legacyLabel.style.display = 'none'
+  }
+
+  updateAnalyzeReferenceModeUi()
+}
+
+async function legacyStartAnalyzeOld() {
   const ids = Array.from(state.analysis.selected)
   if (ids.length === 0) {
     showAlert('warning', '请先选择解析任务')
     return
   }
 
-  const referenceVoltage = Number(byId('referenceVoltage').value || 0)
+  const referenceSelection = resolveAnalyzeReferenceSelection()
   const sagThresholdPct = Number(byId('sagThresholdPct').value || 90)
   const interruptThresholdPct = Number(byId('interruptThresholdPct').value || 10)
   const hysteresisPct = Number(byId('hysteresisPct').value || 2)
   const recoverThresholdPct = Number(byId('recoverThresholdPct').value || 0)
   const minDurationMs = Number(byId('minDurationMs').value || 10)
 
-  if (referenceVoltage <= 0) {
+  if (false) {
     showAlert('warning', '参考电压必须大于0')
     return
   }
@@ -894,6 +1037,88 @@ async function startAnalyze() {
   }
 }
 
+function syncAnalyzeReferenceUi() {
+  const label = byId('referenceTypeLabel')
+    || byId('referenceOptionGroup')?.closest('.search-item')?.querySelector('label')
+  if (label) label.textContent = '\u53c2\u8003\u7535\u538b\u5904\u7406'
+
+  const legacyLabel = label?.previousElementSibling
+  if (legacyLabel && legacyLabel.tagName === 'LABEL') {
+    legacyLabel.style.display = 'none'
+  }
+
+  updateAnalyzeReferenceModeUi()
+}
+
+async function startAnalyze() {
+  const ids = Array.from(state.analysis.selected)
+  if (ids.length === 0) {
+    showAlert('warning', '\u8bf7\u5148\u9009\u62e9\u5206\u6790\u4efb\u52a1')
+    return
+  }
+
+  const referenceSelection = resolveAnalyzeReferenceSelection()
+  const sagThresholdPct = Number(byId('sagThresholdPct').value || 90)
+  const interruptThresholdPct = Number(byId('interruptThresholdPct').value || 10)
+  const hysteresisPct = Number(byId('hysteresisPct').value || 2)
+  const recoverThresholdPct = Number(byId('recoverThresholdPct').value || 0)
+  const minDurationMs = Number(byId('minDurationMs').value || 10)
+
+  if (referenceSelection.referenceType === 'CustomVoltage' && referenceSelection.referenceVoltage <= 0) {
+    showAlert('warning', '\u81ea\u5b9a\u4e49\u53c2\u8003\u7535\u538b\u5fc5\u987b\u5927\u4e8e 0')
+    return
+  }
+  if (sagThresholdPct <= 0 || sagThresholdPct > 100) {
+    showAlert('warning', '\u6682\u964d\u9608\u503c\u5fc5\u987b\u5728 0-100 \u4e4b\u95f4')
+    return
+  }
+  if (interruptThresholdPct <= 0 || interruptThresholdPct > 100) {
+    showAlert('warning', '\u4e2d\u65ad\u9608\u503c\u5fc5\u987b\u5728 0-100 \u4e4b\u95f4')
+    return
+  }
+  if (hysteresisPct < 0 || hysteresisPct > 20) {
+    showAlert('warning', '\u8fdf\u6ede\u5fc5\u987b\u5728 0-20 \u4e4b\u95f4')
+    return
+  }
+  if (recoverThresholdPct > 0 && (recoverThresholdPct < sagThresholdPct || recoverThresholdPct > 100)) {
+    showAlert('warning', '\u6062\u590d\u9608\u503c\u5fc5\u987b\u5728\u6682\u964d\u9608\u503c\u5230 100 \u4e4b\u95f4')
+    return
+  }
+  if (minDurationMs < 0) {
+    showAlert('warning', '\u6700\u5c0f\u6301\u7eed\u65f6\u95f4\u4e0d\u80fd\u4e3a\u8d1f\u6570')
+    return
+  }
+
+  const body = {
+    fileIds: [],
+    analysisGuids: ids,
+    referenceType: referenceSelection.referenceType,
+    referenceVoltage: referenceSelection.referenceVoltage,
+    sagThresholdPct,
+    recoverThresholdPct: recoverThresholdPct > 0 ? recoverThresholdPct : null,
+    interruptThresholdPct,
+    hysteresisPct,
+    minDurationMs
+  }
+
+  try {
+    const res = await zwavApi.sagAnalyze(body)
+    if (res?.success) {
+      const queuedCount = res.data?.queuedCount ?? res.data?.createdEventCount ?? 0
+      state.analysis.selected.clear()
+      showAlert('success', `\u5df2\u52a0\u5165\u5206\u6790\u961f\u5217\uff1a${queuedCount} \u6761\uff0c\u5217\u8868\u5c06\u81ea\u52a8\u5237\u65b0\u5206\u6790\u8fdb\u5ea6`)
+      closeDialog('analyzeModal')
+      state.page = 1
+      await loadList()
+      return
+    }
+
+    showAlert('error', res?.message || '\u6682\u964d\u5206\u6790\u5931\u8d25')
+  } catch (e) {
+    showAlert('error', e.message || '\u6682\u964d\u5206\u6790\u5931\u8d25')
+  }
+}
+
 async function loadRules() {
   const meta = getRuleTabMeta()
   const ruleState = getRuleListState()
@@ -939,12 +1164,16 @@ function renderRules() {
   const tbody = ruleState.data.map((row, idx) => {
     const name = row.ruleName || '-'
     const valueText = row[meta.valueProp] || '-'
+    const phaseTypeText = getSafePhaseTypeText(row.phaseType)
+    const phaseValueText = formatPhaseValue(getDisplayPhaseValue(row))
     const enabledText = row.enabled === false ? '排除' : '启用'
     return `
       <tr>
         <td class="cell-center">${idx + 1 + (ruleState.page - 1) * ruleState.pageSize}</td>
         <td class="file-name-cell" title="${escapeHtml(name)}">${escapeHtml(name)}</td>
         <td class="cell-center">${escapeHtml(valueText)}</td>
+        ${state.rules.activeTab === RULE_TAB_PHASE ? `<td class="cell-center">${escapeHtml(phaseTypeText)}</td>` : ''}
+        ${state.rules.activeTab === RULE_TAB_PHASE ? `<td class="cell-center">${escapeHtml(phaseValueText)}</td>` : ''}
         ${state.rules.activeTab === RULE_TAB_PHASE ? `<td class="cell-center">${escapeHtml(enabledText)}</td>` : ''}
         <td class="cell-center">${escapeHtml(String(row.seqNo ?? 0))}</td>
         <td>${escapeHtml(row.crtTime ? formatDateTime(row.crtTime) : '-')}</td>
@@ -996,6 +1225,10 @@ function openRuleEdit(row) {
   setText('ruleEditTitle', row ? meta.editTitle : meta.addTitle)
   byId('ruleNameInput').value = row ? (row.ruleName || '') : ''
   byId('phaseNameSelect').value = row ? (row.phaseName || 'A') : 'A'
+  byId('phaseTypeSelect').value = String(row ? (row.phaseType || getDefaultPhaseType(row.phaseName)) : getDefaultPhaseType(byId('phaseNameSelect').value))
+  byId('phaseValueInput').value = row
+    ? String(row.phaseValue ?? getDefaultPhaseValue(byId('phaseTypeSelect').value))
+    : String(getDefaultPhaseValue(byId('phaseTypeSelect').value))
   byId('enabledInput').checked = row ? row.enabled !== false : true
   byId('groupNameInput').value = row ? (row.groupName || '') : ''
   byId('seqNoInput').value = row ? String(row.seqNo ?? 0) : String(computeLocalNextRuleSeqNo())
@@ -1008,6 +1241,8 @@ async function saveRule() {
   const meta = getRuleTabMeta(tab)
   const ruleName = String(byId('ruleNameInput').value || '').trim()
   const phaseName = String(byId('phaseNameSelect').value || '').trim()
+  const phaseType = Number(byId('phaseTypeSelect').value || 0)
+  const phaseValue = Number(byId('phaseValueInput').value || 0)
   const enabled = !!byId('enabledInput').checked
   const groupName = String(byId('groupNameInput').value || '').trim()
   const seqNo = Number(byId('seqNoInput').value || 0)
@@ -1018,6 +1253,14 @@ async function saveRule() {
   }
   if (tab === RULE_TAB_PHASE && !phaseName) {
     showAlert('warning', '相别不能为空')
+    return
+  }
+  if (tab === RULE_TAB_PHASE && phaseType !== PHASE_TYPE_PHASE && phaseType !== PHASE_TYPE_LINE) {
+    showAlert('warning', '鐢靛帇绫诲瀷鏃犳晥')
+    return
+  }
+  if (tab === RULE_TAB_PHASE && (!Number.isFinite(phaseValue) || phaseValue <= 0)) {
+    showAlert('warning', '鐩稿埆鐢靛帇鍊煎繀椤诲ぇ浜?0')
     return
   }
   if (tab === RULE_TAB_GROUP && !groupName) {
@@ -1031,7 +1274,7 @@ async function saveRule() {
 
   try {
     const body = tab === RULE_TAB_PHASE
-      ? { ruleName, phaseName, seqNo, enabled }
+      ? { ruleName, phaseName, phaseType, phaseValue, seqNo, enabled }
       : { ruleName, groupName, seqNo }
 
     let res
@@ -1204,7 +1447,12 @@ function bindEvents() {
     state.analysis.selected.clear()
     byId('analysisKeyword').value = ''
     byId('analysisPageSize').value = String(state.analysis.pageSize)
+    const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="PhaseVoltage"]')
+    if (defaultReferenceRadio) defaultReferenceRadio.checked = true
+    const customReferenceInput = byId('customReferenceVoltage')
+    if (customReferenceInput) customReferenceInput.value = ''
     state.analyzeRecoverAuto = true
+    syncAnalyzeReferenceUi()
     syncAnalyzeRecoverThresholdIfAuto()
     openDialog('analyzeModal')
     await loadAnalyses()
@@ -1245,6 +1493,11 @@ function bindEvents() {
   on('hysteresisPct', 'input', () => syncAnalyzeRecoverThresholdIfAuto())
   on('recoverThresholdPct', 'input', () => {
     state.analyzeRecoverAuto = false
+  })
+  document.querySelectorAll('input[name="referenceTypeRadio"]').forEach((el) => {
+    el.addEventListener('change', () => {
+      updateAnalyzeReferenceModeUi()
+    })
   })
 
   on('btnOpenChannelRules', 'click', async () => {
@@ -1297,6 +1550,16 @@ function bindEvents() {
     loadRules()
   })
 
+  on('phaseNameSelect', 'change', () => {
+    const nextType = getDefaultPhaseType(byId('phaseNameSelect').value)
+    byId('phaseTypeSelect').value = String(nextType)
+    syncPhaseRuleValueByType(true)
+  })
+
+  on('phaseTypeSelect', 'change', () => {
+    syncPhaseRuleValueByType(true)
+  })
+
   on('btnRuleAdd', 'click', () => openRuleEdit(null))
   on('btnSaveRule', 'click', saveRule)
 
@@ -1307,10 +1570,12 @@ function bindEvents() {
 async function init() {
   bindEvents()
   syncRuleTabUi()
+  syncAnalyzeReferenceUi()
   startPolling()
 
   state.pageSize = Number(byId('pageSize').value || 10)
-  byId('referenceVoltage').value = '57.74'
+  const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="PhaseVoltage"]')
+  if (defaultReferenceRadio) defaultReferenceRadio.checked = true
   byId('sagThresholdPct').value = '90'
   byId('interruptThresholdPct').value = '10'
   byId('hysteresisPct').value = '2'

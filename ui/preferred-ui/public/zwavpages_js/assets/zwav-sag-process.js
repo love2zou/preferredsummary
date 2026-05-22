@@ -39,11 +39,7 @@ const state = {
   selected: new Set(),
   hidden: new Set(),
   rmsHidden: new Set(),
-  thresholdHidden: {
-    sag: false,
-    recover: false,
-    interrupt: false
-  },
+  rawThresholdHidden: { sag: false, recover: false, interrupt: false },
   rawZoomApplied: false,
   rawZoomState: null,
   rawUserZoomed: false,
@@ -135,16 +131,6 @@ function formatUtcMs(str) {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}.${ms}`
 }
 
-function formatSagOccurTime(evt) {
-  const base = state.process?.faultStartTime || state.process?.waveStartTimeUtc
-  const offsetMs = Number(evt?.startMs)
-  if (base && Number.isFinite(offsetMs)) {
-    const d = new Date(base)
-    if (!Number.isNaN(d.getTime())) return formatUtcMs(new Date(d.getTime() + offsetMs).toISOString())
-  }
-  return evt?.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt?.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-')
-}
-
 function formatAbsTimeFromOffsetMs(offsetMs) {
   const n = Number(offsetMs)
   if (!Number.isFinite(n)) return '-'
@@ -161,29 +147,164 @@ function formatAbsTimeFromOffsetMs(offsetMs) {
   return `${hh}:${mi}:${ss}.${ms}`
 }
 
-function getSagRowKey(evt) {
-  const channelIndex = Number(evt?.channelIndex ?? 0)
-  const phase = String(evt?.phase || '')
-  const startMs = Number(evt?.startMs ?? 0)
-  const endMs = Number(evt?.endMs ?? 0)
-  const kind = String(evt?.eventType || '')
-  return `${channelIndex}-${phase}-${kind}-${startMs}-${endMs}`
+function normalizePhaseValue(value) {
+  return String(value || '').trim().toUpperCase()
 }
 
-function isMarkerForChannel(entry, channelIndex, phase, channelName) {
-  const entryChannelIndex = Number(entry?.channelIndex)
-  if (Number.isFinite(entryChannelIndex) && entryChannelIndex > 0) {
-    return entryChannelIndex === Number(channelIndex)
+function normalizeChannelName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[\s_\-]+/g, '')
+    .replace(/[()（）\[\]【】]/g, '')
+    .toLowerCase()
+}
+
+function inferPhaseFromTexts(...values) {
+  const raw = values
+    .map((item) => String(item || '').trim().toUpperCase())
+    .filter(Boolean)
+    .join(' ')
+
+  if (!raw) return ''
+
+  const compact = raw.replace(/[\s_\-\/\\]+/g, '')
+  const contains = (keyword) => {
+    const normalized = String(keyword || '').toUpperCase()
+    const compactKeyword = normalized.replace(/[\s_\-\/\\]+/g, '')
+    return raw.includes(normalized) || compact.includes(compactKeyword)
   }
 
-  const entryChannelName = String(entry?.channelName || '').trim()
-  if (entryChannelName && channelName && entryChannelName === channelName) {
+  if (contains('UAB') || contains('AB线') || contains('AB相') || contains('AB PHASE')) return 'AB'
+  if (contains('UBC') || contains('BC线') || contains('BC相') || contains('BC PHASE')) return 'BC'
+  if (contains('UCA') || contains('CA线') || contains('CA相') || contains('CA PHASE')) return 'CA'
+  if (contains('VAN') || contains('UA') || contains('A相') || contains('A PHASE')) return 'A'
+  if (contains('VBN') || contains('UB') || contains('B相') || contains('B PHASE')) return 'B'
+  if (contains('VCN') || contains('UC') || contains('C相') || contains('C PHASE')) return 'C'
+  return ''
+}
+
+function getVoltageChannelByIndex(channelIndex) {
+  const idx = Number(channelIndex)
+  if (!Number.isFinite(idx)) return null
+  return state.voltageChannels.find((c) => Number(c.channelIndex) === idx) || null
+}
+
+function getVoltageChannelByName(channelName) {
+  const target = normalizeChannelName(channelName)
+  if (!target) return null
+
+  let fallback = null
+  for (const channel of state.voltageChannels || []) {
+    const rawName = String(channel?.channelName || '')
+    const direct = normalizeChannelName(rawName)
+    if (direct && direct === target) return channel
+
+    const cleanName = rawName.replace(/[\(\（\[].*[\)\）\]]\s*$/, '').trim()
+    const clean = normalizeChannelName(cleanName)
+    if (clean && clean === target) fallback = channel
+  }
+
+  return fallback
+}
+
+function getUniqueChannelCountByPhase(phase) {
+  const normalized = normalizePhaseValue(phase)
+  if (!normalized) return 0
+  return (state.voltageChannels || []).filter((c) => normalizePhaseValue(c?.phase) === normalized).length
+}
+
+function findVoltageChannelForEvent(evt) {
+  return getVoltageChannelByIndex(evt?.channelIndex)
+    || getVoltageChannelByName(evt?.channelName)
+    || null
+}
+
+function resolveEventPhase(evt) {
+  const channel = findVoltageChannelForEvent(evt)
+  const inferredChannelPhase = inferPhaseFromTexts(channel?.channelName, channel?.channelCode)
+  if (inferredChannelPhase) return inferredChannelPhase
+
+  const channelPhase = normalizePhaseValue(channel?.phase)
+  if (channelPhase) return channelPhase
+
+  const inferredEventPhase = inferPhaseFromTexts(evt?.channelName)
+  if (inferredEventPhase) return inferredEventPhase
+
+  const eventPhase = normalizePhaseValue(evt?.phase || evt?.worstPhase || evt?.triggerPhase || evt?.endPhase)
+  return eventPhase || '-'
+}
+
+function getEventChannelToken(evt) {
+  const idx = Number(evt?.channelIndex)
+  if (Number.isFinite(idx)) return `idx:${idx}`
+
+  const channel = findVoltageChannelForEvent(evt)
+  const matchedIdx = Number(channel?.channelIndex)
+  if (Number.isFinite(matchedIdx)) return `idx:${matchedIdx}`
+
+  const name = normalizeChannelName(evt?.channelName)
+  if (name) return `name:${name}`
+
+  return `phase:${resolveEventPhase(evt)}`
+}
+
+function eventMatchesChannel(evt, channel) {
+  const eventIdx = Number(evt?.channelIndex)
+  const channelIdx = Number(channel?.channelIndex)
+  if (Number.isFinite(eventIdx) && Number.isFinite(channelIdx)) {
+    return eventIdx === channelIdx
+  }
+
+  const matchedChannel = findVoltageChannelForEvent(evt)
+  const matchedIdx = Number(matchedChannel?.channelIndex)
+  if (Number.isFinite(matchedIdx) && Number.isFinite(channelIdx)) {
+    return matchedIdx === channelIdx
+  }
+
+  const eventName = normalizeChannelName(evt?.channelName)
+  const channelName = normalizeChannelName(channel?.channelName)
+  if (eventName && channelName && eventName === channelName) {
     return true
   }
 
-  // 原始波形上的暂降区间和事件标记必须精确命中通道，
-  // 不能再仅按 A/B/C 相别兜底，否则同相别的其他电压通道也会被误标记。
+  const eventPhase = resolveEventPhase(evt)
+  const channelPhase = normalizePhaseValue(channel?.phase)
+  if (eventPhase && channelPhase && eventPhase === channelPhase) {
+    return getUniqueChannelCountByPhase(channelPhase) === 1
+  }
+
   return false
+}
+
+function markerMatchesChannel(marker, channel) {
+  const markerIdx = Number(marker?.channelIndex)
+  const channelIdx = Number(channel?.channelIndex)
+  if (Number.isFinite(markerIdx) && Number.isFinite(channelIdx)) {
+    return markerIdx === channelIdx
+  }
+
+  const markerName = normalizeChannelName(marker?.channelName)
+  const channelName = normalizeChannelName(channel?.channelName)
+  if (markerName && channelName && markerName === channelName) {
+    return true
+  }
+
+  const markerPhase = normalizePhaseValue(marker?.phase)
+  const channelPhase = normalizePhaseValue(channel?.phase)
+  if (markerPhase && channelPhase && markerPhase === channelPhase) {
+    return getUniqueChannelCountByPhase(channelPhase) === 1
+  }
+
+  return false
+}
+
+function getSagRowKey(evt) {
+  const phase = resolveEventPhase(evt)
+  const channelToken = getEventChannelToken(evt)
+  const startMs = Number(evt?.startMs ?? 0)
+  const endMs = Number(evt?.endMs ?? 0)
+  const kind = String(evt?.eventType || '')
+  return `${channelToken}-${phase}-${kind}-${startMs}-${endMs}`
 }
 
 function pickFocusEvent() {
@@ -342,37 +463,6 @@ function getRefVoltage() {
   const pv = Number(p[0]?.referenceVoltage)
   if (Number.isFinite(pv) && pv > 0) return pv
   return 0
-}
-
-function getRefVoltageForChannel(channelIndex, phase) {
-  const pushIfValid = (list, value) => {
-    const n = Number(value)
-    if (Number.isFinite(n) && n > 0) list.push(n)
-  }
-
-  const candidates = []
-  pushIfValid(candidates, state.params.referenceVoltage)
-  pushIfValid(candidates, state.process?.event?.referenceVoltage)
-
-  const phases = Array.isArray(state.process?.phases) ? state.process.phases : []
-  const phaseText = String(phase || '').trim().toUpperCase()
-
-  for (const item of phases) {
-    if (Number(item?.channelIndex) === Number(channelIndex)) pushIfValid(candidates, item?.referenceVoltage)
-  }
-  for (const item of phases) {
-    if (String(item?.phase || '').trim().toUpperCase() === phaseText) pushIfValid(candidates, item?.referenceVoltage)
-  }
-
-  const rmsPoints = Array.isArray(state.process?.rmsPoints) ? state.process.rmsPoints : []
-  for (const item of rmsPoints) {
-    if (Number(item?.channelIndex) === Number(channelIndex)) {
-      pushIfValid(candidates, item?.referenceVoltage)
-      if (candidates.length) break
-    }
-  }
-
-  return candidates.length ? candidates[0] : 0
 }
 
 function renderHeader() {
@@ -856,8 +946,8 @@ function renderSagTable() {
   }
 
   const rows = (state.process?.computedEvents || []).slice().sort((a, b) => {
-    const pa = phaseRank(a?.phase)
-    const pb = phaseRank(b?.phase)
+    const pa = phaseRank(resolveEventPhase(a))
+    const pb = phaseRank(resolveEventPhase(b))
     if (pa !== pb) return pa - pb
 
     const ca = String(a?.channelName || '').trim()
@@ -877,15 +967,16 @@ function renderSagTable() {
     .map((evt, idx) => {
       const key = getSagRowKey(evt)
       const checked = state.sagSelectedKeys.has(key) ? 'checked' : ''
-      const occur = formatSagOccurTime(evt)
+      const occur = evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-')
       const typeText = evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : String(evt.eventType || '-')
       const chText = evt.channelName ? String(evt.channelName) : '-'
+      const phaseText = resolveEventPhase(evt)
       return `
         <tr>
           <td class="cell-center"><input type="checkbox" class="sag-check" data-key="${escapeHtml(key)}" ${checked}></td>
           <td class="cell-center">${idx + 1}</td>
           <td title="${escapeHtml(chText)}">${escapeHtml(chText)}</td>
-          <td class="cell-center">${escapeHtml(String(evt.phase || '-'))}</td>
+          <td class="cell-center">${escapeHtml(phaseText)}</td>
           <td class="cell-center">${escapeHtml(typeText)}</td>
           <td>${escapeHtml(occur)}</td>
           <td>${escapeHtml(formatMs(evt.durationMs))}</td>
@@ -980,16 +1071,15 @@ function updateToleranceChart() {
       const x = Number(evt.durationMs) / 1000
       const y = Number(evt.residualVoltagePct)
       if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0) return null
-      const phase = String(evt.phase || '-')
       return {
         key: getSagRowKey(evt),
-        label: `${phase}相 ${x.toFixed(3)}s ${y.toFixed(2)}%`,
+        label: `${resolveEventPhase(evt)}相 ${x.toFixed(3)}s ${y.toFixed(2)}%`,
         color: RAW_COLORS[idx % RAW_COLORS.length],
         value: [x, y],
-        phase,
+        phase: resolveEventPhase(evt),
         durationMs: evt.durationMs,
         durationSec: x,
-        occurTimeText: formatSagOccurTime(evt),
+        occurTimeText: evt.occurTimeUtc ? formatUtcMs(evt.occurTimeUtc) : (evt.startTimeUtc ? formatUtcMs(evt.startTimeUtc) : '-'),
         eventTypeText: evt.eventType === 'Interruption' ? '中断' : evt.eventType === 'Sag' ? '暂降' : evt.eventType || '-',
         residualVoltage: evt.residualVoltage,
         residualVoltagePct: evt.residualVoltagePct,
@@ -1362,9 +1452,9 @@ function renderRawLegend() {
     const hiddenCls = state.rmsHidden.has(channelIndex) ? 'style="opacity:0.45"' : ''
     items.push(`<span class="raw-legend-item" data-kind="rms" data-idx="${escapeHtml(channelIndex)}" ${hiddenCls}><span class="legend-line rms" style="background:${RMS_COLORS[i % RMS_COLORS.length]}"></span><span class="legend-text">${escapeHtml(label)}</span></span>`)
   })
-  items.push(`<span class="raw-legend-item ${state.thresholdHidden.sag ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="sag"><span class="legend-dash dash-sag"></span><span class="legend-text">暂降阈值</span></span>`)
-  items.push(`<span class="raw-legend-item ${state.thresholdHidden.recover ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="recover"><span class="legend-dash dash-recover"></span><span class="legend-text">恢复阈值</span></span>`)
-  items.push(`<span class="raw-legend-item ${state.thresholdHidden.interrupt ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="interrupt"><span class="legend-dash dash-interrupt"></span><span class="legend-text">中断阈值</span></span>`)
+  items.push(`<span class="raw-legend-item ${state.rawThresholdHidden.sag ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="sag"><span class="legend-dash dash-sag"></span><span class="legend-text">暂降阈值</span></span>`)
+  items.push(`<span class="raw-legend-item ${state.rawThresholdHidden.recover ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="recover"><span class="legend-dash dash-recover"></span><span class="legend-text">恢复阈值</span></span>`)
+  items.push(`<span class="raw-legend-item ${state.rawThresholdHidden.interrupt ? 'is-hidden' : ''}" data-kind="threshold" data-threshold="interrupt"><span class="legend-dash dash-interrupt"></span><span class="legend-text">中断阈值</span></span>`)
   items.push(`<span class="raw-legend-item"><span class="legend-area"></span><span class="legend-text">暂降区间</span></span>`)
   items.push(`<span class="raw-legend-item"><span class="legend-vline"></span><span class="legend-text">开始/结束</span></span>`)
   setHtml('rawLegend', items.join(''))
@@ -1394,9 +1484,9 @@ function renderRawLegend() {
   byId('rawLegend').querySelectorAll('.raw-legend-item[data-kind="threshold"]').forEach((el) => {
     el.addEventListener('click', () => {
       saveRawZoomState()
-      const threshold = String(el.getAttribute('data-threshold') || '')
-      if (!threshold) return
-      state.thresholdHidden[threshold] = !state.thresholdHidden[threshold]
+      const key = String(el.getAttribute('data-threshold') || '')
+      if (!key || !(key in state.rawThresholdHidden)) return
+      state.rawThresholdHidden[key] = !state.rawThresholdHidden[key]
       renderRawLegend()
       updateRawChart()
     })
@@ -1439,6 +1529,7 @@ function updateRawChart() {
   const series = []
 
   const topBase = 20
+  const refV = getRefVoltage()
   const sagPct = Number(state.params.sagThresholdPct ?? 90)
   const interruptPct = Number(state.params.interruptThresholdPct ?? 10)
   const hysteresisPct = Number(state.params.hysteresisPct ?? 2)
@@ -1471,7 +1562,15 @@ function updateRawChart() {
       nameLocation: 'middle',
       nameRotate: 0,
       nameGap: 5,
-      nameTextStyle: { fontSize: 12, fontWeight: 700, color: '#303133' },
+      nameTextStyle: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: '#606266',
+        width: 120,
+        overflow: 'truncate',
+        align: 'right',
+        verticalAlign: 'middle'
+      },
       axisLabel: { show: false },
       axisTick: { show: false },
       scale: true
@@ -1492,10 +1591,7 @@ function updateRawChart() {
     const rmsColor = RMS_COLORS[colorIndex % RMS_COLORS.length]
 
     const ch = state.voltageChannels.find((c) => Number(c.channelIndex) === Number(channelIndex))
-    const phase = String(ch?.phase || '').toUpperCase()
     const name = ch ? `${ch.channelIndex}. ${ch.channelName || ''}` : `CH${channelIndex}`
-    const channelName = String(ch?.channelName || '').trim()
-    const channelRefV = getRefVoltageForChannel(channelIndex, phase)
     yAxis[i].name = name
 
     const rawSeriesIndex = series.length
@@ -1532,11 +1628,11 @@ function updateRawChart() {
 
     const baseSeriesIndex = rawSeriesIndex
 
-    if (channelRefV > 0) {
-      const sagY = (channelRefV * sagPct) / 100
-      const recoverY = (channelRefV * recoverPct) / 100
-      const interruptY = (channelRefV * interruptPct) / 100
-      if (!state.thresholdHidden.sag) {
+    if (refV > 0) {
+      const sagY = (refV * sagPct) / 100
+      const recoverY = (refV * recoverPct) / 100
+      const interruptY = (refV * interruptPct) / 100
+      if (!state.rawThresholdHidden.sag) {
         series.push({
           id: `sag-threshold-${channelIndex}`,
           name: `暂降阈值-${channelIndex}`,
@@ -1544,13 +1640,11 @@ function updateRawChart() {
           xAxisIndex: i,
           yAxisIndex: i,
           showSymbol: false,
-          silent: true,
-          z: 8,
-          lineStyle: { type: 'dashed', width: 2, color: '#1677ff', opacity: 1 },
+          lineStyle: { type: 'dashed', width: 1, color: '#1677ff' },
           data: buildHorizontalLineData(xTimes, sagY)
         })
       }
-      if (!state.thresholdHidden.recover) {
+      if (!state.rawThresholdHidden.recover) {
         series.push({
           id: `recover-threshold-${channelIndex}`,
           name: `恢复阈值-${channelIndex}`,
@@ -1558,13 +1652,11 @@ function updateRawChart() {
           xAxisIndex: i,
           yAxisIndex: i,
           showSymbol: false,
-          silent: true,
-          z: 7,
-          lineStyle: { type: 'dashed', width: 1.5, color: '#52c41a', opacity: 0.95 },
+          lineStyle: { type: 'dashed', width: 1, color: '#52c41a' },
           data: buildHorizontalLineData(xTimes, recoverY)
         })
       }
-      if (!state.thresholdHidden.interrupt) {
+      if (!state.rawThresholdHidden.interrupt) {
         series.push({
           id: `interrupt-threshold-${channelIndex}`,
           name: `中断阈值-${channelIndex}`,
@@ -1572,9 +1664,7 @@ function updateRawChart() {
           xAxisIndex: i,
           yAxisIndex: i,
           showSymbol: false,
-          silent: true,
-          z: 7,
-          lineStyle: { type: 'dashed', width: 1.5, color: '#fa8c16', opacity: 0.95 },
+          lineStyle: { type: 'dashed', width: 1, color: '#fa8c16' },
           data: buildHorizontalLineData(xTimes, interruptY)
         })
       }
@@ -1583,13 +1673,13 @@ function updateRawChart() {
     const markAreas = []
     const markAreaKeys = new Set()
     for (const evt of state.process?.computedEvents || []) {
-      if (!isMarkerForChannel(evt, channelIndex, phase, channelName)) continue
+      if (!eventMatchesChannel(evt, ch)) continue
       const s = Number(evt?.startMs)
       const e = Number(evt?.endMs)
       if (!Number.isFinite(s) || !Number.isFinite(e)) continue
       const si = findNearestIndex(xTimes, s)
       const ei = findNearestIndex(xTimes, e)
-      const areaKey = `${Number(evt?.channelIndex ?? 0)}-${s}-${e}-${String(evt?.eventType || '')}`
+      const areaKey = `${xTimes[si]}-${xTimes[ei]}`
       if (markAreaKeys.has(areaKey)) continue
       markAreaKeys.add(areaKey)
       markAreas.push([{ xAxis: xTimes[si] }, { xAxis: xTimes[ei] }])
@@ -1605,16 +1695,17 @@ function updateRawChart() {
     const lines = []
     const lineKeys = new Set()
     for (const m of state.process?.markers || []) {
-      if (!isMarkerForChannel(m, channelIndex, phase, channelName)) continue
+      if (!markerMatchesChannel(m, ch)) continue
       const t = Number(m?.timeMs)
       if (!Number.isFinite(t)) continue
       const idx2 = findNearestIndex(xTimes, t)
-      const lineKey = `${String(m?.kind || '')}-${Number(m?.channelIndex ?? 0)}-${t}-${String(m?.label || '')}`
+      const labelText = String(m?.label || m?.kind || '')
+      const lineKey = `${xTimes[idx2]}-${labelText}`
       if (lineKeys.has(lineKey)) continue
       lineKeys.add(lineKey)
       lines.push({
         xAxis: xTimes[idx2],
-        name: String(m?.label || m?.kind || ''),
+        name: labelText,
         label: { show: true, formatter: String(m?.label || ''), fontSize: 10 }
       })
     }
@@ -1696,7 +1787,6 @@ function updateRawChart() {
   state.rawChart.resize()
   scheduleMarkerRender()
 
-  const refV = getRefVoltage()
   setText(
     'rawSub',
     `参考电压：${refV ? refV.toFixed(2) : '-'} V，暂降阈值：${formatPercent(sagPct)}%，中断阈值：${formatPercent(interruptPct)}%，迟滞：${formatPercent(hysteresisPct)}%，最小持续：${formatMs(state.params.minDurationMs)} ms`
@@ -1718,10 +1808,13 @@ function buildReportLines() {
     return lines
   }
 
-  const normPhase = (p) => String(p || '').toUpperCase()
+  const normPhase = (value) => {
+    if (value && typeof value === 'object') return resolveEventPhase(value)
+    return normalizePhaseValue(value)
+  }
   const isSag = (e) => String(e?.eventType || '').toLowerCase() === 'sag'
   const isInterrupt = (e) => String(e?.eventType || '').toLowerCase() === 'interruption'
-  const phaseSet = new Set(rows.map((x) => normPhase(x?.phase)).filter(Boolean))
+  const phaseSet = new Set(rows.map((x) => normPhase(x)).filter((x) => x && x !== '-'))
   const phases = Array.from(phaseSet)
   const isThree = ['A', 'B', 'C'].every((p) => phaseSet.has(p))
 
@@ -1745,14 +1838,14 @@ function buildReportLines() {
 
   if (Number.isFinite(overallMaxMag)) {
     const worstRows = rows.filter((x) => Number(x?.sagMagnitudePct) === overallMaxMag)
-    const worstPhases = Array.from(new Set(worstRows.map((x) => normPhase(x?.phase)).filter(Boolean)))
+    const worstPhases = Array.from(new Set(worstRows.map((x) => normPhase(x)).filter((x) => x && x !== '-')))
     lines.push(`最大暂降幅值：${formatPercent(overallMaxMag)}%（相别：${worstPhases.join('/') || '-'}）。`)
   }
   if (Number.isFinite(overallMinResidual)) lines.push(`最低残余电压：${formatPercent(overallMinResidual)}%。`)
   if (Number.isFinite(overallMaxDur)) lines.push(`最长持续时间：${formatMs(overallMaxDur)} ms。`)
 
   const perPhase = phases.map((p) => {
-    const list = rows.filter((x) => normPhase(x?.phase) === p)
+    const list = rows.filter((x) => normPhase(x) === p)
     const pMaxMag = list.reduce((m, x) => {
       const v = Number(x?.sagMagnitudePct)
       return Number.isFinite(v) ? Math.max(m, v) : m
@@ -1802,7 +1895,7 @@ function buildReportLines() {
     if (Number.isFinite(item.pMinResidual)) lines.push(`- 最低残余电压：${formatPercent(item.pMinResidual)}%。`)
     if (Number.isFinite(item.pMaxDur)) lines.push(`- 最长持续：${formatMs(item.pMaxDur)} ms。`)
     if (item.worstEvt) {
-      const t = formatSagOccurTime(item.worstEvt)
+      const t = item.worstEvt.occurTimeUtc ? formatUtcMs(item.worstEvt.occurTimeUtc) : '-'
       lines.push(`- 最严重事件时间：${t}；持续 ${formatMs(item.worstEvt.durationMs)} ms；幅值 ${formatPercent(item.worstEvt.sagMagnitudePct)}%。`)
     }
   }
@@ -1913,7 +2006,7 @@ function analyzeToleranceCurve(events) {
       const worstOutside = outsideEvents.reduce((a, b) =>
         Number(a.residualVoltagePct) < Number(b.residualVoltagePct) ? a : b
       )
-      details.push(`越界最严重：${worstOutside.phase || '-'}相 ${(Number(worstOutside.durationMs) / 1000).toFixed(3)}s ${Number(worstOutside.residualVoltagePct).toFixed(2)}%`)
+      details.push(`越界最严重：${resolveEventPhase(worstOutside)}相 ${(Number(worstOutside.durationMs) / 1000).toFixed(3)}s ${Number(worstOutside.residualVoltagePct).toFixed(2)}%`)
     }
   } else {
     summary.push('所有事件均超出新版容忍度曲线范围')

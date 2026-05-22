@@ -27,6 +27,8 @@ namespace Preferred.Api.Services
         {
             public string Keyword { get; set; }
             public string PhaseName { get; set; }
+            public int PhaseType { get; set; }
+            public decimal PhaseValue { get; set; }
             public bool Enabled { get; set; }
         }
 
@@ -34,6 +36,8 @@ namespace Preferred.Api.Services
         {
             public bool HasMatch { get; set; }
             public string PhaseName { get; set; }
+            public int PhaseType { get; set; }
+            public decimal PhaseValue { get; set; }
             public bool Enabled { get; set; }
         }
 
@@ -148,18 +152,40 @@ namespace Preferred.Api.Services
             if (text.Length == 0)
                 return string.Empty;
 
-            var builtIn = MatchBuiltInPhase(text);
-            if (!string.IsNullOrWhiteSpace(builtIn))
-                return builtIn;
+            // 两阶段识别：
+            // 1. 先用启用规则识别相别，保证词库显式配置优先生效；
+            // 2. 在已识别出的候选结果上，再检查是否命中排除规则。
+            var enabledRule = MatchEnabledRule(channelName, channelCode, unit, rules);
+            string phase = enabledRule.HasMatch
+                ? (enabledRule.PhaseName ?? string.Empty)
+                : MatchBuiltInPhase(text);
 
-            var matchedRule = MatchRule(channelName, channelCode, unit, rules);
-            if (matchedRule.HasMatch)
-                return matchedRule.Enabled ? matchedRule.PhaseName ?? string.Empty : string.Empty;
+            if (string.IsNullOrWhiteSpace(phase))
+                return string.Empty;
 
-            return string.Empty;
+            var excludedRule = MatchExcludedRule(channelName, channelCode, unit, rules);
+            if (excludedRule.HasMatch)
+                return string.Empty;
+
+            return phase;
         }
 
         public static RuleMatchResult MatchRule(string channelName, string channelCode, string unit, RuleItem[] rules)
+        {
+            return MatchRule(channelName, channelCode, unit, rules, enabledFilter: null);
+        }
+
+        public static RuleMatchResult MatchEnabledRule(string channelName, string channelCode, string unit, RuleItem[] rules)
+        {
+            return MatchRule(channelName, channelCode, unit, rules, enabledFilter: true);
+        }
+
+        public static RuleMatchResult MatchExcludedRule(string channelName, string channelCode, string unit, RuleItem[] rules)
+        {
+            return MatchRule(channelName, channelCode, unit, rules, enabledFilter: false);
+        }
+
+        private static RuleMatchResult MatchRule(string channelName, string channelCode, string unit, RuleItem[] rules, bool? enabledFilter)
         {
             var text = BuildMatchText(channelName, channelCode, unit);
             if (text.Length == 0 || rules == null || rules.Length == 0)
@@ -174,6 +200,9 @@ namespace Preferred.Api.Services
                 if (rule == null || string.IsNullOrEmpty(rule.Keyword) || string.IsNullOrEmpty(rule.PhaseName))
                     continue;
 
+                if (enabledFilter.HasValue && rule.Enabled != enabledFilter.Value)
+                    continue;
+
                 if (!ContainsKeyword(text, rule.Keyword))
                     continue;
 
@@ -186,6 +215,8 @@ namespace Preferred.Api.Services
                 {
                     HasMatch = true,
                     PhaseName = rule.PhaseName,
+                    PhaseType = rule.PhaseType,
+                    PhaseValue = rule.PhaseValue,
                     Enabled = rule.Enabled
                 };
             }
@@ -294,6 +325,8 @@ namespace Preferred.Api.Services
                     {
                         x.RuleName,
                         x.PhaseName,
+                        x.PhaseType,
+                        x.PhaseValue,
                         x.Enabled
                     })
                     .ToListAsync()
@@ -305,6 +338,8 @@ namespace Preferred.Api.Services
                     {
                         Keyword = NormalizeKeyword(x.RuleName),
                         PhaseName = NormalizePhaseName(x.PhaseName),
+                        PhaseType = x.PhaseType,
+                        PhaseValue = x.PhaseValue,
                         Enabled = x.Enabled
                     })
                     .Where(x => !string.IsNullOrWhiteSpace(x.Keyword) && !string.IsNullOrWhiteSpace(x.PhaseName))

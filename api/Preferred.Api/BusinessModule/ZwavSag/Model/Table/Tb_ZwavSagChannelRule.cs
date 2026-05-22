@@ -14,6 +14,10 @@ namespace Preferred.Api.Models
 
         public string PhaseName { get; set; }
 
+        public int PhaseType { get; set; }
+
+        public decimal PhaseValue { get; set; }
+
         public int SeqNo { get; set; }
 
         public bool Enabled { get; set; } = true;

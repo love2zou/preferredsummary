@@ -6,6 +6,94 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>录波暂降分析（HTML+JS）</title>
   <link href="./assets/app.css" rel="stylesheet" />
+  <style>
+    .reference-option-group {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    .reference-option-card {
+      display: flex;
+      align-items: center;
+      min-height: 52px;
+      padding: 10px 14px;
+      border: 1px solid #dcdfe6;
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .reference-option-card:hover {
+      border-color: #79bbff;
+      box-shadow: 0 8px 16px rgba(64, 158, 255, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .reference-option-card.is-active {
+      border-color: #409eff;
+      box-shadow: 0 10px 24px rgba(64, 158, 255, 0.14);
+      background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+    }
+
+    .reference-option-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #303133;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .reference-option-card input[type="radio"] {
+      margin: 0;
+      flex: 0 0 auto;
+    }
+
+    .reference-option-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .reference-option-desc {
+      font-size: 12px;
+      color: #909399;
+    }
+
+    .custom-reference-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px dashed #c0c4cc;
+      background: #fff;
+    }
+
+    .custom-reference-wrap.is-visible {
+      display: inline-flex;
+    }
+
+    .custom-reference-wrap label {
+      white-space: nowrap;
+      color: #606266;
+    }
+
+    @media (max-width: 768px) {
+      .custom-reference-wrap.is-visible {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -141,9 +229,49 @@
       </div>
       <div class="el-dialog__body">
         <div class="analyze-params">
-          <div class="search-item">
-            <label>参考电压(V)</label>
-            <input id="referenceVoltage" type="number" step="0.01" class="el-input" min="0" />
+          <div class="search-item reference-mode-item">
+            <label id="referenceTypeLabel">参考电压处理</label>
+            <div class="reference-option-group" id="referenceOptionGroup">
+              <label class="reference-option-card" data-reference-mode="PhaseVoltage">
+                <span class="reference-option-header">
+                  <input type="radio" name="referenceTypeRadio" value="PhaseVoltage" checked />
+                  <span class="reference-option-text">
+                    <span>相电压</span>
+                    <span class="reference-option-desc">57.74V</span>
+                  </span>
+                </span>
+              </label>
+              <label class="reference-option-card" data-reference-mode="LineVoltage">
+                <span class="reference-option-header">
+                  <input type="radio" name="referenceTypeRadio" value="LineVoltage" />
+                  <span class="reference-option-text">
+                    <span>线电压</span>
+                    <span class="reference-option-desc">100kV</span>
+                  </span>
+                </span>
+              </label>
+              <label class="reference-option-card" data-reference-mode="Adaptive">
+                <span class="reference-option-header">
+                  <input type="radio" name="referenceTypeRadio" value="Adaptive" />
+                  <span class="reference-option-text">
+                    <span>系统自适应处理</span>
+                  </span>
+                </span>
+              </label>
+              <label class="reference-option-card" data-reference-mode="CustomVoltage">
+                <span class="reference-option-header">
+                  <input type="radio" name="referenceTypeRadio" value="CustomVoltage" />
+                  <span class="reference-option-text">
+                    <span>自定义输入</span>
+                  </span>
+                </span>
+              </label>
+            </div>
+            <div class="custom-reference-wrap" id="customReferenceWrap">
+              <label for="customReferenceVoltage">自定义参考值</label>
+              <input id="customReferenceVoltage" type="number" step="0.01" min="0" class="el-input"
+                placeholder="请输入参考电压" />
+            </div>
           </div>
           <div class="search-item">
             <label>暂降阈值(%)</label>
@@ -206,7 +334,7 @@
   </div>
 
   <div class="el-dialog-mask" id="channelRuleModal">
-    <div class="el-dialog el-dialog--lg">
+    <div class="el-dialog el-dialog--lg channel-rule-dialog">
       <div class="el-dialog__header">
         <div class="el-dialog__title">电压暂降通道识别词库</div>
         <button class="el-dialog__close" data-dialog-close>×</button>
@@ -235,12 +363,12 @@
           <thead>
             <tr>
               <th class="cell-center" style="width: 60px">序号</th>
-              <th style="width: 220px">规则名称</th>
-              <th style="width: 120px" id="ruleValueHeader">相别</th>
-              <th class="cell-center" style="width: 90px" id="ruleEnabledHeader">启用</th>
-              <th style="width: 70px">排序号</th>
-              <th style="width: 120px">创建时间</th>
-              <th class="cell-center" style="width: 120px">操作</th>
+              <th style="width: 180px">规则名称</th>
+              <th style="width: 80px" id="ruleValueHeader">相别</th>
+              <th class="cell-center" style="width: 70px" id="ruleEnabledHeader">启用</th>
+              <th style="width: 84px">排序号</th>
+              <th style="width: 168px">创建时间</th>
+              <th class="cell-center" style="width: 110px">操作</th>
             </tr>
           </thead>
           <tbody id="ruleTbody"></tbody>
@@ -258,10 +386,10 @@
             页</span>
           <button class="el-button" id="ruleNext">下一页</button>
         </div>
+        <div class="el-dialog__footer">
+          <button class="el-button" data-dialog-close>关闭</button>
+        </div>
       </div>
-    </div>
-    <div class="el-dialog__footer">
-      <button class="el-button" data-dialog-close>关闭</button>
     </div>
   </div>
 
@@ -287,6 +415,18 @@
               <option value="BC">BC</option>
               <option value="CA">CA</option>
             </select>
+          </div>
+          <div class="search-item" id="phaseTypeFieldWrap">
+            <label>电压类型</label>
+            <select id="phaseTypeSelect" class="el-select">
+              <option value="1">相电压</option>
+              <option value="2">线电压</option>
+            </select>
+          </div>
+          <div class="search-item" id="phaseValueFieldWrap">
+            <label>相别电压值</label>
+            <input id="phaseValueInput" type="number" step="0.01" min="0" class="el-input"
+              placeholder="例如：57.74 或 100" />
           </div>
           <div class="search-item" id="enabledFieldWrap">
             <label>启用</label>
@@ -349,10 +489,10 @@
       margin-bottom: 15px;
       padding: 10px;
       display: flex;
-      align-items: center;
+      align-items: flex-end;
       justify-content: space-between;
       gap: 10px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       background-color: var(--el-fill-color-light);
       border-radius: 6px;
     }
@@ -370,6 +510,20 @@
       align-items: center;
       gap: 8px;
       flex: 0 0 auto;
+    }
+
+    .channel-rule-dialog {
+      width: min(1060px, calc(100vw - 32px));
+      max-width: calc(100vw - 32px);
+    }
+
+    #channelRuleModal .el-dialog__body {
+      overflow-x: hidden;
+    }
+
+    #channelRuleModal .el-table {
+      width: 100%;
+      table-layout: fixed;
     }
 
     .search-label {
@@ -445,25 +599,42 @@
 
     .analyze-params {
       display: grid;
-      grid-template-columns: repeat(3, minmax(260px, 1fr));
-      gap: 10px 14px;
-      align-items: end;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px 14px;
+      align-items: start;
       margin-bottom: 10px;
     }
 
     .analyze-params .search-item {
       width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
 
     .analyze-params .search-item label {
-      width: 92px;
+      width: 160px;
       text-align: right;
+      flex: 0 0 160px;
     }
 
-    .analyze-params .search-item .el-input {
+    .analyze-params .search-item .el-input,
+    .analyze-params .search-item .el-select {
       width: auto;
       flex: 1 1 auto;
       min-width: 0;
+    }
+
+    .analyze-params .search-item.reference-mode-item {
+      grid-column: 1 / -1;
+      display: block;
+    }
+
+    .analyze-params .search-item.reference-mode-item>label {
+      display: block;
+      width: auto;
+      text-align: left;
+      margin-bottom: 10px;
     }
 
     .rule-edit-form {
@@ -665,6 +836,29 @@
       display: flex;
       align-items: center;
       gap: 8px;
+    }
+
+    @media (max-width: 768px) {
+      .reference-option-group {
+        grid-template-columns: 1fr;
+      }
+
+      .reference-option-text {
+        white-space: normal;
+      }
+
+      .analyze-params {
+        grid-template-columns: 1fr;
+      }
+
+      .analyze-params .search-item {
+        align-items: flex-start;
+      }
+
+      .analyze-params .search-item label {
+        width: 84px;
+        flex-basis: 84px;
+      }
     }
   </style>
 

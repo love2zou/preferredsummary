@@ -96,6 +96,7 @@ namespace Zwav.Application.Sag
                 // 这样可以避免“高压侧参考值误用到中压/低压侧”造成整段误判。
                 decimal anchorReferenceVoltage = ResolveChannelReferenceVoltage(
                     context,
+                    channel,
                     rawSeries,
                     context.ReferenceVoltage);
 
@@ -1477,11 +1478,35 @@ namespace Zwav.Application.Sag
         /// </summary>
         private static decimal ResolveChannelReferenceVoltage(
             ZwavSagAnalyzeContext context,
+            ZwavVoltageChannelContext channel,
             ChannelRawRmsSeries rawSeries,
             decimal? forcedReferenceVoltage)
         {
             if (rawSeries?.Points == null || rawSeries.Points.Count == 0)
                 return 0m;
+
+            string referenceType = (context?.ReferenceType ?? string.Empty).Trim();
+            if (string.Equals(referenceType, "PhaseVoltage", StringComparison.OrdinalIgnoreCase))
+                return forcedReferenceVoltage.HasValue && forcedReferenceVoltage.Value > 0m
+                    ? decimal.Round(forcedReferenceVoltage.Value, 6)
+                    : 57.74m;
+
+            if (string.Equals(referenceType, "LineVoltage", StringComparison.OrdinalIgnoreCase))
+                return forcedReferenceVoltage.HasValue && forcedReferenceVoltage.Value > 0m
+                    ? decimal.Round(forcedReferenceVoltage.Value, 6)
+                    : 100m;
+
+            if (string.Equals(referenceType, "CustomVoltage", StringComparison.OrdinalIgnoreCase))
+                return forcedReferenceVoltage.HasValue && forcedReferenceVoltage.Value > 0m
+                    ? decimal.Round(forcedReferenceVoltage.Value, 6)
+                    : 0m;
+
+            if (string.Equals(referenceType, "Adaptive", StringComparison.OrdinalIgnoreCase) &&
+                channel?.PhaseValue.HasValue == true &&
+                channel.PhaseValue.Value > 0m)
+            {
+                return decimal.Round(channel.PhaseValue.Value, 6);
+            }
 
             // 先从通道自身推断参考值，作为真实量级基准。
             decimal inferredReference = InferChannelReferenceVoltage(rawSeries);
@@ -1590,9 +1615,9 @@ namespace Zwav.Application.Sag
         /// </summary>
         private static bool UseSlidingReference(ZwavSagAnalyzeContext context)
         {
-            return !string.Equals(
+            return string.Equals(
                 (context?.ReferenceType ?? string.Empty).Trim(),
-                "Declared",
+                "Sliding",
                 StringComparison.OrdinalIgnoreCase);
         }
 

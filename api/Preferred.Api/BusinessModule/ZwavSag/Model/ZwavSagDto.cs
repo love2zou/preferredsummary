@@ -115,6 +115,8 @@ namespace Zwav.Application.Sag
         public int Id { get; set; }
         public string RuleName { get; set; }
         public string PhaseName { get; set; }
+        public int PhaseType { get; set; }
+        public decimal PhaseValue { get; set; }
         public int SeqNo { get; set; }
         public bool Enabled { get; set; }
         public DateTime CrtTime { get; set; }
@@ -124,6 +126,8 @@ namespace Zwav.Application.Sag
     {
         public string RuleName { get; set; }
         public string PhaseName { get; set; }
+        public int PhaseType { get; set; }
+        public decimal PhaseValue { get; set; }
         public int SeqNo { get; set; }
         public bool Enabled { get; set; } = true;
     }
@@ -132,6 +136,8 @@ namespace Zwav.Application.Sag
     {
         public string RuleName { get; set; }
         public string PhaseName { get; set; }
+        public int? PhaseType { get; set; }
+        public decimal? PhaseValue { get; set; }
         public int? SeqNo { get; set; }
         public bool? Enabled { get; set; }
     }
