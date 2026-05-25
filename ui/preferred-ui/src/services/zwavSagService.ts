@@ -96,10 +96,9 @@ export type AnalyzeZwavSagRequest = {
   fileIds?: number[]
   analysisGuids?: string[]
   forceRebuild?: boolean
-  referenceType?: 'PhaseVoltage' | 'LineVoltage' | 'Adaptive' | 'CustomVoltage' | 'Declared' | 'Sliding' | string
+  referenceType?: 'Declared' | 'Sliding' | string
   referenceVoltage?: number
   sagThresholdPct?: number
-  recoverThresholdPct?: number | null
   interruptThresholdPct?: number
   hysteresisPct?: number
   minDurationMs?: number
@@ -344,29 +343,20 @@ export type ZwavSagChannelRuleDto = {
   id: number
   ruleName: string
   phaseName: string
-  phaseType: number
-  phaseValue: number
   seqNo: number
-  enabled: boolean
   crtTime: string
 }
 
 export type CreateZwavSagChannelRuleRequest = {
   ruleName: string
   phaseName: string
-  phaseType?: number
-  phaseValue?: number
   seqNo: number
-  enabled?: boolean
 }
 
 export type UpdateZwavSagChannelRuleRequest = {
   ruleName?: string
   phaseName?: string
-  phaseType?: number
-  phaseValue?: number
   seqNo?: number
-  enabled?: boolean
 }
 
 export const zwavSagService = {

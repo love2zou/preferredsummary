@@ -523,3 +523,14 @@ D:\github\preferredsummary\api\Preferred.Api\.codex-build\runtimes\win\lib\netco
 D:\github\preferredsummary\api\Preferred.Api\.codex-build\runtimes\win\lib\net7.0\System.Management.dll
 D:\github\preferredsummary\api\Preferred.Api\.codex-build\runtimes\win\lib\netstandard2.0\System.Security.Cryptography.ProtectedData.dll
 D:\github\preferredsummary\api\Preferred.Api\.codex-build\runtimes\win\lib\netcoreapp3.0\System.Windows.Extensions.dll
+D:\github\preferredsummary\.build\preferred-api-check\appsettings.Development.json
+D:\github\preferredsummary\.build\preferred-api-check\appsettings.json
+D:\github\preferredsummary\.build\preferred-api-check\package-lock.json
+D:\github\preferredsummary\.build\preferred-api-check\package.json
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.staticwebassets.runtime.json
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.exe
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.deps.json
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.runtimeconfig.json
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.dll
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.pdb
+D:\github\preferredsummary\.build\preferred-api-check\Preferred.Api.xml

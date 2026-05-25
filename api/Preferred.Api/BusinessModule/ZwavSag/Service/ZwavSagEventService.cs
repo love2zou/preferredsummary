@@ -350,24 +350,13 @@ namespace Preferred.Api.Services
                 .ToDictionaryAsync(x => x.FileId, x => x)
                 .ConfigureAwait(false);
 
-            var processingFileIds = await _context.ZwavSagEvents
-                .AsNoTracking()
-                .Where(x => fileIds.Contains(x.FileId) && x.Status == 1)
-                .Select(x => x.FileId)
-                .Distinct()
-                .ToListAsync()
-                .ConfigureAwait(false);
-
             var queuedEventIds = new List<int>();
             var queueRequest = CloneAnalyzeRequest(req);
             int queuedCount = 0;
 
             foreach (var fileId in fileIds)
             {
-                // 同一文件若已存在处理中事件，则跳过，避免重复分析。
-                if (processingFileIds.Contains(fileId))
-                    continue;
-
+                // 同一录波文件允许重复分析；每次点击都应生成一条新的分析记录并进入队列。
                 if (!files.TryGetValue(fileId, out var file) || file == null)
                 {
                     _logger.LogWarning("暂降分析入队跳过：未找到文件，FileId={FileId}", fileId);

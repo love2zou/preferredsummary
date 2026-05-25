@@ -38,8 +38,8 @@ namespace Preferred.Api.Extensions
             services.AddScoped<IZwavSagAnalyzer, ZwavSagAnalyzer>();
             services.AddSingleton<IZwavSagAnalysisQueue, ZwavSagAnalysisQueue>();
             services.AddScoped<IZwavSagEventService, ZwavSagEventService>();
-            services.AddHostedService<AnalysisWorker>();
             services.AddHostedService<ZwavSagAnalysisWorker>();
+            services.AddHostedService<AnalysisWorker>();
             //录波文件服务
             //视频分析服务
             services.AddScoped<IVideoAnalyticsService,VideoAnalyticsService>();
