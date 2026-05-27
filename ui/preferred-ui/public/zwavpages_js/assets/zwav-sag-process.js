@@ -59,6 +59,7 @@ const state = {
   searchLimit: 50000,
   searchDownSample: 1,
   params: {
+    referenceType: 'Adaptive',
     referenceVoltage: 0,
     sagThresholdPct: 90,
     recoverThresholdPct: null,
@@ -2108,6 +2109,10 @@ async function loadProcess() {
   state.process = res.data
   state.analysisGuid = res.data.analysisGuid || ''
   state.voltageChannels = res.data.voltageChannels || []
+  state.params.referenceType = inferRecalcReferenceMode(
+    res.data?.event?.referenceType,
+    res.data?.event?.referenceVoltage
+  )
   state.params.referenceVoltage = Number(res.data?.event?.referenceVoltage ?? 0) || 0
   state.params.sagThresholdPct = Number(res.data?.event?.sagThresholdPct ?? 90) || 90
   state.params.interruptThresholdPct = Number(res.data?.event?.interruptThresholdPct ?? 10) || 10
@@ -2280,6 +2285,49 @@ function setRecalcConfirmValue(id, v) {
   if (el) el.value = String(v ?? '')
 }
 
+function inferRecalcReferenceMode(referenceType, referenceVoltage) {
+  const rawType = String(referenceType || '').trim()
+  if (rawType) return rawType
+
+  const voltage = Number(referenceVoltage)
+  if (!Number.isFinite(voltage) || voltage <= 0) return 'Adaptive'
+  if (Math.abs(voltage - 57.74) < 0.01) return 'PhaseVoltage'
+  if (Math.abs(voltage - 100) < 0.01) return 'LineVoltage'
+  return 'CustomVoltage'
+}
+
+function getSelectedRecalcReferenceMode() {
+  return String(document.querySelector('input[name="recalcReferenceTypeRadio"]:checked')?.value || 'Adaptive').trim()
+}
+
+function updateRecalcReferenceModeUi() {
+  const activeMode = getSelectedRecalcReferenceMode()
+
+  document.querySelectorAll('[data-recalc-reference-mode]').forEach((el) => {
+    el.classList.toggle('is-active', el.getAttribute('data-recalc-reference-mode') === activeMode)
+  })
+
+  const customWrap = byId('recalcCustomReferenceWrap')
+  if (customWrap) customWrap.classList.toggle('is-visible', activeMode === 'CustomVoltage')
+
+  const legacyReferenceInput = byId('recalcReferenceVoltage')
+  const legacyReferenceRow = legacyReferenceInput && legacyReferenceInput.closest ? legacyReferenceInput.closest('tr') : null
+  if (legacyReferenceRow) legacyReferenceRow.style.display = 'none'
+}
+
+function resolveRecalcReferenceSelection() {
+  const raw = getSelectedRecalcReferenceMode()
+  if (raw === 'LineVoltage') return { referenceType: 'LineVoltage', referenceVoltage: 100 }
+  if (raw === 'Adaptive') return { referenceType: 'Adaptive', referenceVoltage: null }
+  if (raw === 'CustomVoltage') {
+    return {
+      referenceType: 'CustomVoltage',
+      referenceVoltage: Number(byId('recalcCustomReferenceVoltage')?.value || 0)
+    }
+  }
+  return { referenceType: 'PhaseVoltage', referenceVoltage: 57.74 }
+}
+
 function computeRecoverThresholdPct(sagThresholdPct, hysteresisPct) {
   const sag = Number(sagThresholdPct)
   const h = Number(hysteresisPct)
@@ -2297,7 +2345,13 @@ function syncRecalcRecoverThresholdIfAuto() {
 
 function openRecalcConfirm() {
   state.recalcRecoverAuto = true
-  setRecalcConfirmValue('recalcReferenceVoltage', state.params.referenceVoltage ?? 0)
+  const referenceMode = inferRecalcReferenceMode(state.params.referenceType, state.params.referenceVoltage)
+  const targetRadio = document.querySelector(`input[name="recalcReferenceTypeRadio"][value="${referenceMode}"]`)
+  if (targetRadio) targetRadio.checked = true
+  setRecalcConfirmValue(
+    'recalcCustomReferenceVoltage',
+    referenceMode === 'CustomVoltage' ? state.params.referenceVoltage ?? '' : ''
+  )
   setRecalcConfirmValue('recalcMinDurationMs', state.params.minDurationMs ?? 10)
   setRecalcConfirmValue('recalcSagThresholdPct', state.params.sagThresholdPct ?? 90)
   setRecalcConfirmValue('recalcInterruptThresholdPct', state.params.interruptThresholdPct ?? 10)
@@ -2306,20 +2360,53 @@ function openRecalcConfirm() {
   setRecalcConfirmValue(
     'recalcRecoverThresholdPct',
     Number.isFinite(Number(recover)) && Number(recover) > 0
-      ? recover
-      : computeRecoverThresholdPct(state.params.sagThresholdPct, state.params.hysteresisPct)
-  )
+        ? recover
+        : computeRecoverThresholdPct(state.params.sagThresholdPct, state.params.hysteresisPct)
+    )
+  updateRecalcReferenceModeUi()
   openDialog('recalcConfirmModal')
 }
 
 async function confirmRecalc() {
-  closeDialog('recalcConfirmModal')
-  state.params.referenceVoltage = Number(byId('recalcReferenceVoltage')?.value || state.params.referenceVoltage || 0)
-  state.params.minDurationMs = Number(byId('recalcMinDurationMs')?.value || state.params.minDurationMs || 10)
-  state.params.sagThresholdPct = Number(byId('recalcSagThresholdPct')?.value || state.params.sagThresholdPct || 90)
-  state.params.interruptThresholdPct = Number(byId('recalcInterruptThresholdPct')?.value || state.params.interruptThresholdPct || 10)
-  state.params.hysteresisPct = Number(byId('recalcHysteresisPct')?.value || state.params.hysteresisPct || 2)
+  const referenceSelection = resolveRecalcReferenceSelection()
+  const minDurationMs = Number(byId('recalcMinDurationMs')?.value || state.params.minDurationMs || 10)
+  const sagThresholdPct = Number(byId('recalcSagThresholdPct')?.value || state.params.sagThresholdPct || 90)
+  const interruptThresholdPct = Number(byId('recalcInterruptThresholdPct')?.value || state.params.interruptThresholdPct || 10)
+  const hysteresisPct = Number(byId('recalcHysteresisPct')?.value || state.params.hysteresisPct || 2)
   const recoverVal = Number(byId('recalcRecoverThresholdPct')?.value || 0)
+
+  if (referenceSelection.referenceType === 'CustomVoltage' && referenceSelection.referenceVoltage <= 0) {
+    showAlert('warning', '自定义参考电压必须大于 0')
+    return
+  }
+  if (sagThresholdPct <= 0 || sagThresholdPct > 100) {
+    showAlert('warning', '暂降阈值必须在 0-100 之间')
+    return
+  }
+  if (interruptThresholdPct <= 0 || interruptThresholdPct > 100) {
+    showAlert('warning', '中断阈值必须在 0-100 之间')
+    return
+  }
+  if (hysteresisPct < 0 || hysteresisPct > 20) {
+    showAlert('warning', '迟滞必须在 0-20 之间')
+    return
+  }
+  if (recoverVal > 0 && (recoverVal < sagThresholdPct || recoverVal > 100)) {
+    showAlert('warning', '恢复阈值必须在暂降阈值到 100 之间')
+    return
+  }
+  if (minDurationMs < 0) {
+    showAlert('warning', '最小持续时间不能小于 0')
+    return
+  }
+
+  closeDialog('recalcConfirmModal')
+  state.params.referenceType = referenceSelection.referenceType
+  state.params.referenceVoltage = Number(referenceSelection.referenceVoltage || 0)
+  state.params.minDurationMs = minDurationMs
+  state.params.sagThresholdPct = sagThresholdPct
+  state.params.interruptThresholdPct = interruptThresholdPct
+  state.params.hysteresisPct = hysteresisPct
   state.params.recoverThresholdPct = Number.isFinite(recoverVal) && recoverVal > 0 ? recoverVal : null
   await previewProcess()
   await fetchWaveData()
@@ -2330,7 +2417,8 @@ async function previewProcess() {
 
   try {
     const body = {
-      referenceVoltage: state.params.referenceVoltage,
+      referenceType: state.params.referenceType,
+      referenceVoltage: state.params.referenceType === 'Adaptive' ? null : state.params.referenceVoltage,
       sagThresholdPct: state.params.sagThresholdPct,
       recoverThresholdPct: state.params.recoverThresholdPct,
       interruptThresholdPct: state.params.interruptThresholdPct,
@@ -2789,6 +2877,11 @@ function bindEvents() {
   on('recalcRecoverThresholdPct', 'input', () => {
     state.recalcRecoverAuto = false
   })
+  document.querySelectorAll('input[name="recalcReferenceTypeRadio"]').forEach((el) => {
+    el.addEventListener('change', () => {
+      updateRecalcReferenceModeUi()
+    })
+  })
 
   on('channelSearch', 'input', renderChannelList)
   on('analogCheckAll', 'change', () => {
@@ -2805,6 +2898,7 @@ function bindEvents() {
   bindDialog('exportConfirmModal')
   bindDialog('exportSamplesConfirmModal')
   bindDialog('recalcConfirmModal')
+  updateRecalcReferenceModeUi()
 
   window.addEventListener('keydown', onKeyDown)
 

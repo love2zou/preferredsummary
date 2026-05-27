@@ -922,7 +922,7 @@ function syncAnalyzeRecoverThresholdIfAuto() {
 }
 
 function getSelectedAnalyzeReferenceMode() {
-  return String(document.querySelector('input[name="referenceTypeRadio"]:checked')?.value || 'PhaseVoltage').trim()
+  return String(document.querySelector('input[name="referenceTypeRadio"]:checked')?.value || 'Adaptive').trim()
 }
 
 function updateAnalyzeReferenceModeUi() {
@@ -1447,7 +1447,7 @@ function bindEvents() {
     state.analysis.selected.clear()
     byId('analysisKeyword').value = ''
     byId('analysisPageSize').value = String(state.analysis.pageSize)
-    const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="PhaseVoltage"]')
+    const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="Adaptive"]')
     if (defaultReferenceRadio) defaultReferenceRadio.checked = true
     const customReferenceInput = byId('customReferenceVoltage')
     if (customReferenceInput) customReferenceInput.value = ''
@@ -1574,7 +1574,7 @@ async function init() {
   startPolling()
 
   state.pageSize = Number(byId('pageSize').value || 10)
-  const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="PhaseVoltage"]')
+  const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="Adaptive"]')
   if (defaultReferenceRadio) defaultReferenceRadio.checked = true
   byId('sagThresholdPct').value = '90'
   byId('interruptThresholdPct').value = '10'

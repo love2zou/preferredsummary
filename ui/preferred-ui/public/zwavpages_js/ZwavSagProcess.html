@@ -7,6 +7,98 @@
   <title>暂降过程（HTML+JS）</title>
   <link href="./assets/app.css" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <style>
+    .reference-option-group {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    .reference-option-card {
+      display: flex;
+      align-items: center;
+      min-height: 52px;
+      padding: 10px 14px;
+      border: 1px solid #dcdfe6;
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .reference-option-card:hover {
+      border-color: #79bbff;
+      box-shadow: 0 8px 16px rgba(64, 158, 255, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .reference-option-card.is-active {
+      border-color: #409eff;
+      box-shadow: 0 10px 24px rgba(64, 158, 255, 0.14);
+      background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
+    }
+
+    .reference-option-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: #303133;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .reference-option-card input[type="radio"] {
+      margin: 0;
+      flex: 0 0 auto;
+    }
+
+    .reference-option-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .reference-option-desc {
+      font-size: 12px;
+      color: #909399;
+    }
+
+    .custom-reference-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px dashed #c0c4cc;
+      background: #fff;
+    }
+
+    .custom-reference-wrap.is-visible {
+      display: inline-flex;
+    }
+
+    .custom-reference-wrap label {
+      white-space: nowrap;
+      color: #606266;
+    }
+
+    @media (max-width: 768px) {
+      .reference-option-group {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .custom-reference-wrap.is-visible {
+        width: 100%;
+        justify-content: space-between;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -282,6 +374,50 @@
       <div class="el-dialog__body">
         <div style="color: var(--el-text-color-primary); line-height: 20px; margin-bottom: 10px;">
           将使用以下参数重新计算暂降事件，确定继续吗？
+        </div>
+        <div class="search-item reference-mode-item" style="width:100%; margin-bottom: 12px;">
+          <label id="recalcReferenceTypeLabel">参考电压处理</label>
+          <div class="reference-option-group" id="recalcReferenceOptionGroup">
+            <label class="reference-option-card" data-recalc-reference-mode="PhaseVoltage">
+              <span class="reference-option-header">
+                <input type="radio" name="recalcReferenceTypeRadio" value="PhaseVoltage" />
+                <span class="reference-option-text">
+                  <span>相电压</span>
+                  <span class="reference-option-desc">57.74V</span>
+                </span>
+              </span>
+            </label>
+            <label class="reference-option-card" data-recalc-reference-mode="LineVoltage">
+              <span class="reference-option-header">
+                <input type="radio" name="recalcReferenceTypeRadio" value="LineVoltage" />
+                <span class="reference-option-text">
+                  <span>线电压</span>
+                  <span class="reference-option-desc">100kV</span>
+                </span>
+              </span>
+            </label>
+            <label class="reference-option-card" data-recalc-reference-mode="Adaptive">
+              <span class="reference-option-header">
+                <input type="radio" name="recalcReferenceTypeRadio" value="Adaptive" checked />
+                <span class="reference-option-text">
+                  <span>系统自适应处理</span>
+                </span>
+              </span>
+            </label>
+            <label class="reference-option-card" data-recalc-reference-mode="CustomVoltage">
+              <span class="reference-option-header">
+                <input type="radio" name="recalcReferenceTypeRadio" value="CustomVoltage" />
+                <span class="reference-option-text">
+                  <span>自定义输入</span>
+                </span>
+              </span>
+            </label>
+          </div>
+          <div class="custom-reference-wrap" id="recalcCustomReferenceWrap">
+            <label for="recalcCustomReferenceVoltage">自定义参考值</label>
+            <input id="recalcCustomReferenceVoltage" type="number" step="0.01" min="0" class="el-input"
+              placeholder="请输入参考电压" />
+          </div>
         </div>
         <table class="el-table">
           <thead>
