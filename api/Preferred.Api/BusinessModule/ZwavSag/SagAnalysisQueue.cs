@@ -7,6 +7,8 @@ namespace Zwav.Application.Sag
 {
     public sealed class ZwavSagAnalysisQueueItem
     {
+        public int TaskId { get; set; }
+
         public int FileId { get; set; }
 
         public int AnalysisId { get; set; }

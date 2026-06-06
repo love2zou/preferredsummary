@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>暂降任务工作台</title>
+  <link href="./assets/app.css" rel="stylesheet" />
+  <style>
+    :root {
+      --task-hero-bg: linear-gradient(135deg, #f5f9ff 0%, #eef7f2 48%, #fffaf1 100%);
+      --task-panel-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+      --task-border-soft: rgba(148, 163, 184, 0.22);
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(64, 158, 255, 0.10), transparent 26%),
+        radial-gradient(circle at top right, rgba(103, 194, 58, 0.10), transparent 24%),
+        linear-gradient(180deg, #f4f7fb 0%, #eef2f7 100%);
+      min-height: 100vh;
+    }
+
+    .task-page {
+      max-width: 1680px;
+      margin: 0 auto;
+      padding: 28px 24px 36px;
+    }
+
+    .task-hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 24px 28px;
+      border: 1px solid var(--task-border-soft);
+      border-radius: 24px;
+      background: var(--task-hero-bg);
+      box-shadow: var(--task-panel-shadow);
+    }
+
+    .task-hero h1 {
+      margin: 0;
+      font-size: 28px;
+      color: #1f2937;
+      letter-spacing: 0.02em;
+    }
+
+    .task-hero p {
+      margin: 10px 0 0;
+      max-width: 760px;
+      font-size: 14px;
+      line-height: 1.8;
+      color: #526071;
+    }
+
+    .task-hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .task-mode-tabs {
+      display: inline-flex;
+      gap: 10px;
+      margin-top: 14px;
+      padding: 6px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.86);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .task-mode-tab {
+      border: none;
+      background: transparent;
+      color: #64748b;
+      padding: 9px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .task-mode-tab.is-active {
+      background: #1d4ed8;
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(29, 78, 216, 0.22);
+    }
+
+    .task-workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(420px, 0.95fr);
+      gap: 18px;
+      margin-top: 20px;
+      align-items: start;
+    }
+
+    .task-panel {
+      border: 1px solid var(--task-border-soft);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: var(--task-panel-shadow);
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+    }
+
+    .task-panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 20px 22px 12px;
+    }
+
+    .task-panel-title {
+      margin: 0;
+      font-size: 20px;
+      color: #1f2937;
+    }
+
+    .task-panel-subtitle {
+      margin: 6px 0 0;
+      color: #64748b;
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .task-panel-body {
+      padding: 0 22px 22px;
+    }
+
+    .workbench-block {
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px solid rgba(226, 232, 240, 0.92);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.92) 0%, rgba(255, 255, 255, 0.98) 100%);
+    }
+
+    .block-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .block-title {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1f2937;
+    }
+
+    .block-tip {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .analysis-params-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .reference-option-group {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      width: 100%;
+    }
+
+    .reference-option-card {
+      display: flex;
+      align-items: center;
+      min-height: 54px;
+      padding: 12px 14px;
+      border: 1px solid #dbe3ef;
+      border-radius: 14px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .reference-option-card:hover {
+      transform: translateY(-1px);
+      border-color: rgba(64, 158, 255, 0.45);
+      box-shadow: 0 10px 22px rgba(64, 158, 255, 0.08);
+    }
+
+    .reference-option-card.is-active {
+      border-color: #409eff;
+      background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+      box-shadow: 0 12px 28px rgba(64, 158, 255, 0.14);
+    }
+
+    .reference-option-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .reference-option-card input[type="radio"] {
+      margin: 0;
+      flex: 0 0 auto;
+    }
+
+    .reference-option-text {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .reference-option-desc {
+      font-size: 12px;
+      color: #909399;
+    }
+
+    .custom-reference-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px dashed #c0c4cc;
+      background: #fff;
+    }
+
+    .custom-reference-wrap.is-visible {
+      display: flex;
+    }
+
+    .toolbar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .table-shell {
+      border: 1px solid rgba(226, 232, 240, 0.96);
+      border-radius: 16px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    .table-shell .el-table {
+      table-layout: fixed;
+    }
+
+    .pagination-inline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pagination-left,
+    .pagination-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .selection-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: linear-gradient(90deg, rgba(29, 78, 216, 0.06) 0%, rgba(103, 194, 58, 0.08) 100%);
+      border: 1px solid rgba(29, 78, 216, 0.08);
+      flex-wrap: wrap;
+    }
+
+    .selection-main {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .selection-main strong {
+      color: #1f2937;
+      font-size: 15px;
+    }
+
+    .selection-main span {
+      color: #64748b;
+      font-size: 12px;
+    }
+
+    .summary-card {
+      padding: 18px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #f8fbff 0%, #ffffff 52%, #f9fcf6 100%);
+      border: 1px solid rgba(191, 219, 254, 0.65);
+    }
+
+    .summary-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .summary-title {
+      margin: 0;
+      font-size: 18px;
+      color: #1f2937;
+    }
+
+    .summary-meta {
+      margin-top: 6px;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    .summary-text {
+      margin-top: 14px;
+      color: #334155;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .summary-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .kpi-card {
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid rgba(226, 232, 240, 0.96);
+    }
+
+    .kpi-label {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .kpi-value {
+      margin-top: 8px;
+      font-size: 24px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .kpi-sub {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+
+    .task-empty {
+      padding: 34px 18px;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 13px;
+    }
+
+    .workbench-hidden {
+      display: none !important;
+    }
+
+    .file-status-cell {
+      min-width: 136px;
+    }
+
+    .compact-progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .compact-progress .el-progress-bar {
+      min-width: 68px;
+    }
+
+    @media (max-width: 1320px) {
+      .task-workspace {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 860px) {
+      .task-page {
+        padding: 18px 12px 26px;
+      }
+
+      .task-hero {
+        padding: 18px;
+      }
+
+      .task-panel-head,
+      .task-panel-body {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .analysis-params-grid,
+      .reference-option-group,
+      .kpi-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="task-page">
+    <section class="task-hero">
+      <div>
+        <h1 id="pageTitle">暂降任务工作台</h1>
+        <p id="pageSubtitle">把待分析的录波文件持续加入当前暂降任务，并在同一页面里盯住接收数量、完成数量、成功/失败、待解析、预计剩余时间和逐文件进度。</p>
+        <div class="task-mode-tabs">
+          <button class="task-mode-tab" id="btnModeCreate" type="button">创建暂降任务</button>
+          <button class="task-mode-tab" id="btnModeList" type="button">暂降任务列表</button>
+        </div>
+      </div>
+      <div class="task-hero-actions">
+        <a class="el-button" href="./ZwavSagEvents.html">返回暂降分析</a>
+        <button class="el-button" id="btnOpenListWindow" type="button">打开任务列表窗口</button>
+        <button class="el-button el-button--primary" id="btnRefreshPage" type="button">刷新数据</button>
+      </div>
+    </section>
+
+    <div class="task-workspace">
+      <section class="task-panel">
+        <div class="task-panel-head">
+          <div>
+            <h2 class="task-panel-title" id="mainPanelTitle">待加入任务的录波文件</h2>
+            <p class="task-panel-subtitle" id="mainPanelSubtitle">选择已完成解析的录波文件，把它们加入当前未关闭的暂降任务；如果当前没有可追加任务，系统会自动新建。</p>
+          </div>
+        </div>
+        <div class="task-panel-body">
+          <div id="createPanel">
+            <div class="workbench-block">
+              <div class="block-title-row">
+                <h3 class="block-title">分析参数</h3>
+                <span class="block-tip" id="analysisParamTip">没有活动任务时可调整参数；如果追加到未关闭任务，参数会自动沿用任务配置。</span>
+              </div>
+              <div class="analysis-params-grid">
+                <div class="search-item" style="grid-column: 1 / -1;">
+                  <label>参考电压处理</label>
+                  <div class="reference-option-group" id="referenceOptionGroup">
+                    <label class="reference-option-card" data-reference-mode="PhaseVoltage">
+                      <span class="reference-option-header">
+                        <input type="radio" name="referenceTypeRadio" value="PhaseVoltage" />
+                        <span class="reference-option-text"><span>相电压</span><span class="reference-option-desc">57.74V</span></span>
+                      </span>
+                    </label>
+                    <label class="reference-option-card" data-reference-mode="LineVoltage">
+                      <span class="reference-option-header">
+                        <input type="radio" name="referenceTypeRadio" value="LineVoltage" />
+                        <span class="reference-option-text"><span>线电压</span><span class="reference-option-desc">100V</span></span>
+                      </span>
+                    </label>
+                    <label class="reference-option-card" data-reference-mode="Adaptive">
+                      <span class="reference-option-header">
+                        <input type="radio" name="referenceTypeRadio" value="Adaptive" checked />
+                        <span class="reference-option-text"><span>系统自适应处理</span></span>
+                      </span>
+                    </label>
+                    <label class="reference-option-card" data-reference-mode="CustomVoltage">
+                      <span class="reference-option-header">
+                        <input type="radio" name="referenceTypeRadio" value="CustomVoltage" />
+                        <span class="reference-option-text"><span>自定义输入</span></span>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="custom-reference-wrap" id="customReferenceWrap">
+                    <label for="customReferenceVoltage">自定义参考值</label>
+                    <input id="customReferenceVoltage" type="number" step="0.01" min="0" class="el-input" placeholder="请输入参考电压" />
+                  </div>
+                </div>
+                <div class="search-item">
+                  <label>暂降阈值(%)</label>
+                  <input id="sagThresholdPct" type="number" step="1" class="el-input" min="0" max="100" />
+                </div>
+                <div class="search-item">
+                  <label>最小持续(ms)</label>
+                  <input id="minDurationMs" type="number" step="1" class="el-input" min="0" />
+                </div>
+                <div class="search-item">
+                  <label>中断阈值(%)</label>
+                  <input id="interruptThresholdPct" type="number" step="1" class="el-input" min="0" max="100" />
+                </div>
+                <div class="search-item">
+                  <label>迟滞(%)</label>
+                  <input id="hysteresisPct" type="number" step="0.5" class="el-input" min="0" max="20" />
+                </div>
+                <div class="search-item">
+                  <label>恢复阈值(%)</label>
+                  <input id="recoverThresholdPct" type="number" step="0.5" class="el-input" min="0" max="100" />
+                </div>
+              </div>
+            </div>
+
+            <div class="workbench-block">
+              <div class="toolbar-row">
+                <div class="toolbar-left">
+                  <input id="analysisKeyword" class="el-input" placeholder="录波文件名关键词" style="width: 260px" />
+                </div>
+                <div class="toolbar-right">
+                  <button class="el-button el-button--primary" id="btnAnalysisSearch" type="button">查询</button>
+                </div>
+              </div>
+              <div class="table-shell">
+                <table class="el-table">
+                  <thead>
+                    <tr>
+                      <th class="cell-center" style="width: 44px"><input type="checkbox" id="analysisCheckAll" /></th>
+                      <th class="cell-center" style="width: 64px">序号</th>
+                      <th style="width: 280px">录波文件名</th>
+                      <th style="width: 90px">状态</th>
+                      <th style="width: 90px">大小</th>
+                      <th style="width: 170px">创建时间</th>
+                    </tr>
+                  </thead>
+                  <tbody id="analysisTbody"></tbody>
+                </table>
+              </div>
+              <div class="pagination-inline">
+                <div class="pagination-left">
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="analysisTotalText">-</span>
+                  <select id="analysisPageSize" class="el-select" style="width: 90px; height: 28px">
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                </div>
+                <div class="pagination-right">
+                  <button class="el-button" id="analysisPrev" type="button">上一页</button>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="analysisPageText">1</span> 页</span>
+                  <button class="el-button" id="analysisNext" type="button">下一页</button>
+                </div>
+              </div>
+              <div class="selection-bar">
+                <div class="selection-main">
+                  <strong id="selectedAnalysisText">已选择 0 个录波文件</strong>
+                  <span id="selectedAnalysisSubText">任务未关闭前，可以多次把新录波文件继续追加到同一任务中。</span>
+                </div>
+                <button class="el-button el-button--primary" id="btnSubmitTaskAnalyze" type="button">加入任务并开始分析</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="listPanel" class="workbench-hidden">
+            <div class="workbench-block">
+              <div class="toolbar-row">
+                <div class="toolbar-left">
+                  <input id="taskKeyword" class="el-input" placeholder="任务编号 / 任务名称" style="width: 220px" />
+                  <select id="taskStatusFilter" class="el-select" style="width: 140px">
+                    <option value="">全部状态</option>
+                    <option value="0">接收中</option>
+                    <option value="1">已关闭待收尾</option>
+                    <option value="2">已完成</option>
+                    <option value="3">已完成（有失败）</option>
+                  </select>
+                  <select id="taskClosedFilter" class="el-select" style="width: 140px">
+                    <option value="">全部任务</option>
+                    <option value="false">仅未关闭</option>
+                    <option value="true">仅已关闭</option>
+                  </select>
+                </div>
+                <div class="toolbar-right">
+                  <button class="el-button el-button--primary" id="btnTaskSearch" type="button">查询</button>
+                  <button class="el-button" id="btnTaskListRefresh" type="button">刷新列表</button>
+                  <button class="el-button el-button--success" id="btnListOpenCreate" type="button">切换到创建任务</button>
+                </div>
+              </div>
+              <div class="table-shell">
+                <table class="el-table">
+                  <thead>
+                    <tr>
+                      <th class="cell-center" style="width: 60px">序号</th>
+                      <th style="width: 170px">任务编号</th>
+                      <th style="width: 180px">任务名称</th>
+                      <th style="width: 96px">状态</th>
+                      <th style="width: 88px">接收</th>
+                      <th style="width: 88px">完成</th>
+                      <th style="width: 88px">待解析</th>
+                      <th style="width: 160px">开始解析</th>
+                      <th style="width: 160px">结束解析</th>
+                      <th style="width: 180px">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="taskTbody"></tbody>
+                </table>
+              </div>
+              <div class="pagination-inline">
+                <div class="pagination-left">
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="taskTotalText">-</span>
+                  <select id="taskPageSize" class="el-select" style="width: 90px; height: 28px">
+                    <option value="10" selected>10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                  </select>
+                </div>
+                <div class="pagination-right">
+                  <button class="el-button" id="taskPrev" type="button">上一页</button>
+                  <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="taskPageText">1</span> 页</span>
+                  <button class="el-button" id="taskNext" type="button">下一页</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="task-panel">
+        <div class="task-panel-head">
+          <div>
+            <h2 class="task-panel-title" id="sidePanelTitle">当前任务统计</h2>
+            <p class="task-panel-subtitle" id="sidePanelSubtitle">上面展示任务汇总，下面按录波文件逐条展示分析进度、成功/失败和错误信息。</p>
+          </div>
+        </div>
+        <div class="task-panel-body">
+          <div class="summary-card">
+            <div class="summary-top">
+              <div>
+                <h3 class="summary-title" id="taskDetailTaskNo">当前没有活动任务</h3>
+                <div class="summary-meta" id="taskDetailMeta">提交第一批录波文件后会自动创建任务；如果已经有未关闭任务，这里会显示当前任务编号与状态。</div>
+              </div>
+              <span class="el-tag el-tag--info" id="taskDetailStatusTag">新任务</span>
+            </div>
+            <div class="summary-text" id="taskDetailSummary">当前暂无活动任务。</div>
+            <div class="summary-meta" id="taskDetailFoot">任务关闭前，可继续多次接收新的录波文件；关闭后不能再追加，只能新建任务。</div>
+            <div class="summary-actions">
+              <button class="el-button" id="btnRenameTask" type="button">修改任务</button>
+              <button class="el-button" id="btnRefreshTask" type="button">刷新任务</button>
+              <button class="el-button el-button--danger" id="btnCloseTask" type="button">关闭任务</button>
+              <button class="el-button el-button--danger" id="btnDeleteTask" type="button">删除任务</button>
+            </div>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label">接收数量</div>
+              <div class="kpi-value" id="taskReceivedCount">0</div>
+              <div class="kpi-sub">当前任务已接收到的录波文件总数</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">已完成</div>
+              <div class="kpi-value" id="taskFinishedCount">0</div>
+              <div class="kpi-sub" id="taskFinishedSub">成功 0 个，失败 0 个</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">成功数量</div>
+              <div class="kpi-value" id="taskSuccessCount">0</div>
+              <div class="kpi-sub">已完成自动解析且成功落库的文件数</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">失败数量</div>
+              <div class="kpi-value" id="taskFailedCount">0</div>
+              <div class="kpi-sub">自动解析失败，需要复核错误信息</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">待解析</div>
+              <div class="kpi-value" id="taskPendingCount">0</div>
+              <div class="kpi-sub" id="taskPendingSub">正在排队或处理中</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">预计剩余时间</div>
+              <div class="kpi-value" id="taskEtaText">--:--:--</div>
+              <div class="kpi-sub" id="taskProgressSub">当前进度 0%</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">开始解析时间</div>
+              <div class="kpi-value" id="taskStartTimeText" style="font-size: 18px;">-</div>
+              <div class="kpi-sub">任务中首个录波文件开始自动解析的时间</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">结束解析时间</div>
+              <div class="kpi-value" id="taskFinishTimeText" style="font-size: 18px;">-</div>
+              <div class="kpi-sub">所有已接收录波文件全部完成后的时间</div>
+            </div>
+          </div>
+
+          <div class="workbench-block">
+            <div class="toolbar-row">
+              <div class="toolbar-left">
+                <input id="taskFileKeyword" class="el-input" placeholder="录波文件名" style="width: 220px" />
+                <select id="taskFileStatusFilter" class="el-select" style="width: 140px">
+                  <option value="">全部状态</option>
+                  <option value="0">待处理</option>
+                  <option value="1">处理中</option>
+                  <option value="2">成功</option>
+                  <option value="3">失败</option>
+                </select>
+              </div>
+              <div class="toolbar-right">
+                <button class="el-button el-button--primary" id="btnTaskFileSearch" type="button">查询</button>
+              </div>
+            </div>
+            <div class="table-shell">
+              <table class="el-table">
+                <thead>
+                  <tr>
+                    <th class="cell-center" style="width: 54px">序号</th>
+                    <th style="width: 210px">录波文件名</th>
+                    <th style="width: 88px">状态</th>
+                    <th style="width: 120px">进度</th>
+                    <th style="width: 70px">暂降</th>
+                    <th style="width: 84px">类型</th>
+                    <th style="width: 84px">最严重相</th>
+                    <th style="width: 150px">开始时间</th>
+                    <th style="width: 150px">结束时间</th>
+                    <th style="width: 140px">错误信息</th>
+                  </tr>
+                </thead>
+                <tbody id="taskFileTbody"></tbody>
+              </table>
+            </div>
+            <div class="pagination-inline">
+              <div class="pagination-left">
+                <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="taskFileTotalText">-</span>
+                <select id="taskFilePageSize" class="el-select" style="width: 90px; height: 28px">
+                  <option value="10" selected>10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              <div class="pagination-right">
+                <button class="el-button" id="taskFilePrev" type="button">上一页</button>
+                <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="taskFilePageText">1</span> 页</span>
+                <button class="el-button" id="taskFileNext" type="button">下一页</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="taskEditModal">
+    <div class="el-dialog">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">修改暂降任务</div>
+        <button class="el-dialog__close" data-dialog-close>×</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="search-item" style="width:100%">
+          <label>任务名称</label>
+          <input id="taskNameInput" class="el-input" maxlength="100" placeholder="请输入任务名称" style="width:100%" />
+        </div>
+        <div style="margin-top:8px; font-size:12px; color: var(--el-text-color-secondary);">任务编号、统计数量和分析参数仍由系统维护，这里仅允许修改任务名称。</div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>取消</button>
+        <button class="el-button el-button--primary" id="btnSaveTaskName" type="button">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./assets/zwav-sag-task-workbench.js?v=20260531-1"></script>
+</body>
+
+</html>

@@ -94,6 +94,37 @@ export const zwavApi = {
     return apiJson('/api/ZwavSagEvents/analyze', { method: 'POST', body })
   },
 
+  sagActiveTask() {
+    return apiJson('/api/ZwavSagEvents/tasks/active')
+  },
+
+  sagTaskList(params) {
+    return apiJson('/api/ZwavSagEvents/tasks', { params })
+  },
+
+  sagTaskDetail(taskId) {
+    return apiJson(`/api/ZwavSagEvents/tasks/${encodeURIComponent(taskId)}`)
+  },
+
+  sagTaskUpdate(taskId, body) {
+    return apiJson(`/api/ZwavSagEvents/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PUT',
+      body
+    })
+  },
+
+  sagTaskEventList(taskId, params) {
+    return apiJson(`/api/ZwavSagEvents/tasks/${encodeURIComponent(taskId)}/events`, { params })
+  },
+
+  sagCloseTask(taskId) {
+    return apiJson(`/api/ZwavSagEvents/tasks/${encodeURIComponent(taskId)}/close`, { method: 'POST' })
+  },
+
+  sagTaskDelete(taskId) {
+    return apiJson(`/api/ZwavSagEvents/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+  },
+
   // 电压通道识别词库
   sagChannelRuleList(params) {
     return apiJson('/api/ZwavSagEvents/channel-rules', { params })

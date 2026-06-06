@@ -829,12 +829,7 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagEvent (
    InterruptThresholdPct     DECIMAL(10,3)       NULL COMMENT '短时中断阈值(%)',
    HysteresisPct             DECIMAL(10,3)       NULL COMMENT '迟滞电压(%)',
 
-   IsMergedStatEvent         TINYINT(1) DEFAULT 0 NOT NULL COMMENT '是否为统计归并结果（1是 0否）',
-   MergeGroupId              VARCHAR(64)         NULL COMMENT '统计归并分组号',
-   RawEventCount             INT DEFAULT 0       NOT NULL COMMENT '原始事件数',
-
    SeqNo                     INT DEFAULT 0       NOT NULL COMMENT '排序号',
-   Remark                    VARCHAR(500)        NULL COMMENT '备注',
 
    CrtTime                   DATETIME            NOT NULL COMMENT '创建时间',
    UpdTime                   DATETIME            NOT NULL COMMENT '最后修改时间'

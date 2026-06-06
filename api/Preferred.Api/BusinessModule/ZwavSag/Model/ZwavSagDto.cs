@@ -55,10 +55,6 @@ namespace Zwav.Application.Sag
         public decimal? SagThresholdPct { get; set; }
         public decimal? InterruptThresholdPct { get; set; }
         public decimal? HysteresisPct { get; set; }
-        public bool IsMergedStatEvent { get; set; }
-        public string MergeGroupId { get; set; }
-        public int RawEventCount { get; set; }
-        public string Remark { get; set; }
         public DateTime CrtTime { get; set; }
     }
 
@@ -81,13 +77,10 @@ namespace Zwav.Application.Sag
         public bool IsWorstPhase { get; set; }
     }
 
-    public class UpdateZwavSagEventRequest
-    {
-        public string Remark { get; set; }
-    }
-
     public class AnalyzeZwavSagRequest
     {
+        public int? TaskId { get; set; }
+        public bool CreateTask { get; set; }
         public int[] FileIds { get; set; }
         public string[] AnalysisGuids { get; set; }
         public string ReferenceType { get; set; } = "Declared";
@@ -102,12 +95,77 @@ namespace Zwav.Application.Sag
 
     public class AnalyzeZwavSagResponse
     {
+        public int TaskId { get; set; }
+        public string TaskNo { get; set; }
         public int AnalyzedCount { get; set; }
         public int QueuedCount { get; set; }
         public int[] QueuedEventIds { get; set; }
         public int CreatedEventCount { get; set; }
         public int CreatedPhaseCount { get; set; }
         public int CreatedRmsPointCount { get; set; }
+        public int AddedFileCount { get; set; }
+        public int SkippedFileCount { get; set; }
+    }
+
+    public class ZwavSagTaskDto
+    {
+        public int Id { get; set; }
+        public string TaskNo { get; set; }
+        public string TaskName { get; set; }
+        public string SourceType { get; set; }
+        public int Status { get; set; }
+        public string StatusText { get; set; }
+        public int Progress { get; set; }
+        public bool IsClosed { get; set; }
+        public DateTime? ClosedTime { get; set; }
+        public DateTime? StartParseTime { get; set; }
+        public DateTime? FinishParseTime { get; set; }
+        public DateTime? LastReceiveTime { get; set; }
+        public string ReferenceType { get; set; }
+        public decimal? ReferenceVoltage { get; set; }
+        public decimal SagThresholdPct { get; set; }
+        public decimal? RecoverThresholdPct { get; set; }
+        public decimal InterruptThresholdPct { get; set; }
+        public decimal HysteresisPct { get; set; }
+        public decimal MinDurationMs { get; set; }
+        public int ReceivedFileCount { get; set; }
+        public int FinishedFileCount { get; set; }
+        public int SuccessFileCount { get; set; }
+        public int FailedFileCount { get; set; }
+        public int PendingFileCount { get; set; }
+        public long TotalParseMs { get; set; }
+        public long? EstimatedRemainingMs { get; set; }
+        public string SummaryText { get; set; }
+        public DateTime CrtTime { get; set; }
+        public DateTime UpdTime { get; set; }
+    }
+
+    public class ZwavSagTaskFileItemDto
+    {
+        public int Id { get; set; }
+        public int FileId { get; set; }
+        public int? AnalysisId { get; set; }
+        public string AnalysisGuid { get; set; }
+        public string OriginalName { get; set; }
+        public int Status { get; set; }
+        public int Progress { get; set; }
+        public string ErrorMessage { get; set; }
+        public bool HasSag { get; set; }
+        public string EventType { get; set; }
+        public string WorstPhase { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? FinishTime { get; set; }
+        public long? CostMs { get; set; }
+        public DateTime? OccurTimeUtc { get; set; }
+        public decimal? DurationMs { get; set; }
+        public decimal? SagPercent { get; set; }
+        public decimal? ResidualVoltagePct { get; set; }
+        public DateTime CrtTime { get; set; }
+    }
+
+    public class UpdateZwavSagTaskRequest
+    {
+        public string TaskName { get; set; }
     }
 
     public class ZwavSagChannelRuleDto

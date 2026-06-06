@@ -108,6 +108,229 @@ namespace Preferred.Api.Controllers
         /// <summary>
         /// 删除单个暂降事件
         /// </summary>
+        [HttpGet("tasks/active")]
+        [ProducesResponseType(typeof(ApiResponse<ZwavSagTaskDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetActiveTaskAsync()
+        {
+            try
+            {
+                var data = await _svc.GetActiveTaskAsync();
+                return Ok(new ApiResponse<ZwavSagTaskDto>
+                {
+                    Success = true,
+                    Message = "鏌ヨ鎴愬姛",
+                    Data = data
+                });
+            }
+            catch (Exception ex)
+            {
+                return ServerError("鏌ヨ褰撳墠鏆傞檷浠诲姟澶辫触", ex);
+            }
+        }
+
+        [HttpGet("tasks")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResult<ZwavSagTaskDto>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetTaskListAsync(
+            [FromQuery] string keyword,
+            [FromQuery] int? status,
+            [FromQuery] bool? isClosed,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                if (page <= 0)
+                    return BadRequestApi("page 蹇呴』澶т簬 0");
+
+                if (pageSize <= 0 || pageSize > 200)
+                    return BadRequestApi("pageSize 蹇呴』鍦?1~200 涔嬮棿");
+
+                var data = await _svc.QueryTasksAsync(keyword, status, isClosed, page, pageSize);
+                return Ok(new ApiResponse<PagedResult<ZwavSagTaskDto>>
+                {
+                    Success = true,
+                    Message = "鏌ヨ鎴愬姛",
+                    Data = data
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("鏌ヨ鏆傞檷浠诲姟鍒楄〃澶辫触", ex);
+            }
+        }
+
+        [HttpGet("tasks/{id:int}")]
+        [ProducesResponseType(typeof(ApiResponse<ZwavSagTaskDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetTaskAsync([FromRoute] int id)
+        {
+            try
+            {
+                var data = await _svc.GetTaskAsync(id);
+                return Ok(new ApiResponse<ZwavSagTaskDto>
+                {
+                    Success = true,
+                    Message = "鏌ヨ鎴愬姛",
+                    Data = data
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiErrorResponse { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return ServerError("鏌ヨ鏆傞檷浠诲姟澶辫触", ex);
+            }
+        }
+
+        [HttpGet("tasks/{id:int}/events")]
+        [ProducesResponseType(typeof(ApiResponse<PagedResult<ZwavSagTaskFileItemDto>>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> GetTaskEventListAsync(
+            [FromRoute] int id,
+            [FromQuery] string keyword,
+            [FromQuery] int? status,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 20)
+        {
+            try
+            {
+                if (page <= 0)
+                    return BadRequestApi("page 蹇呴』澶т簬 0");
+
+                if (pageSize <= 0 || pageSize > 200)
+                    return BadRequestApi("pageSize 蹇呴』鍦?1~200 涔嬮棿");
+
+                var data = await _svc.QueryTaskFilesAsync(id, keyword, status, page, pageSize);
+                return Ok(new ApiResponse<PagedResult<ZwavSagTaskFileItemDto>>
+                {
+                    Success = true,
+                    Message = "鏌ヨ鎴愬姛",
+                    Data = data
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiErrorResponse { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return ServerError("鏌ヨ鏆傞檷浠诲姟鏂囦欢澶辫触", ex);
+            }
+        }
+
+        [HttpPut("tasks/{id:int}")]
+        [Consumes("application/json")]
+        [ProducesResponseType(typeof(ApiResponse<ZwavSagTaskDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> UpdateTaskAsync([FromRoute] int id, [FromBody] UpdateZwavSagTaskRequest req)
+        {
+            try
+            {
+                var data = await _svc.UpdateTaskAsync(id, req);
+                return Ok(new ApiResponse<ZwavSagTaskDto>
+                {
+                    Success = true,
+                    Message = "任务更新成功",
+                    Data = data
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiErrorResponse { Message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return ServerError("更新暂降任务失败", ex);
+            }
+        }
+
+        [HttpPost("tasks/{id:int}/close")]
+        [ProducesResponseType(typeof(ApiResponse<ZwavSagTaskDto>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> CloseTaskAsync([FromRoute] int id)
+        {
+            try
+            {
+                var data = await _svc.CloseTaskAsync(id);
+                return Ok(new ApiResponse<ZwavSagTaskDto>
+                {
+                    Success = true,
+                    Message = "浠诲姟宸插叧闂?",
+                    Data = data
+                });
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(new ApiErrorResponse { Message = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("鍏抽棴鏆傞檷浠诲姟澶辫触", ex);
+            }
+        }
+
+        [HttpDelete("tasks/{id:int}")]
+        [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status404NotFound)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status500InternalServerError)]
+        public async Task<IActionResult> DeleteTaskAsync([FromRoute] int id)
+        {
+            try
+            {
+                var ok = await _svc.DeleteTaskAsync(id);
+                if (!ok)
+                    return NotFound(new ApiErrorResponse { Message = "未找到暂降分析任务" });
+
+                return Ok(new ApiResponse<object>
+                {
+                    Success = true,
+                    Message = "任务删除成功",
+                    Data = null
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequestApi(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return ServerError("删除暂降任务失败", ex);
+            }
+        }
+
         [HttpDelete("{id:int}")]
         [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status400BadRequest)]

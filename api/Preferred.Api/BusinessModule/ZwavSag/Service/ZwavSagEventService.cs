@@ -59,10 +59,278 @@ namespace Preferred.Api.Services
         /// </summary>
         private const decimal MaxDurationDbValue = 999999999.999m;
 
+        public async Task<ZwavSagTaskDto> GetActiveTaskAsync()
+        {
+            var taskId = await _context.ZwavSagTasks
+                .AsNoTracking()
+                .Where(x => !x.IsClosed)
+                .OrderByDescending(x => x.Id)
+                .Select(x => (int?)x.Id)
+                .FirstOrDefaultAsync()
+                .ConfigureAwait(false);
+
+            if (!taskId.HasValue)
+                return null;
+
+            await RefreshTaskStatsAsync(taskId.Value).ConfigureAwait(false);
+            return await BuildTaskDtoAsync(taskId.Value).ConfigureAwait(false);
+        }
+
+        public async Task<PagedResult<ZwavSagTaskDto>> QueryTasksAsync(
+            string keyword,
+            int? status,
+            bool? isClosed,
+            int page,
+            int pageSize)
+        {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
+
+            var query = _context.ZwavSagTasks.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                keyword = keyword.Trim();
+                query = query.Where(x =>
+                    x.TaskNo.Contains(keyword) ||
+                    x.TaskName.Contains(keyword) ||
+                    x.SourceType.Contains(keyword));
+            }
+
+            if (status.HasValue)
+                query = query.Where(x => x.Status == status.Value);
+
+            if (isClosed.HasValue)
+                query = query.Where(x => x.IsClosed == isClosed.Value);
+
+            var total = await query.CountAsync().ConfigureAwait(false);
+            var ids = await query
+                .OrderByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => x.Id)
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var data = new List<ZwavSagTaskDto>(ids.Count);
+            for (int i = 0; i < ids.Count; i++)
+            {
+                await RefreshTaskStatsAsync(ids[i]).ConfigureAwait(false);
+                data.Add(await BuildTaskDtoAsync(ids[i]).ConfigureAwait(false));
+            }
+
+            return new PagedResult<ZwavSagTaskDto>
+            {
+                Data = data,
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
+            };
+        }
+
+        public async Task<ZwavSagTaskDto> GetTaskAsync(int id)
+        {
+            if (id <= 0)
+                throw new ArgumentException("id must be greater than 0", nameof(id));
+
+            await RefreshTaskStatsAsync(id).ConfigureAwait(false);
+            return await BuildTaskDtoAsync(id).ConfigureAwait(false);
+        }
+
+        public async Task<ZwavSagTaskDto> UpdateTaskAsync(int id, UpdateZwavSagTaskRequest req)
+        {
+            if (id <= 0)
+                throw new ArgumentException("id must be greater than 0", nameof(id));
+            if (req == null)
+                throw new ArgumentNullException(nameof(req));
+
+            var task = await _context.ZwavSagTasks.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+            if (task == null)
+                throw new KeyNotFoundException("未找到暂降分析任务");
+
+            var taskName = string.IsNullOrWhiteSpace(req.TaskName)
+                ? string.Empty
+                : req.TaskName.Trim();
+            if (string.IsNullOrWhiteSpace(taskName))
+                throw new ArgumentException("任务名称不能为空", nameof(req));
+            if (taskName.Length > 100)
+                throw new ArgumentException("任务名称长度不能超过 100 个字符", nameof(req));
+
+            task.TaskName = taskName;
+            task.UpdTime = DateTime.UtcNow;
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+
+            await RefreshTaskStatsAsync(task.Id).ConfigureAwait(false);
+            return await BuildTaskDtoAsync(task.Id).ConfigureAwait(false);
+        }
+
+        public async Task<PagedResult<ZwavSagTaskFileItemDto>> QueryTaskFilesAsync(
+            int taskId,
+            string keyword,
+            int? status,
+            int page,
+            int pageSize)
+        {
+            if (taskId <= 0)
+                throw new ArgumentException("taskId must be greater than 0", nameof(taskId));
+
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
+
+            bool exists = await _context.ZwavSagTasks
+                .AsNoTracking()
+                .AnyAsync(x => x.Id == taskId)
+                .ConfigureAwait(false);
+            if (!exists)
+                throw new KeyNotFoundException("鏈壘鍒版殏闄嶅垎鏋愪换鍔?");
+
+            var query = _context.ZwavSagEvents
+                .AsNoTracking()
+                .Where(x => x.TaskId == taskId);
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                keyword = keyword.Trim();
+                query = query.Where(x =>
+                    x.OriginalName.Contains(keyword) ||
+                    (x.ErrorMessage != null && x.ErrorMessage.Contains(keyword)));
+            }
+
+            if (status.HasValue)
+                query = query.Where(x => x.Status == status.Value);
+
+            var total = await query.CountAsync().ConfigureAwait(false);
+            var data = await query
+                .OrderBy(x => x.SeqNo)
+                .ThenByDescending(x => x.Id)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(x => new ZwavSagTaskFileItemDto
+                {
+                    Id = x.Id,
+                    FileId = x.FileId,
+                    AnalysisId = x.AnalysisId,
+                    AnalysisGuid = x.AnalysisGuid,
+                    OriginalName = x.OriginalName,
+                    Status = x.Status,
+                    Progress = x.Status == 2 || x.Status == 3 ? 100 : x.Progress,
+                    ErrorMessage = x.ErrorMessage,
+                    HasSag = x.HasSag,
+                    EventType = x.EventType,
+                    WorstPhase = x.WorstPhase,
+                    StartTime = x.StartTime,
+                    FinishTime = x.FinishTime,
+                    CostMs = x.CostMs,
+                    OccurTimeUtc = x.OccurTimeUtc,
+                    DurationMs = x.DurationMs,
+                    SagPercent = x.SagPercent,
+                    ResidualVoltagePct = x.ResidualVoltagePct,
+                    CrtTime = x.CrtTime
+                })
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            return new PagedResult<ZwavSagTaskFileItemDto>
+            {
+                Data = data,
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize)
+            };
+        }
+
+        public async Task<ZwavSagTaskDto> CloseTaskAsync(int id)
+        {
+            var task = await _context.ZwavSagTasks.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+            if (task == null)
+                throw new KeyNotFoundException("未找到暂降分析任务");
+
+            if (task.IsClosed)
+                throw new InvalidOperationException("任务已经关闭，不能重复关闭");
+
+            var now = DateTime.UtcNow;
+            task.IsClosed = true;
+            task.ClosedTime = now;
+            task.UpdTime = now;
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+
+            await RefreshTaskStatsAsync(task.Id).ConfigureAwait(false);
+            return await BuildTaskDtoAsync(task.Id).ConfigureAwait(false);
+        }
+
+        public async Task<bool> DeleteTaskAsync(int id)
+        {
+            if (id <= 0)
+                throw new ArgumentException("id must be greater than 0", nameof(id));
+
+            var task = await _context.ZwavSagTasks.FirstOrDefaultAsync(x => x.Id == id).ConfigureAwait(false);
+            if (task == null)
+                return false;
+
+            if (!task.IsClosed)
+                throw new InvalidOperationException("请先关闭任务，再执行删除");
+
+            bool hasRunningFiles = await _context.ZwavSagEvents
+                .AsNoTracking()
+                .AnyAsync(x => x.TaskId == id && (x.Status == SagTaskFileStatusPending || x.Status == SagTaskFileStatusProcessing))
+                .ConfigureAwait(false);
+            if (hasRunningFiles)
+                throw new InvalidOperationException("任务仍有待处理或处理中录波文件，请等待任务收尾完成后再删除");
+
+            using var tx = await _context.Database.BeginTransactionAsync().ConfigureAwait(false);
+
+            var eventIds = await _context.ZwavSagEvents
+                .Where(x => x.TaskId == id)
+                .Select(x => x.Id)
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            if (eventIds.Count > 0)
+            {
+                var phases = await _context.ZwavSagEventPhases
+                    .Where(x => eventIds.Contains(x.SagEventId))
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                if (phases.Count > 0)
+                    _context.ZwavSagEventPhases.RemoveRange(phases);
+
+                var rmsPoints = await _context.ZwavSagRmsPoints
+                    .Where(x => eventIds.Contains(x.SagEventId))
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                if (rmsPoints.Count > 0)
+                    _context.ZwavSagRmsPoints.RemoveRange(rmsPoints);
+
+                var events = await _context.ZwavSagEvents
+                    .Where(x => x.TaskId == id)
+                    .ToListAsync()
+                    .ConfigureAwait(false);
+                if (events.Count > 0)
+                    _context.ZwavSagEvents.RemoveRange(events);
+            }
+
+            _context.ZwavSagTasks.Remove(task);
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+            await tx.CommitAsync().ConfigureAwait(false);
+            return true;
+        }
+
         /// <summary>
         /// 相角类字段的数据库安全上限。
         /// </summary>
         private const decimal MaxAngleDbValue = 999999.999999m;
+
+        private const int SagTaskStatusOpen = 0;
+        private const int SagTaskStatusClosedProcessing = 1;
+        private const int SagTaskStatusCompleted = 2;
+        private const int SagTaskStatusCompletedWithErrors = 3;
+
+        private const int SagTaskFileStatusPending = 0;
+        private const int SagTaskFileStatusProcessing = 1;
+        private const int SagTaskFileStatusSuccess = 2;
+        private const int SagTaskFileStatusFailed = 3;
 
         private readonly ApplicationDbContext _context;
         private readonly IZwavSagAnalyzer _analyzer;
@@ -329,6 +597,144 @@ namespace Preferred.Api.Services
             if (req == null)
                 throw new ArgumentNullException(nameof(req));
 
+            if (!req.CreateTask && !(req.TaskId > 0))
+                return await AnalyzeLegacyAsync(req).ConfigureAwait(false);
+
+            ValidateAnalyzeReferenceRequest(req);
+
+            var fileIds = await ResolveFileIdsAsync(req).ConfigureAwait(false);
+            if (fileIds.Count == 0)
+                throw new InvalidOperationException("未选择录波文件");
+
+            var files = await _context.ZwavFiles
+                .AsNoTracking()
+                .Where(x => fileIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id)
+                .ConfigureAwait(false);
+
+            var latestAnalysisMap = await _context.ZwavAnalyses
+                .AsNoTracking()
+                .Where(x => fileIds.Contains(x.FileId))
+                .GroupBy(x => x.FileId)
+                .Select(g => g.OrderByDescending(x => x.Id).FirstOrDefault())
+                .ToDictionaryAsync(x => x.FileId, x => x)
+                .ConfigureAwait(false);
+
+            var queueRequest = CloneAnalyzeRequest(req);
+            var task = await ResolveOrCreateTaskAsync(req, queueRequest).ConfigureAwait(false);
+            var existingFileSet = new HashSet<int>(await _context.ZwavSagEvents
+                .AsNoTracking()
+                .Where(x => x.TaskId == task.Id)
+                .Select(x => x.FileId)
+                .ToListAsync()
+                .ConfigureAwait(false));
+
+            var queuedEventIds = new List<int>();
+            int queuedCount = 0;
+            int skippedCount = 0;
+            int nextSeqNo = (await _context.ZwavSagEvents
+                .Where(x => x.TaskId == task.Id)
+                .Select(x => (int?)x.SeqNo)
+                .DefaultIfEmpty(0)
+                .MaxAsync()
+                .ConfigureAwait(false)).GetValueOrDefault();
+
+            foreach (var fileId in fileIds)
+            {
+                if (existingFileSet.Contains(fileId))
+                {
+                    skippedCount++;
+                    continue;
+                }
+
+                if (!files.TryGetValue(fileId, out var file) || file == null)
+                {
+                    _logger.LogWarning("暂降分析入队跳过：未找到文件，FileId={FileId}", fileId);
+                    skippedCount++;
+                    continue;
+                }
+
+                if (!latestAnalysisMap.TryGetValue(fileId, out var analysis) || analysis == null)
+                {
+                    _logger.LogWarning("暂降分析入队跳过：未找到解析记录，FileId={FileId}", fileId);
+                    skippedCount++;
+                    continue;
+                }
+
+                int processingEventId = 0;
+                var startAt = DateTime.UtcNow;
+
+                try
+                {
+                    var processingEvent = await CreateProcessingEventAsync(
+                        fileId,
+                        task.Id,
+                        analysis.Id,
+                        analysis.AnalysisGuid,
+                        file.OriginalName,
+                        startAt,
+                        ++nextSeqNo).ConfigureAwait(false);
+                    processingEventId = processingEvent.Id;
+                    queuedEventIds.Add(processingEventId);
+
+                    await _sagAnalysisQueue.EnqueueAsync(new ZwavSagAnalysisQueueItem
+                    {
+                        TaskId = task.Id,
+                        FileId = fileId,
+                        AnalysisId = analysis.Id,
+                        ProcessingEventId = processingEventId,
+                        OriginalName = file.OriginalName,
+                        StartTimeUtc = startAt,
+                        Request = CloneAnalyzeRequest(queueRequest)
+                    }).ConfigureAwait(false);
+
+                    existingFileSet.Add(fileId);
+                    queuedCount++;
+                }
+                catch (Exception ex)
+                {
+                    if (processingEventId > 0)
+                        await MarkProcessingEventFailedAsync(processingEventId, ex.Message).ConfigureAwait(false);
+
+                    _logger.LogError(
+                        ex,
+                        "暂降分析入队失败，FileId={FileId}, AnalysisId={AnalysisId}, TaskId={TaskId}, OriginalName={OriginalName}",
+                        fileId,
+                        analysis?.Id,
+                        task.Id,
+                        file?.OriginalName);
+
+                    throw;
+                }
+            }
+
+            if (queuedCount == 0)
+                throw new InvalidOperationException("当前任务中没有可新增的录波文件，请勿重复加入");
+
+            task.LastReceiveTime = DateTime.UtcNow;
+            task.UpdTime = DateTime.UtcNow;
+            await RefreshTaskStatsAsync(task.Id).ConfigureAwait(false);
+
+            return new AnalyzeZwavSagResponse
+            {
+                TaskId = task.Id,
+                TaskNo = task.TaskNo,
+                AnalyzedCount = queuedCount,
+                QueuedCount = queuedCount,
+                QueuedEventIds = queuedEventIds.ToArray(),
+                CreatedEventCount = queuedCount,
+                CreatedPhaseCount = 0,
+                CreatedRmsPointCount = 0,
+                AddedFileCount = queuedCount,
+                SkippedFileCount = skippedCount
+            };
+        }
+
+        private async Task<AnalyzeZwavSagResponse> AnalyzeLegacyAsync(AnalyzeZwavSagRequest req)
+        {
+            if (req == null)
+                throw new ArgumentNullException(nameof(req));
+
             ValidateAnalyzeReferenceRequest(req);
 
             // 统一把 FileIds / AnalysisGuids 映射成文件维度，后续所有幂等控制都围绕 FileId 进行。
@@ -375,7 +781,14 @@ namespace Preferred.Api.Services
                 try
                 {
                     // 先落一条“处理中”记录，前端可以立即拿到事件 ID 用于轮询进度。
-                    var processingEvent = await CreateProcessingEventAsync(fileId, file.OriginalName, startAt).ConfigureAwait(false);
+                    var processingEvent = await CreateProcessingEventAsync(
+                        fileId,
+                        0,
+                        analysis.Id,
+                        analysis.AnalysisGuid,
+                        file.OriginalName,
+                        startAt,
+                        0).ConfigureAwait(false);
                     processingEventId = processingEvent.Id;
                     queuedEventIds.Add(processingEventId);
 
@@ -462,6 +875,7 @@ namespace Preferred.Api.Services
                     originalName);
 
                 // 这里的进度值用于前端显示阶段，不追求严格线性。
+                await MarkTaskEventProcessingAsync(item.ProcessingEventId, startAt).ConfigureAwait(false);
                 await UpdateProgressAsync(item.ProcessingEventId, 5).ConfigureAwait(false);
                 var analyzeContext = await BuildAnalyzeContextAsync(analysis, item.Request ?? new AnalyzeZwavSagRequest()).ConfigureAwait(false);
                 await UpdateProgressAsync(item.ProcessingEventId, 25).ConfigureAwait(false);
@@ -470,6 +884,14 @@ namespace Preferred.Api.Services
 
                 var finishAt = DateTime.UtcNow;
                 var costMs = (long)Math.Round((finishAt - startAt).TotalMilliseconds);
+                var processingSeqNo = item.ProcessingEventId > 0
+                    ? await _context.ZwavSagEvents
+                        .AsNoTracking()
+                        .Where(x => x.Id == item.ProcessingEventId)
+                        .Select(x => (int?)x.SeqNo)
+                        .FirstOrDefaultAsync(cancellationToken)
+                        .ConfigureAwait(false)
+                    : null;
 
                 using var tx = await _context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
@@ -487,7 +909,7 @@ namespace Preferred.Api.Services
                 int fileCreatedEventCount = 0;
                 int fileCreatedPhaseCount = 0;
                 int fileCreatedRmsCount = 0;
-                int firstEventId = 0;
+                int firstEventId = item.ProcessingEventId;
 
                 for (int i = 0; i < persistPackages.Count; i++)
                 {
@@ -496,6 +918,16 @@ namespace Preferred.Api.Services
                         continue;
 
                     // 先保存主事件拿到主键，再回填相别和 RMS 明细外键。
+                    pkg.Event.TaskId = item.TaskId > 0 ? item.TaskId : pkg.Event.TaskId;
+                    pkg.Event.AnalysisId = item.AnalysisId;
+                    pkg.Event.AnalysisGuid = analysis.AnalysisGuid;
+                    if (item.TaskId > 0)
+                    {
+                        if (processingSeqNo.GetValueOrDefault() > 0)
+                            pkg.Event.SeqNo = processingSeqNo.Value;
+
+                        pkg.Event.CrtTime = startAt;
+                    }
                     _context.ZwavSagEvents.Add(pkg.Event);
                     await _context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -530,6 +962,8 @@ namespace Preferred.Api.Services
                     await DeleteProcessingEventAsync(item.ProcessingEventId, cancellationToken).ConfigureAwait(false);
 
                 await tx.CommitAsync(cancellationToken).ConfigureAwait(false);
+                if (item.TaskId > 0)
+                    await RefreshTaskStatsAsync(item.TaskId).ConfigureAwait(false);
 
                 _logger.LogInformation(
                     "后台暂降分析完成，FileId={FileId}, EventId={SagEventId}, EventCount={EventCount}, PhaseCount={PhaseCount}, RmsCount={RmsCount}, CostMs={CostMs}",
@@ -558,6 +992,8 @@ namespace Preferred.Api.Services
 
                 _context.ChangeTracker.Clear();
                 await MarkProcessingEventFailedAsync(item.ProcessingEventId, ex.Message).ConfigureAwait(false);
+                if (item.TaskId > 0)
+                    await RefreshTaskStatsAsync(item.TaskId).ConfigureAwait(false);
             }
         }
 
@@ -1199,6 +1635,103 @@ namespace Preferred.Api.Services
         private static decimal DefaultChannelRulePhaseValue(int phaseType)
         {
             return phaseType == 2 ? 100m : 57.74m;
+        }
+
+        private static string BuildAdaptiveChannelMatchText(string channelName, string channelCode)
+        {
+            var raw = string.Concat(
+                (channelName ?? string.Empty).Trim(),
+                " ",
+                (channelCode ?? string.Empty).Trim());
+
+            return new string(raw
+                .Where(ch => !char.IsWhiteSpace(ch) && ch != '_' && ch != '-' && ch != '/' && ch != '\\')
+                .ToArray())
+                .ToUpperInvariant();
+        }
+
+        private static string ResolveExplicitLineVoltagePhase(string channelName, string channelCode)
+        {
+            string matchText = BuildAdaptiveChannelMatchText(channelName, channelCode);
+            if (matchText.Length == 0)
+                return string.Empty;
+
+            if (matchText.Contains("UAB", StringComparison.Ordinal) ||
+                matchText.Contains("AB\u7EBF", StringComparison.Ordinal))
+                return "AB";
+
+            if (matchText.Contains("UBC", StringComparison.Ordinal) ||
+                matchText.Contains("BC\u7EBF", StringComparison.Ordinal))
+                return "BC";
+
+            if (matchText.Contains("UCA", StringComparison.Ordinal) ||
+                matchText.Contains("CA\u7EBF", StringComparison.Ordinal))
+                return "CA";
+
+            return string.Empty;
+        }
+
+        private static bool IsExplicitLineVoltageChannel(string phase, string channelName, string channelCode)
+        {
+            var normalizedPhase = NormalizePhaseName(phase);
+            if (normalizedPhase == "AB" || normalizedPhase == "BC" || normalizedPhase == "CA")
+                return true;
+
+            string matchText = BuildAdaptiveChannelMatchText(channelName, channelCode);
+            return matchText.Contains("UAB", StringComparison.Ordinal) ||
+                   matchText.Contains("UBC", StringComparison.Ordinal) ||
+                   matchText.Contains("UCA", StringComparison.Ordinal) ||
+                   matchText.Contains("AB\u7EBF", StringComparison.Ordinal) ||
+                   matchText.Contains("BC\u7EBF", StringComparison.Ordinal) ||
+                   matchText.Contains("CA\u7EBF", StringComparison.Ordinal) ||
+                   matchText.Contains("\u7EBF\u7535\u538B", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static int ResolveAdaptiveChannelPhaseType(
+            string phase,
+            string channelName,
+            string channelCode,
+            ZwavSagVoltageChannelRuleMatcher.RuleMatchResult enabledRule)
+        {
+            if (IsExplicitLineVoltageChannel(phase, channelName, channelCode))
+                return 2;
+
+            if (enabledRule != null &&
+                enabledRule.HasMatch &&
+                (enabledRule.PhaseType == 1 || enabledRule.PhaseType == 2))
+            {
+                return enabledRule.PhaseType;
+            }
+
+            return 1;
+        }
+
+        private static decimal? ResolveAdaptiveChannelPhaseValue(
+            int phaseType,
+            ZwavSagVoltageChannelRuleMatcher.RuleMatchResult enabledRule,
+            ZwavSagVoltageChannelRuleMatcher.RuleItem[] rules)
+        {
+            if (enabledRule != null &&
+                enabledRule.HasMatch &&
+                enabledRule.PhaseType == phaseType &&
+                enabledRule.PhaseValue > 0m)
+            {
+                return decimal.Round(enabledRule.PhaseValue, 6);
+            }
+
+            if (rules != null)
+            {
+                for (int i = 0; i < rules.Length; i++)
+                {
+                    var rule = rules[i];
+                    if (rule == null || !rule.Enabled || rule.PhaseType != phaseType || rule.PhaseValue <= 0m)
+                        continue;
+
+                    return decimal.Round(rule.PhaseValue, 6);
+                }
+            }
+
+            return DefaultChannelRulePhaseValue(phaseType);
         }
 
         private static string NormalizeReferenceType(string referenceType, decimal? referenceVoltage)
@@ -1868,9 +2401,12 @@ namespace Preferred.Api.Services
                     continue;
 
                 // 相别识别不到时无法参与后续排序和事件归类，因此直接跳过。
-                var phase = enabledRule.HasMatch
-                    ? enabledRule.PhaseName
-                    : ZwavSagVoltageChannelRuleMatcher.MatchPhase(channelName, channelCode, unit, rules);
+                var explicitLinePhase = ResolveExplicitLineVoltagePhase(channelName, channelCode);
+                var phase = !string.IsNullOrWhiteSpace(explicitLinePhase)
+                    ? explicitLinePhase
+                    : enabledRule.HasMatch
+                        ? enabledRule.PhaseName
+                        : ZwavSagVoltageChannelRuleMatcher.MatchPhase(channelName, channelCode, unit, rules);
                 if (string.IsNullOrWhiteSpace(phase))
                     continue;
 
@@ -1878,6 +2414,9 @@ namespace Preferred.Api.Services
                 var groupName = ZwavSagVoltageChannelRuleMatcher.MatchGroup(channelName, channelCode, unit, groupRules);
                 if (string.IsNullOrWhiteSpace(groupName))
                     groupName = $"CH-{ch.ChannelIndex}";
+
+                var phaseType = ResolveAdaptiveChannelPhaseType(phase, channelName, channelCode, enabledRule);
+                var phaseValue = ResolveAdaptiveChannelPhaseValue(phaseType, enabledRule, rules);
 
                 result.Add(new ZwavVoltageChannelContext
                 {
@@ -1887,8 +2426,8 @@ namespace Preferred.Api.Services
                     ChannelCode = channelCode,
                     ChannelName = channelName,
                     Unit = unit,
-                    PhaseType = enabledRule.HasMatch ? enabledRule.PhaseType : (int?)null,
-                    PhaseValue = enabledRule.HasMatch && enabledRule.PhaseValue > 0m ? enabledRule.PhaseValue : (decimal?)null
+                    PhaseType = phaseType,
+                    PhaseValue = phaseValue
                 });
             }
 
@@ -2287,33 +2826,10 @@ namespace Preferred.Api.Services
                     SagThresholdPct = x.SagThresholdPct,
                     InterruptThresholdPct = x.InterruptThresholdPct,
                     HysteresisPct = x.HysteresisPct,
-                    IsMergedStatEvent = x.IsMergedStatEvent,
-                    MergeGroupId = x.MergeGroupId,
-                    RawEventCount = x.RawEventCount,
-                    Remark = x.Remark,
                     CrtTime = x.CrtTime
                 })
                 .ToArrayAsync()
                 .ConfigureAwait(false);
-        }
-
-        public async Task<bool> UpdateAsync(int id, UpdateZwavSagEventRequest req)
-        {
-            if (req == null)
-                throw new ArgumentNullException(nameof(req));
-
-            var entity = await _context.ZwavSagEvents
-                .FirstOrDefaultAsync(x => x.Id == id)
-                .ConfigureAwait(false);
-
-            if (entity == null)
-                return false;
-
-            entity.Remark = req.Remark;
-            entity.UpdTime = DateTime.UtcNow;
-
-            await _context.SaveChangesAsync().ConfigureAwait(false);
-            return true;
         }
 
         public async Task<bool> DeleteAsync(int id)
@@ -2397,12 +2913,283 @@ namespace Preferred.Api.Services
             return events.Count;
         }
 
-        private async Task<ZwavSagEvent> CreateProcessingEventAsync(int fileId, string originalName, DateTime startAt)
+        private async Task<ZwavSagTask> ResolveOrCreateTaskAsync(AnalyzeZwavSagRequest rawRequest, AnalyzeZwavSagRequest normalizedRequest)
+        {
+            ZwavSagTask task = null;
+
+            if (rawRequest?.TaskId > 0)
+            {
+                task = await _context.ZwavSagTasks.FirstOrDefaultAsync(x => x.Id == rawRequest.TaskId.Value).ConfigureAwait(false);
+                if (task == null)
+                    throw new KeyNotFoundException("未找到暂降分析任务");
+            }
+            if (task == null)
+                return await CreateSagTaskAsync(normalizedRequest).ConfigureAwait(false);
+
+            if (task.IsClosed)
+                throw new InvalidOperationException("当前任务已关闭，不能继续追加录波文件");
+
+            EnsureTaskConfigMatches(task, normalizedRequest);
+            return task;
+        }
+
+        private async Task<ZwavSagTask> CreateSagTaskAsync(AnalyzeZwavSagRequest req)
+        {
+            var now = DateTime.UtcNow;
+            var taskNo = $"SAG{now:yyyyMMddHHmmssfff}";
+            var task = new ZwavSagTask
+            {
+                TaskNo = taskNo,
+                TaskName = $"暂降分析任务-{now:yyyyMMddHHmmss}",
+                SourceType = "Manual",
+                Status = SagTaskStatusOpen,
+                Progress = 0,
+                IsClosed = false,
+                ClosedTime = null,
+                StartParseTime = null,
+                FinishParseTime = null,
+                LastReceiveTime = now,
+                ReferenceType = NormalizeReferenceType(req?.ReferenceType, req?.ReferenceVoltage),
+                ReferenceVoltage = NormalizeReferenceVoltage(req?.ReferenceType, req?.ReferenceVoltage),
+                SagThresholdPct = req?.SagThresholdPct > 0 ? req.SagThresholdPct : 90m,
+                RecoverThresholdPct = req?.RecoverThresholdPct,
+                InterruptThresholdPct = req?.InterruptThresholdPct > 0 ? req.InterruptThresholdPct : 10m,
+                HysteresisPct = req?.HysteresisPct >= 0 ? req.HysteresisPct : 2m,
+                MinDurationMs = req?.MinDurationMs >= 0 ? req.MinDurationMs : 10m,
+                ReceivedFileCount = 0,
+                FinishedFileCount = 0,
+                SuccessFileCount = 0,
+                FailedFileCount = 0,
+                PendingFileCount = 0,
+                TotalParseMs = 0,
+                ErrorMessage = null,
+                SeqNo = 0,
+                CrtTime = now,
+                UpdTime = now
+            };
+
+            _context.ZwavSagTasks.Add(task);
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+            return task;
+        }
+
+        private static void EnsureTaskConfigMatches(ZwavSagTask task, AnalyzeZwavSagRequest req)
+        {
+            if (task == null || req == null)
+                return;
+
+            string reqReferenceType = NormalizeReferenceType(req.ReferenceType, req.ReferenceVoltage);
+            decimal? reqReferenceVoltage = NormalizeReferenceVoltage(reqReferenceType, req.ReferenceVoltage);
+
+            bool mismatch =
+                !string.Equals(task.ReferenceType ?? string.Empty, reqReferenceType ?? string.Empty, StringComparison.OrdinalIgnoreCase)
+                || DecimalChanged(task.ReferenceVoltage, reqReferenceVoltage)
+                || DecimalChanged(task.SagThresholdPct, req.SagThresholdPct)
+                || DecimalChanged(task.RecoverThresholdPct, req.RecoverThresholdPct)
+                || DecimalChanged(task.InterruptThresholdPct, req.InterruptThresholdPct)
+                || DecimalChanged(task.HysteresisPct, req.HysteresisPct)
+                || DecimalChanged(task.MinDurationMs, req.MinDurationMs);
+
+            if (mismatch)
+                throw new InvalidOperationException("当前任务已锁定分析参数，如需调整请先关闭当前任务后再新建");
+        }
+
+        private static bool DecimalChanged(decimal? left, decimal? right)
+        {
+            var l = left.HasValue ? decimal.Round(left.Value, 3) : (decimal?)null;
+            var r = right.HasValue ? decimal.Round(right.Value, 3) : (decimal?)null;
+            return l != r;
+        }
+
+        private async Task<ZwavSagTaskDto> BuildTaskDtoAsync(int taskId)
+        {
+            var task = await _context.ZwavSagTasks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == taskId)
+                .ConfigureAwait(false);
+            if (task == null)
+                throw new KeyNotFoundException("未找到暂降分析任务");
+
+            long? estimatedRemainingMs = null;
+            if (task.FinishedFileCount > 0 && task.PendingFileCount > 0 && task.TotalParseMs > 0)
+            {
+                estimatedRemainingMs = (long)Math.Round((decimal)task.TotalParseMs / task.FinishedFileCount * task.PendingFileCount);
+            }
+
+            var dto = new ZwavSagTaskDto
+            {
+                Id = task.Id,
+                TaskNo = task.TaskNo,
+                TaskName = task.TaskName,
+                SourceType = task.SourceType,
+                Status = task.Status,
+                StatusText = GetSagTaskStatusText(task.Status),
+                Progress = ClampProgress(task.Progress),
+                IsClosed = task.IsClosed,
+                ClosedTime = task.ClosedTime,
+                StartParseTime = task.StartParseTime,
+                FinishParseTime = task.FinishParseTime,
+                LastReceiveTime = task.LastReceiveTime,
+                ReferenceType = task.ReferenceType,
+                ReferenceVoltage = task.ReferenceVoltage,
+                SagThresholdPct = task.SagThresholdPct,
+                RecoverThresholdPct = task.RecoverThresholdPct,
+                InterruptThresholdPct = task.InterruptThresholdPct,
+                HysteresisPct = task.HysteresisPct,
+                MinDurationMs = task.MinDurationMs,
+                ReceivedFileCount = task.ReceivedFileCount,
+                FinishedFileCount = task.FinishedFileCount,
+                SuccessFileCount = task.SuccessFileCount,
+                FailedFileCount = task.FailedFileCount,
+                PendingFileCount = task.PendingFileCount,
+                TotalParseMs = task.TotalParseMs,
+                EstimatedRemainingMs = estimatedRemainingMs,
+                CrtTime = task.CrtTime,
+                UpdTime = task.UpdTime
+            };
+            dto.SummaryText = BuildSagTaskSummaryText(dto);
+            return dto;
+        }
+
+        private async Task RefreshTaskStatsAsync(int taskId)
+        {
+            if (taskId <= 0)
+                return;
+
+            var task = await _context.ZwavSagTasks.FirstOrDefaultAsync(x => x.Id == taskId).ConfigureAwait(false);
+            if (task == null)
+                return;
+
+            var rows = await _context.ZwavSagEvents
+                .AsNoTracking()
+                .Where(x => x.TaskId == taskId)
+                .Select(x => new
+                {
+                    x.Status,
+                    x.CrtTime,
+                    x.StartTime,
+                    x.FinishTime,
+                    x.CostMs
+                })
+                .ToListAsync()
+                .ConfigureAwait(false);
+
+            var receivedCount = rows.Count;
+            var successCount = rows.Count(x => x.Status == SagTaskFileStatusSuccess);
+            var failedCount = rows.Count(x => x.Status == SagTaskFileStatusFailed);
+            var finishedCount = successCount + failedCount;
+            var pendingCount = Math.Max(0, receivedCount - finishedCount);
+
+            task.ReceivedFileCount = receivedCount;
+            task.SuccessFileCount = successCount;
+            task.FailedFileCount = failedCount;
+            task.FinishedFileCount = finishedCount;
+            task.PendingFileCount = pendingCount;
+            task.Progress = receivedCount <= 0 ? 0 : ClampProgress((int)Math.Round(finishedCount * 100d / receivedCount));
+            task.StartParseTime = rows.Where(x => x.StartTime.HasValue).Select(x => x.StartTime).Min();
+            task.TotalParseMs = rows.Where(x => x.CostMs.HasValue && x.CostMs.Value > 0).Sum(x => x.CostMs.Value);
+
+            if (!task.IsClosed)
+            {
+                task.Status = SagTaskStatusOpen;
+                task.FinishParseTime = null;
+            }
+            else if (pendingCount > 0)
+            {
+                task.Status = SagTaskStatusClosedProcessing;
+                task.FinishParseTime = null;
+            }
+            else
+            {
+                task.Status = failedCount > 0 ? SagTaskStatusCompletedWithErrors : SagTaskStatusCompleted;
+                task.FinishParseTime = rows.Where(x => x.FinishTime.HasValue).Select(x => x.FinishTime).Max();
+            }
+
+            task.ErrorMessage = failedCount > 0
+                ? await _context.ZwavSagEvents
+                    .AsNoTracking()
+                    .Where(x => x.TaskId == taskId && x.Status == SagTaskFileStatusFailed && !string.IsNullOrEmpty(x.ErrorMessage))
+                    .OrderByDescending(x => x.Id)
+                    .Select(x => x.ErrorMessage)
+                    .FirstOrDefaultAsync()
+                    .ConfigureAwait(false)
+                : null;
+            task.UpdTime = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+        }
+
+        private async Task MarkTaskEventProcessingAsync(int taskEventId, DateTime startAt)
+        {
+            if (taskEventId <= 0)
+                return;
+
+            var entity = await _context.ZwavSagEvents.FirstOrDefaultAsync(x => x.Id == taskEventId).ConfigureAwait(false);
+            if (entity == null)
+                return;
+
+            entity.Status = SagTaskFileStatusProcessing;
+            entity.Progress = 10;
+            entity.StartTime = entity.StartTime ?? startAt;
+            entity.UpdTime = DateTime.UtcNow;
+            await _context.SaveChangesAsync().ConfigureAwait(false);
+            if (entity.TaskId.HasValue)
+                await RefreshTaskStatsAsync(entity.TaskId.Value).ConfigureAwait(false);
+        }
+
+        private static string GetSagTaskStatusText(int status)
+        {
+            return status switch
+            {
+                SagTaskStatusOpen => "接收中",
+                SagTaskStatusClosedProcessing => "已关闭待收尾",
+                SagTaskStatusCompleted => "已完成",
+                SagTaskStatusCompletedWithErrors => "已完成（有失败）",
+                _ => "未知"
+            };
+        }
+
+        private static string BuildSagTaskSummaryText(ZwavSagTaskDto task)
+        {
+            if (task == null)
+                return "当前暂无活动任务";
+
+            string startText = task.StartParseTime.HasValue
+                ? task.StartParseTime.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+                : "尚未开始解析";
+            string etaText = task.EstimatedRemainingMs.HasValue
+                ? FormatDurationHms(task.EstimatedRemainingMs.Value)
+                : "--:--:--";
+
+            return $"{startText}开始解析，目前共接收到录波文件{task.ReceivedFileCount}个，已完成自动解析{task.FinishedFileCount}个（其中成功{task.SuccessFileCount}个、失败{task.FailedFileCount}个），待自动解析{task.PendingFileCount}个，预计剩余时间{etaText}。";
+        }
+
+        private static string FormatDurationHms(long totalMs)
+        {
+            if (totalMs <= 0)
+                return "00:00:00";
+
+            var ts = TimeSpan.FromMilliseconds(totalMs);
+            int hours = (int)Math.Floor(ts.TotalHours);
+            return string.Format(CultureInfo.InvariantCulture, "{0:D2}:{1:D2}:{2:D2}", hours, ts.Minutes, ts.Seconds);
+        }
+
+        private async Task<ZwavSagEvent> CreateProcessingEventAsync(
+            int fileId,
+            int taskId,
+            int analysisId,
+            string analysisGuid,
+            string originalName,
+            DateTime startAt,
+            int seqNo)
         {
             var now = DateTime.UtcNow;
             var entity = new ZwavSagEvent
             {
                 FileId = fileId,
+                TaskId = taskId > 0 ? taskId : (int?)null,
+                AnalysisId = analysisId > 0 ? analysisId : (int?)null,
+                AnalysisGuid = string.IsNullOrWhiteSpace(analysisGuid) ? null : analysisGuid.Trim(),
                 OriginalName = originalName,
                 Status = 1,
                 Progress = 0,
@@ -2413,9 +3200,7 @@ namespace Preferred.Api.Services
                 StartTime = startAt,
                 FinishTime = null,
                 CostMs = null,
-                RawEventCount = 0,
-                SeqNo = 0,
-                Remark = null,
+                SeqNo = seqNo > 0 ? seqNo : 0,
                 CrtTime = now,
                 UpdTime = now
             };
@@ -2506,6 +3291,8 @@ namespace Preferred.Api.Services
 
             return new AnalyzeZwavSagRequest
             {
+                TaskId = req.TaskId,
+                CreateTask = req.CreateTask,
                 FileIds = req.FileIds?.Where(x => x > 0).Distinct().ToArray(),
                 AnalysisGuids = req.AnalysisGuids?
                     .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -2654,10 +3441,6 @@ namespace Preferred.Api.Services
                 SagThresholdPct = x.SagThresholdPct,
                 InterruptThresholdPct = x.InterruptThresholdPct,
                 HysteresisPct = x.HysteresisPct,
-                IsMergedStatEvent = x.IsMergedStatEvent,
-                MergeGroupId = x.MergeGroupId,
-                RawEventCount = x.RawEventCount,
-                Remark = x.Remark,
                 CrtTime = x.CrtTime
             };
         }
@@ -2677,11 +3460,7 @@ namespace Preferred.Api.Services
                 StartTime = startAt,
                 FinishTime = finishAt,
                 CostMs = costMs,
-                IsMergedStatEvent = false,
-                MergeGroupId = null,
-                RawEventCount = 0,
                 SeqNo = 0,
-                Remark = null,
                 CrtTime = finishAt,
                 UpdTime = finishAt
             };
@@ -2702,11 +3481,7 @@ namespace Preferred.Api.Services
                 StartTime = startAt,
                 FinishTime = failAt,
                 CostMs = (long)Math.Round((failAt - startAt).TotalMilliseconds),
-                IsMergedStatEvent = false,
-                MergeGroupId = null,
-                RawEventCount = 0,
                 SeqNo = 0,
-                Remark = null,
                 CrtTime = failAt,
                 UpdTime = failAt
             };
@@ -2728,11 +3503,6 @@ namespace Preferred.Api.Services
                 throw new ArgumentNullException(nameof(evt));
 
             int eventCount = allEvents?.Count(x => x != null) ?? 1;
-            int rawEventCount = allEvents == null
-                ? Math.Max(1, evt.RawEventCount)
-                : allEvents
-                    .Where(x => x != null)
-                    .Sum(x => Math.Max(1, x.RawEventCount > 0 ? x.RawEventCount : 1));
 
             return new ZwavSagEvent
             {
@@ -2765,11 +3535,7 @@ namespace Preferred.Api.Services
                 SagThresholdPct = ClampPercent(evt.SagThresholdPct),
                 InterruptThresholdPct = ClampPercent(evt.InterruptThresholdPct),
                 HysteresisPct = ClampPercent(evt.HysteresisPct),
-                IsMergedStatEvent = evt.IsMergedStatEvent,
-                MergeGroupId = evt.IsMergedStatEvent ? Guid.NewGuid().ToString("N") : null,
-                RawEventCount = Math.Max(1, rawEventCount),
                 SeqNo = seqNo,
-                Remark = null,
                 CrtTime = finishAt,
                 UpdTime = finishAt
             };

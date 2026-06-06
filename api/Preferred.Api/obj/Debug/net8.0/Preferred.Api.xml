@@ -471,107 +471,6 @@
             查询任务状态（直接查 Tb_ZwavAnalysis）
             </summary>
         </member>
-        <member name="T:Preferred.Api.Services.IZwavSagEventService">
-            <summary>
-            暂降事件应用服务。
-            负责录波文件暂降分析的发起、后台处理、结果查询、过程预览以及规则维护。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.QueryAsync(System.String,System.String,System.String,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
-            <summary>
-            分页查询暂降分析结果列表，默认返回每个录波文件最新的一条事件记录。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.AnalyzeAsync(Zwav.Application.Sag.AnalyzeZwavSagRequest)">
-            <summary>
-            发起暂降分析请求，将满足条件的录波文件加入后台分析队列。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.ProcessQueuedAnalyzeAsync(Zwav.Application.Sag.ZwavSagAnalysisQueueItem,System.Threading.CancellationToken)">
-            <summary>
-            后台消费一条暂降分析任务，完成上下文构建、分析执行以及结果落库。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetDetailAsync(System.Int32)">
-            <summary>
-            获取单个暂降事件详情。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetPhasesAsync(System.Int32)">
-            <summary>
-            获取指定暂降事件关联的相别明细。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetByFileIdAsync(System.Int32)">
-            <summary>
-            根据录波文件 ID 查询其对应的暂降事件记录。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.UpdateAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagEventRequest)">
-            <summary>
-            更新暂降事件基础信息。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteAsync(System.Int32)">
-            <summary>
-            删除指定暂降事件。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteByFileIdAsync(System.Int32)">
-            <summary>
-            删除某个录波文件下的全部暂降事件及其关联数据。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.GetProcessAsync(System.Int32)">
-            <summary>
-            获取暂降处理过程视图所需的完整上下文。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.PreviewProcessAsync(System.Int32,Zwav.Application.Sag.ZwavSagProcessPreviewRequest)">
-            <summary>
-            基于前端指定参数临时预览暂降处理效果，不修改已持久化结果。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.QueryChannelRuleAsync(System.String,System.Nullable{System.Boolean},System.Int32,System.Int32)">
-            <summary>
-            分页查询电压通道相别匹配规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.CreateChannelRuleAsync(Zwav.Application.Sag.CreateZwavSagChannelRuleRequest)">
-            <summary>
-            新增电压通道相别匹配规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.UpdateChannelRuleAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagChannelRuleRequest)">
-            <summary>
-            更新电压通道相别匹配规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteChannelRuleAsync(System.Int32)">
-            <summary>
-            删除电压通道相别匹配规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.QueryGroupRuleAsync(System.String,System.Int32,System.Int32)">
-            <summary>
-            分页查询电压通道分组规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.CreateGroupRuleAsync(Zwav.Application.Sag.CreateZwavSagGroupRuleRequest)">
-            <summary>
-            新增电压通道分组规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.UpdateGroupRuleAsync(System.Int32,Zwav.Application.Sag.UpdateZwavSagGroupRuleRequest)">
-            <summary>
-            更新电压通道分组规则。
-            </summary>
-        </member>
-        <member name="M:Preferred.Api.Services.IZwavSagEventService.DeleteGroupRuleAsync(System.Int32)">
-            <summary>
-            删除电压通道分组规则。
-            </summary>
-        </member>
         <member name="T:Preferred.Api.Services.ZwavSagEventService">
             <summary>
             暂降事件应用服务。
@@ -1715,123 +1614,9 @@
         </member>
         <member name="T:Preferred.Api.Models.ZwavSagEvent">
             <summary>
-            暂降分析结果（按录波文件维度）。
-            一条记录对应一个录波文件的一次分析结果；若未检测到暂降/中断，也会生成记录。
+            暂降分析结果主表。
+            一条记录对应一个录波文件的一次暂降分析结果。
             </summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.Id">
-            <summary>主键</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.FileId">
-            <summary>录波文件ID（关联 Tb_ZwavFile）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.OriginalName">
-            <summary>录波文件原始名称</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.Status">
-            <summary>分析状态：0=待处理，1=处理中，2=成功，3=失败</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.Progress">
-            <summary>解析进度（0-100）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.ErrorMessage">
-            <summary>失败原因/错误信息</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.HasSag">
-            <summary>是否检测到暂降/中断事件</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.EventType">
-            <summary>结果类型：Normal=正常，Sag=暂降，Interruption=中断</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.EventCount">
-            <summary>事件数量</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.StartTime">
-            <summary>分析开始时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.FinishTime">
-            <summary>分析结束时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.CostMs">
-            <summary>分析耗时（毫秒）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.StartTimeUtc">
-            <summary>事件开始时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.EndTimeUtc">
-            <summary>事件结束时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.OccurTimeUtc">
-            <summary>事件发生时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.DurationMs">
-            <summary>事件持续时长（毫秒）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.TriggerPhase">
-            <summary>触发相别</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.EndPhase">
-            <summary>恢复/结束相别</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.WorstPhase">
-            <summary>最严重相别</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.ReferenceType">
-            <summary>参考电压类型（Declared/Sliding）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.ReferenceVoltage">
-            <summary>参考电压</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.ResidualVoltage">
-            <summary>残余电压</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.ResidualVoltagePct">
-            <summary>残余电压占比（%）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.SagDepth">
-            <summary>暂降深度</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.SagPercent">
-            <summary>暂降百分比（%）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.PhaseJumpDeg">
-            <summary>相角跳变</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.StartAngleDeg">
-            <summary>起始相角</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.SagThresholdPct">
-            <summary>暂降阈值（%）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.InterruptThresholdPct">
-            <summary>中断阈值（%）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.HysteresisPct">
-            <summary>迟滞（%）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.IsMergedStatEvent">
-            <summary>是否为合并统计事件</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.MergeGroupId">
-            <summary>合并分组ID</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.RawEventCount">
-            <summary>原始事件数量</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.SeqNo">
-            <summary>序号</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.Remark">
-            <summary>备注</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.CrtTime">
-            <summary>创建时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.UpdTime">
-            <summary>更新时间（UTC）</summary>
-        </member>
-        <member name="P:Preferred.Api.Models.ZwavSagEvent.Phases">
-            <summary>相别明细集合</summary>
         </member>
         <member name="T:Preferred.Api.Models.ZwavSagEventPhase">
             <summary>
@@ -1961,6 +1746,18 @@
         </member>
         <member name="P:Preferred.Api.Models.ZwavSagRmsPoint.UpdTime">
             <summary>更新时间（UTC）</summary>
+        </member>
+        <member name="T:Preferred.Api.Models.ZwavSagTask">
+            <summary>
+            暂降分析任务聚合表。
+            一个任务可以持续接收多批录波文件，直到被手动关闭。
+            </summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagTask.SourceType">
+            <summary>任务来源：Manual/TripEvent。</summary>
+        </member>
+        <member name="P:Preferred.Api.Models.ZwavSagTask.Status">
+            <summary>任务状态：0=接收中，1=已关闭待收尾，2=完成，3=完成但存在失败。</summary>
         </member>
         <member name="T:Preferred.Api.Models.ApiResponse`1">
             <summary>
@@ -4276,7 +4073,7 @@
             控制器层不再暴露 RMS 模式切换。
             </summary>
         </member>
-        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.DeleteAsync(System.Int32)">
+        <member name="M:Preferred.Api.Controllers.ZwavSagEventsController.GetActiveTaskAsync">
             <summary>
             删除单个暂降事件
             </summary>

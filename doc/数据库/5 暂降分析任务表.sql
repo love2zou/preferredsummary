@@ -1,21 +1,8 @@
 USE Db_PreferredData;
 
-/*
-  基础字段补充
-*/
-ALTER TABLE Tb_User
-    ADD COLUMN IF NOT EXISTS FullName VARCHAR(50) NULL COMMENT '昵称或姓名' AFTER UserName;
-
-ALTER TABLE Tb_SystemResource
-    ADD COLUMN IF NOT EXISTS HostName VARCHAR(100) NOT NULL COMMENT '主机名称' AFTER Id,
-    ADD COLUMN IF NOT EXISTS DiskName VARCHAR(100) NOT NULL COMMENT '系统盘名称' AFTER MemoryUsage;
-
-ALTER TABLE Tb_Notification
-    ADD COLUMN IF NOT EXISTS SendStatus INT DEFAULT 0 NOT NULL COMMENT '发送状态：0未发送，1已发送，2发送失败' AFTER NotifyStatus;
-
-/*
-  暂降分析任务功能升级
-*/
+/*==============================================================*/
+/* 暂降分析任务表                                                */
+/*==============================================================*/
 CREATE TABLE IF NOT EXISTS Tb_ZwavSagTask (
    Id                    INT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
    TaskNo                VARCHAR(64)        NOT NULL COMMENT '任务编号',
@@ -49,6 +36,9 @@ CREATE TABLE IF NOT EXISTS Tb_ZwavSagTask (
    KEY IX_ZwavSagTask_IsClosed_CrtTime (IsClosed, CrtTime)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='暂降分析任务表';
 
+/*==============================================================*/
+/* Tb_ZwavSagEvent 合并任务字段并删除未使用字段                  */
+/*==============================================================*/
 ALTER TABLE Tb_ZwavSagEvent
     ADD COLUMN IF NOT EXISTS TaskId INT NULL COMMENT '所属暂降分析任务ID' AFTER FileId,
     ADD COLUMN IF NOT EXISTS AnalysisId INT NULL COMMENT '录波解析任务ID' AFTER TaskId,

@@ -52,6 +52,7 @@ namespace Preferred.Api.Data
         public DbSet<ZwavSagRmsPoint> ZwavSagRmsPoints { get; set; }
         public DbSet<ZwavSagChannelRule> ZwavSagChannelRules { get; set; }
         public DbSet<ZwavSagGroupRule> ZwavSagGroupRules { get; set; }
+        public DbSet<ZwavSagTask> ZwavSagTasks { get; set; }
         // ====================== ZWAV 电压暂降分析表映射 - End ======================
 
         // ====================== 视频分析表映射- Start======================
@@ -685,6 +686,16 @@ namespace Preferred.Api.Data
 
                 entity.Property(e => e.ErrorMessage).HasColumnType("TEXT");
 
+                entity.Property(e => e.TaskId)
+                    .HasComment("所属暂降分析任务ID（为空表示独立分析记录）");
+
+                entity.Property(e => e.AnalysisId)
+                    .HasComment("录波解析任务ID");
+
+                entity.Property(e => e.AnalysisGuid)
+                    .HasMaxLength(64)
+                    .HasComment("录波解析任务GUID");
+
                 entity.Property(e => e.HasSag)
                     .IsRequired()
                     .HasDefaultValue(false)
@@ -763,26 +774,16 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.HysteresisPct)
                     .HasColumnType("decimal(10,3)");
 
-                entity.Property(e => e.IsMergedStatEvent)
-                    .IsRequired()
-                    .HasDefaultValue(false);
-
-                entity.Property(e => e.MergeGroupId)
-                    .HasMaxLength(64);
-
-                entity.Property(e => e.RawEventCount)
-                    .IsRequired()
-                    .HasDefaultValue(1);
-
                 entity.Property(e => e.SeqNo)
                     .IsRequired()
                     .HasDefaultValue(0);
 
-                entity.Property(e => e.Remark)
-                    .HasMaxLength(500);
-
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => new { e.TaskId, e.Status, e.CrtTime });
+                entity.HasIndex(e => e.AnalysisId);
+                entity.HasIndex(e => e.AnalysisGuid);
             });
 
             modelBuilder.Entity<ZwavSagEventPhase>(entity =>
@@ -965,6 +966,84 @@ namespace Preferred.Api.Data
                 entity.Property(e => e.CrtTime).IsRequired();
                 entity.Property(e => e.UpdTime).IsRequired();
             });
+
+            modelBuilder.Entity<ZwavSagTask>(entity =>
+            {
+                entity.ToTable("Tb_ZwavSagTask");
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id).ValueGeneratedOnAdd();
+
+                entity.Property(e => e.TaskNo).IsRequired().HasMaxLength(64)
+                    .HasComment("暂降分析任务编号（业务唯一）");
+
+                entity.Property(e => e.TaskName).HasMaxLength(100)
+                    .HasComment("任务名称");
+
+                entity.Property(e => e.SourceType).IsRequired().HasMaxLength(32)
+                    .HasComment("任务来源：Manual/TripEvent");
+
+                entity.Property(e => e.Status).IsRequired()
+                    .HasComment("任务状态：0=接收中，1=已关闭待收尾，2=完成，3=完成但存在失败");
+
+                entity.Property(e => e.Progress).IsRequired().HasDefaultValue(0)
+                    .HasComment("任务进度（按文件完成数统计，0-100）");
+
+                entity.Property(e => e.IsClosed).IsRequired().HasDefaultValue(false)
+                    .HasComment("是否已手动关闭，不再接收新录波文件");
+
+                entity.Property(e => e.ClosedTime)
+                    .HasComment("任务关闭时间");
+
+                entity.Property(e => e.StartParseTime)
+                    .HasComment("任务首个文件开始解析时间");
+
+                entity.Property(e => e.FinishParseTime)
+                    .HasComment("任务全部已接收文件解析完成时间");
+
+                entity.Property(e => e.LastReceiveTime)
+                    .HasComment("最近一次接收录波文件时间");
+
+                entity.Property(e => e.ReferenceType).HasMaxLength(32)
+                    .HasComment("参考电压处理方式");
+
+                entity.Property(e => e.ReferenceVoltage).HasColumnType("decimal(18,6)")
+                    .HasComment("任务级参考电压");
+
+                entity.Property(e => e.SagThresholdPct).HasColumnType("decimal(10,3)");
+                entity.Property(e => e.RecoverThresholdPct).HasColumnType("decimal(10,3)");
+                entity.Property(e => e.InterruptThresholdPct).HasColumnType("decimal(10,3)");
+                entity.Property(e => e.HysteresisPct).HasColumnType("decimal(10,3)");
+                entity.Property(e => e.MinDurationMs).HasColumnType("decimal(12,3)");
+
+                entity.Property(e => e.ReceivedFileCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("累计接收到的录波文件数");
+
+                entity.Property(e => e.FinishedFileCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("已完成自动解析的文件数");
+
+                entity.Property(e => e.SuccessFileCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("成功解析文件数");
+
+                entity.Property(e => e.FailedFileCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("失败解析文件数");
+
+                entity.Property(e => e.PendingFileCount).IsRequired().HasDefaultValue(0)
+                    .HasComment("待自动解析文件数");
+
+                entity.Property(e => e.TotalParseMs).IsRequired().HasDefaultValue(0)
+                    .HasComment("累计已完成文件解析耗时（毫秒）");
+
+                entity.Property(e => e.ErrorMessage).HasColumnType("TEXT")
+                    .HasComment("任务级错误信息");
+
+                entity.Property(e => e.SeqNo).IsRequired().HasDefaultValue(0);
+                entity.Property(e => e.CrtTime).IsRequired();
+                entity.Property(e => e.UpdTime).IsRequired();
+
+                entity.HasIndex(e => e.TaskNo).IsUnique();
+                entity.HasIndex(e => new { e.IsClosed, e.CrtTime });
+            });
+
             // ====================== 视频分析表映射 ======================
             modelBuilder.Entity<VideoAnalysisJob>(entity =>
             {

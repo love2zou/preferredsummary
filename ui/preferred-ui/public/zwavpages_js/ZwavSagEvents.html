@@ -93,6 +93,61 @@
         justify-content: space-between;
       }
     }
+
+    .task-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .task-toolbar-left,
+    .task-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .task-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .task-kpi-card {
+      padding: 14px 16px;
+      border: 1px solid #e4e7ed;
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .task-kpi-label {
+      font-size: 12px;
+      color: #909399;
+    }
+
+    .task-kpi-value {
+      margin-top: 6px;
+      font-size: 22px;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    .task-kpi-sub {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #606266;
+    }
+
+    @media (max-width: 768px) {
+      .task-detail-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 
@@ -157,6 +212,8 @@
       </div>
       <div class="page-actions-right">
         <button class="el-button el-button--primary" id="btnOpenAnalyze">新增暂降分析</button>
+        <button class="el-button el-button--success" id="btnOpenCreateTask">创建暂降任务</button>
+        <button class="el-button" id="btnOpenTaskList">暂降任务列表</button>
         <button class="el-button" id="btnOpenChannelRules">电压暂降通道识别词库</button>
       </div>
     </div>
@@ -224,7 +281,7 @@
   <div class="el-dialog-mask" id="analyzeModal">
     <div class="el-dialog el-dialog--lg">
       <div class="el-dialog__header">
-        <div class="el-dialog__title">新增暂降分析</div>
+        <div class="el-dialog__title" id="analyzeModalTitle">新增暂降分析</div>
         <button class="el-dialog__close" data-dialog-close>×</button>
       </div>
       <div class="el-dialog__body">
@@ -295,6 +352,18 @@
           </div>
         </div>
 
+        <div class="task-summary-card" id="sagTaskSummaryCard">
+          <div class="task-summary-head">
+            <div>
+              <div class="task-summary-title">当前目标任务</div>
+              <div class="task-summary-sub" id="sagTaskMetaText">当前会创建一个新的暂降分析任务，后续可以在任务详情中继续追加录波文件。</div>
+            </div>
+            <span class="el-tag el-tag--info" id="sagTaskStatusTag">新任务</span>
+          </div>
+          <div class="task-summary-body" id="sagTaskSummaryText">提交后会立即创建任务，并把当前勾选的录波文件加入该任务进行暂降分析。</div>
+          <div class="task-summary-foot" id="sagTaskFootText">如果是向已有任务追加文件，系统会自动沿用该任务原有的参考电压与分析参数。</div>
+        </div>
+
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
           <input id="analysisKeyword" class="el-input" placeholder="输入文件名关键词" style="width: 260px" />
           <button class="el-button el-button--primary" id="btnAnalysisSearch">查询</button>
@@ -328,7 +397,168 @@
       </div>
       <div class="el-dialog__footer">
         <button class="el-button" data-dialog-close>关闭</button>
-        <button class="el-button el-button--primary" id="btnStartAnalyze">开始分析</button>
+        <button class="el-button el-button--primary" id="btnStartAnalyze">提交任务</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="taskListModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title">暂降任务列表</div>
+        <button class="el-dialog__close" data-dialog-close>脳</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="task-toolbar">
+          <div class="task-toolbar-left">
+            <input id="taskKeyword" class="el-input" placeholder="任务编号 / 任务名称" style="width: 220px" />
+            <select id="taskStatusFilter" class="el-select" style="width: 140px">
+              <option value="">全部状态</option>
+              <option value="0">接收中</option>
+              <option value="1">已关闭待收尾</option>
+              <option value="2">已完成</option>
+              <option value="3">已完成（有失败）</option>
+            </select>
+            <select id="taskClosedFilter" class="el-select" style="width: 140px">
+              <option value="">全部任务</option>
+              <option value="false">仅未关闭</option>
+              <option value="true">仅已关闭</option>
+            </select>
+          </div>
+          <div class="task-toolbar-right">
+            <button class="el-button el-button--primary" id="btnTaskSearch">查询</button>
+            <button class="el-button el-button--success" id="btnTaskCreate">创建暂降任务</button>
+          </div>
+        </div>
+        <table class="el-table">
+          <thead>
+            <tr>
+              <th class="cell-center" style="width: 60px">序号</th>
+              <th style="width: 180px">任务编号</th>
+              <th style="width: 200px">任务名称</th>
+              <th style="width: 110px">任务状态</th>
+              <th style="width: 90px">接收数量</th>
+              <th style="width: 90px">已完成</th>
+              <th style="width: 90px">待解析</th>
+              <th style="width: 170px">开始解析时间</th>
+              <th style="width: 170px">结束解析时间</th>
+              <th class="cell-center" style="width: 130px">操作</th>
+            </tr>
+          </thead>
+          <tbody id="taskTbody"></tbody>
+        </table>
+        <div class="pagination" style="margin-top: 12px;">
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="taskTotalText">-</span>
+          <select id="taskPageSize" class="el-select" style="width: 90px; height: 28px">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="el-button" id="taskPrev">上一页</button>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="taskPageText">1</span> 页</span>
+          <button class="el-button" id="taskNext">下一页</button>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="el-dialog-mask" id="taskDetailModal">
+    <div class="el-dialog el-dialog--lg">
+      <div class="el-dialog__header">
+        <div class="el-dialog__title" id="taskDetailTitle">暂降任务详情</div>
+        <button class="el-dialog__close" data-dialog-close>脳</button>
+      </div>
+      <div class="el-dialog__body">
+        <div class="task-summary-card">
+          <div class="task-summary-head">
+            <div>
+              <div class="task-summary-title" id="taskDetailTaskNo">-</div>
+              <div class="task-summary-sub" id="taskDetailMeta">-</div>
+            </div>
+            <span class="el-tag el-tag--info" id="taskDetailStatusTag">-</span>
+          </div>
+          <div class="task-summary-body" id="taskDetailSummary">-</div>
+          <div class="task-summary-foot" id="taskDetailFoot">-</div>
+        </div>
+
+        <div class="task-detail-grid">
+          <div class="task-kpi-card">
+            <div class="task-kpi-label">接收录波文件</div>
+            <div class="task-kpi-value" id="taskReceivedCount">0</div>
+            <div class="task-kpi-sub">已加入本任务的录波文件总数</div>
+          </div>
+          <div class="task-kpi-card">
+            <div class="task-kpi-label">已完成自动解析</div>
+            <div class="task-kpi-value" id="taskFinishedCount">0</div>
+            <div class="task-kpi-sub" id="taskFinishedSub">成功 0 个，失败 0 个</div>
+          </div>
+          <div class="task-kpi-card">
+            <div class="task-kpi-label">待自动解析</div>
+            <div class="task-kpi-value" id="taskPendingCount">0</div>
+            <div class="task-kpi-sub">正在等待进入暂降分析流程的文件数量</div>
+          </div>
+          <div class="task-kpi-card">
+            <div class="task-kpi-label">预计剩余时间</div>
+            <div class="task-kpi-value" id="taskEtaText">--:--:--</div>
+            <div class="task-kpi-sub" id="taskProgressSub">当前进度 0%</div>
+          </div>
+        </div>
+
+        <div class="task-toolbar">
+          <div class="task-toolbar-left">
+            <input id="taskFileKeyword" class="el-input" placeholder="录波文件名" style="width: 220px" />
+            <select id="taskFileStatusFilter" class="el-select" style="width: 140px">
+              <option value="">全部状态</option>
+              <option value="0">待处理</option>
+              <option value="1">处理中</option>
+              <option value="2">成功</option>
+              <option value="3">失败</option>
+            </select>
+          </div>
+          <div class="task-toolbar-right">
+            <button class="el-button el-button--primary" id="btnTaskFileSearch">查询</button>
+            <button class="el-button el-button--success" id="btnTaskAppendFiles">追加录波文件</button>
+            <button class="el-button el-button--danger" id="btnTaskCloseFromDetail">关闭任务</button>
+          </div>
+        </div>
+
+        <table class="el-table">
+          <thead>
+            <tr>
+              <th class="cell-center" style="width: 60px">序号</th>
+              <th style="width: 240px">录波文件名</th>
+              <th style="width: 90px">状态</th>
+              <th style="width: 80px">进度</th>
+              <th style="width: 80px">是否暂降</th>
+              <th style="width: 80px">事件类型</th>
+              <th style="width: 80px">最严重相别</th>
+              <th style="width: 160px">开始时间</th>
+              <th style="width: 160px">结束时间</th>
+              <th style="width: 150px">错误信息</th>
+            </tr>
+          </thead>
+          <tbody id="taskFileTbody"></tbody>
+        </table>
+
+        <div class="pagination" style="margin-top: 12px;">
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);" id="taskFileTotalText">-</span>
+          <select id="taskFilePageSize" class="el-select" style="width: 90px; height: 28px">
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <button class="el-button" id="taskFilePrev">上一页</button>
+          <span style="font-size: 12px; color: var(--el-text-color-secondary);">第 <span id="taskFilePageText">1</span> 页</span>
+          <button class="el-button" id="taskFileNext">下一页</button>
+        </div>
+      </div>
+      <div class="el-dialog__footer">
+        <button class="el-button" data-dialog-close>关闭</button>
       </div>
     </div>
   </div>
@@ -862,7 +1092,7 @@
     }
   </style>
 
-  <script type="module" src="./assets/zwav-sag-events.js"></script>
+  <script type="module" src="./assets/zwav-sag-events.js?v=20260531-4"></script>
 </body>
 
 </html>

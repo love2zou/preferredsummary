@@ -42,7 +42,26 @@ const state = {
     pageSize: 10,
     total: 0,
     data: [],
-    selected: new Set()
+    selected: new Set(),
+    taskContext: null,
+    mode: 'legacy',
+    taskPolling: null
+  },
+
+  tasks: {
+    loading: false,
+    page: 1,
+    pageSize: 10,
+    total: 0,
+    data: [],
+    detailTaskId: 0,
+    detailTask: null,
+    detailLoading: false,
+    detailPage: 1,
+    detailPageSize: 10,
+    detailTotal: 0,
+    detailData: [],
+    polling: null
   },
 
   rules: {
@@ -118,6 +137,15 @@ function on(id, event, handler) {
   const el = byId(id)
   if (!el) return
   el.addEventListener(event, handler)
+}
+
+function openTaskWorkbenchWindow(mode, taskId) {
+  const url = new URL('./ZwavSagTaskWorkbench.html', window.location.href)
+  url.searchParams.set('mode', mode === 'list' ? 'list' : 'create')
+  const apiBase = getApiBaseUrl()
+  if (apiBase) url.searchParams.set('apiBase', apiBase)
+  if (taskId) url.searchParams.set('taskId', String(taskId))
+  window.open(url.toString(), '_blank', 'noopener')
 }
 
 function getAnalyzeStatusType(status) {
@@ -902,7 +930,494 @@ function renderAnalyses() {
     `
   }).join('')
 
-  setHtml('analysisTbody', tbody)
+setHtml('analysisTbody', tbody)
+}
+
+/*
+function getSagTaskStatusMeta(task) {
+  const status = Number(task?.status)
+  if (status === 0) return { type: 'warning', text: '接收中' }
+  if (status === 1) return { type: 'primary', text: '已关闭待收尾' }
+  if (status === 2) return { type: 'success', text: '已完成' }
+  if (status === 3) return { type: 'danger', text: '已完成（有失败）' }
+  return { type: 'info', text: '未创建' }
+}
+
+function selectReferenceMode(mode, voltage) {
+  const value = String(mode || 'Adaptive')
+  const radio = document.querySelector(`input[name="referenceTypeRadio"][value="${value}"]`)
+  if (radio) radio.checked = true
+  const customInput = byId('customReferenceVoltage')
+  if (customInput && Number.isFinite(Number(voltage)) && Number(voltage) > 0) {
+    customInput.value = String(voltage)
+  }
+  updateAnalyzeReferenceModeUi()
+}
+
+function toggleAnalyzeParamsDisabled(disabled) {
+  ;[
+    'sagThresholdPct',
+    'minDurationMs',
+    'interruptThresholdPct',
+    'hysteresisPct',
+    'recoverThresholdPct',
+    'customReferenceVoltage'
+  ].forEach((id) => {
+    const el = byId(id)
+    if (el) el.disabled = !!disabled
+  })
+
+  document.querySelectorAll('input[name="referenceTypeRadio"]').forEach((el) => {
+    el.disabled = !!disabled
+  })
+}
+
+function applyTaskParamsToForm(task) {
+  if (!task) {
+    toggleAnalyzeParamsDisabled(false)
+    const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="Adaptive"]')
+    if (defaultReferenceRadio) defaultReferenceRadio.checked = true
+    const customReferenceInput = byId('customReferenceVoltage')
+    if (customReferenceInput) customReferenceInput.value = ''
+    updateAnalyzeReferenceModeUi()
+    return
+  }
+
+  byId('sagThresholdPct').value = Number(task.sagThresholdPct || 90)
+  byId('minDurationMs').value = Number(task.minDurationMs || 10)
+  byId('interruptThresholdPct').value = Number(task.interruptThresholdPct || 10)
+  byId('hysteresisPct').value = Number(task.hysteresisPct || 2)
+  byId('recoverThresholdPct').value = task.recoverThresholdPct !== undefined && task.recoverThresholdPct !== null
+    ? Number(task.recoverThresholdPct)
+    : ''
+  selectReferenceMode(task.referenceType || 'Adaptive', task.referenceVoltage)
+  toggleAnalyzeParamsDisabled(true)
+}
+
+function renderSagTaskSummary() {
+  const task = state.analysis.activeTask
+  const statusMeta = getSagTaskStatusMeta(task)
+  const statusTag = byId('sagTaskStatusTag')
+  if (statusTag) {
+    statusTag.className = `el-tag el-tag--${statusMeta.type}`
+    statusTag.textContent = statusMeta.text
+  }
+
+  setText(
+    'sagTaskMetaText',
+    task
+      ? `${task.taskNo || '-'} | ${task.isClosed ? '已关闭，不再接收新文件' : '未关闭，可继续追加录波文件'}`
+      : '当前没有活动任务，首次加入录波文件时会自动创建。'
+  )
+  setText('sagTaskSummaryText', task?.summaryText || '当前暂无活动任务。')
+  setText(
+    'sagTaskFootText',
+    task
+      ? `当前进度 ${Number(task.progress || 0)}%，已完成 ${Number(task.finishedFileCount || 0)}/${Number(task.receivedFileCount || 0)}。`
+      : '任务未关闭前，可以多次勾选录波文件继续追加到同一任务。'
+  )
+
+  const closeBtn = byId('btnCloseSagTask')
+  if (closeBtn) closeBtn.disabled = !task
+}
+
+async function loadActiveSagTask(taskId) {
+  try {
+    const res = taskId ? await zwavApi.sagTaskDetail(taskId) : await zwavApi.sagActiveTask()
+    state.analysis.activeTask = res?.success ? (res.data || null) : null
+  } catch {
+    state.analysis.activeTask = null
+  }
+
+  renderSagTaskSummary()
+  applyTaskParamsToForm(state.analysis.activeTask)
+}
+
+function stopSagTaskPolling() {
+  if (state.analysis.taskPolling) {
+    clearInterval(state.analysis.taskPolling)
+    state.analysis.taskPolling = null
+  }
+}
+
+function startSagTaskPolling() {
+  stopSagTaskPolling()
+  state.analysis.taskPolling = setInterval(() => {
+    const modal = byId('analyzeModal')
+    if (!modal || !modal.classList.contains('is-open')) return
+    if (!state.analysis.activeTask?.id) return
+    loadActiveSagTask(state.analysis.activeTask.id)
+  }, 5000)
+}
+
+function ensureSagTaskUi() {
+  if (!document.getElementById('zwavSagTaskStyle')) {
+    const style = document.createElement('style')
+    style.id = 'zwavSagTaskStyle'
+    style.textContent = `
+      .task-summary-card{margin-bottom:14px;padding:14px 16px;border:1px solid #dcdfe6;border-radius:12px;background:linear-gradient(180deg,#f9fbff 0%,#ffffff 100%)}
+      .task-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+      .task-summary-title{font-size:15px;font-weight:600;color:#303133}
+      .task-summary-sub{margin-top:4px;font-size:12px;color:#909399}
+      .task-summary-body{color:#303133;line-height:1.8}
+      .task-summary-foot{margin-top:8px;font-size:12px;color:#606266}
+    `
+    document.head.appendChild(style)
+  }
+
+  if (!byId('btnCloseSagTask')) {
+    const footer = byId('analyzeModal')?.querySelector('.el-dialog__footer')
+    const startBtn = byId('btnStartAnalyze')
+    if (footer && startBtn) {
+      const btn = document.createElement('button')
+      btn.className = 'el-button el-button--danger'
+      btn.id = 'btnCloseSagTask'
+      btn.textContent = '关闭当前任务'
+      footer.insertBefore(btn, startBtn)
+    }
+  }
+}
+
+function getSagTaskStatusMeta(task) {
+  const status = Number(task?.status)
+  if (status === 0) return { type: 'warning', text: '接收中' }
+  if (status === 1) return { type: 'primary', text: '已关闭待收尾' }
+  if (status === 2) return { type: 'success', text: '已完成' }
+  if (status === 3) return { type: 'danger', text: '已完成（有失败）' }
+  return { type: 'info', text: '新任务' }
+}
+
+function formatDurationHms(ms) {
+  const totalMs = Number(ms)
+  if (!Number.isFinite(totalMs) || totalMs < 0) return '--:--:--'
+  const totalSeconds = Math.floor(totalMs / 1000)
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0')
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${hours}:${minutes}:${seconds}`
+}
+
+function isDialogOpen(id) {
+  return !!byId(id)?.classList.contains('is-open')
+}
+
+function getTaskMetaText(task) {
+  if (!task) return '当前会创建一个新的暂降分析任务，后续可以在任务详情中继续追加录波文件。'
+  const taskName = task.taskName || '暂降分析任务'
+  const statusText = task.isClosed ? '已关闭，不可再追加文件' : '未关闭，可继续追加文件'
+  return `${task.taskNo || '-'} | ${taskName} | ${statusText}`
+}
+
+function resetAnalyzeFormDefaults() {
+  const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="Adaptive"]')
+  if (defaultReferenceRadio) defaultReferenceRadio.checked = true
+  const customReferenceInput = byId('customReferenceVoltage')
+  if (customReferenceInput) customReferenceInput.value = ''
+  byId('sagThresholdPct').value = '90'
+  byId('interruptThresholdPct').value = '10'
+  byId('hysteresisPct').value = '2'
+  byId('minDurationMs').value = '10'
+  state.analyzeRecoverAuto = true
+  syncAnalyzeRecoverThresholdIfAuto()
+  updateAnalyzeReferenceModeUi()
+}
+
+function setAnalyzeTaskContext(task, mode) {
+  state.analysis.taskContext = task || null
+  state.analysis.mode = mode || (task ? 'append' : 'create')
+  renderSagTaskSummary()
+  applyTaskParamsToForm(state.analysis.taskContext)
+}
+
+function renderSagTaskSummary() {
+  const task = state.analysis.taskContext
+  const mode = state.analysis.mode || 'create'
+  const statusMeta = getSagTaskStatusMeta(task)
+  const statusTag = byId('sagTaskStatusTag')
+  if (statusTag) {
+    statusTag.className = `el-tag el-tag--${statusMeta.type}`
+    statusTag.textContent = task ? statusMeta.text : '新任务'
+  }
+
+  setText('analyzeModalTitle', task ? '向已有任务追加录波文件' : '创建暂降任务')
+  setText('sagTaskMetaText', getTaskMetaText(task))
+  setText(
+    'sagTaskSummaryText',
+    task?.summaryText || '提交后会立即创建任务，并把当前勾选的录波文件加入该任务进行暂降分析。'
+  )
+  setText(
+    'sagTaskFootText',
+    task
+      ? `当前进度 ${Number(task.progress || 0)}%，已完成 ${Number(task.finishedFileCount || 0)}/${Number(task.receivedFileCount || 0)}，预计剩余时间 ${formatDurationHms(task.estimatedRemainingMs)}。`
+      : '任务创建后，只要没有被手动关闭，就可以在任务详情中继续追加录波文件。'
+  )
+  setText('btnStartAnalyze', mode === 'append' ? '追加并开始分析' : '创建并开始分析')
+}
+
+async function loadActiveSagTask(taskId) {
+  if (!taskId) {
+    setAnalyzeTaskContext(null, 'create')
+    return
+  }
+
+  try {
+    const res = await zwavApi.sagTaskDetail(taskId)
+    setAnalyzeTaskContext(res?.success ? (res.data || null) : null, 'append')
+  } catch {
+    setAnalyzeTaskContext(null, 'create')
+  }
+}
+
+function stopSagTaskPolling() {
+  if (state.analysis.taskPolling) clearInterval(state.analysis.taskPolling)
+  state.analysis.taskPolling = null
+}
+
+function startSagTaskPolling() {
+  stopSagTaskPolling()
+}
+
+function ensureSagTaskUi() {
+  if (!document.getElementById('zwavSagTaskStyle')) {
+    const style = document.createElement('style')
+    style.id = 'zwavSagTaskStyle'
+    style.textContent = `
+      .task-summary-card{margin-bottom:14px;padding:14px 16px;border:1px solid #dcdfe6;border-radius:12px;background:linear-gradient(180deg,#f9fbff 0%,#ffffff 100%)}
+      .task-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+      .task-summary-title{font-size:15px;font-weight:600;color:#303133}
+      .task-summary-sub{margin-top:4px;font-size:12px;color:#909399}
+      .task-summary-body{color:#303133;line-height:1.8}
+      .task-summary-foot{margin-top:8px;font-size:12px;color:#606266}
+    `
+    document.head.appendChild(style)
+  }
+}
+
+*/
+/*
+function openAnalyzeModalForCreate() {
+  state.analysis.page = 1
+  state.analysis.selected.clear()
+  byId('analysisKeyword').value = ''
+  byId('analysisPageSize').value = String(state.analysis.pageSize)
+  resetAnalyzeFormDefaults()
+  setAnalyzeTaskContext(null, 'create')
+  openDialog('analyzeModal')
+  loadAnalyses()
+}
+
+async function openAnalyzeModalForAppend(task) {
+  const targetTask = task?.id ? task : state.tasks.detailTask
+  if (!targetTask?.id) {
+    showAlert('warning', '请先选择一个暂降任务')
+    return
+  }
+  if (targetTask.isClosed) {
+    showAlert('warning', '当前任务已关闭，不能再追加录波文件')
+    return
+  }
+
+  state.analysis.page = 1
+  state.analysis.selected.clear()
+  byId('analysisKeyword').value = ''
+  byId('analysisPageSize').value = String(state.analysis.pageSize)
+  resetAnalyzeFormDefaults()
+  openDialog('analyzeModal')
+  await loadActiveSagTask(targetTask.id)
+  await loadAnalyses()
+}
+
+*/
+async function loadTaskList(silent = false) {
+  state.tasks.loading = true
+  try {
+    const statusRaw = String(byId('taskStatusFilter')?.value || '').trim()
+    const closedRaw = String(byId('taskClosedFilter')?.value || '').trim()
+    const params = {
+      keyword: (byId('taskKeyword')?.value || '').trim() || undefined,
+      status: statusRaw === '' ? undefined : Number(statusRaw),
+      isClosed: closedRaw === '' ? undefined : closedRaw === 'true',
+      page: state.tasks.page,
+      pageSize: state.tasks.pageSize
+    }
+    const res = await zwavApi.sagTaskList(params)
+    if (!res?.success) {
+      if (!silent) showAlert('error', res?.message || '获取暂降任务列表失败')
+      return
+    }
+    state.tasks.data = res.data?.data || []
+    state.tasks.total = res.data?.total || 0
+    renderTaskList()
+  } catch (e) {
+    if (!silent) showAlert('error', e.message || '获取暂降任务列表失败')
+  } finally {
+    state.tasks.loading = false
+  }
+}
+
+function renderTaskList() {
+  updatePagination(
+    state.tasks.total,
+    state.tasks.page,
+    state.tasks.pageSize,
+    'taskTotalText',
+    'taskPageText',
+    'taskPrev',
+    'taskNext'
+  )
+
+  const rows = state.tasks.data.map((row, idx) => {
+    const statusMeta = getSagTaskStatusMeta(row)
+    return `
+      <tr>
+        <td class="cell-center">${idx + 1 + (state.tasks.page - 1) * state.tasks.pageSize}</td>
+        <td>${escapeHtml(row.taskNo || '-')}</td>
+        <td>${escapeHtml(row.taskName || '-')}</td>
+        <td><span class="el-tag el-tag--${statusMeta.type}">${escapeHtml(statusMeta.text)}</span></td>
+        <td class="cell-center">${Number(row.receivedFileCount || 0)}</td>
+        <td class="cell-center">${Number(row.finishedFileCount || 0)}</td>
+        <td class="cell-center">${Number(row.pendingFileCount || 0)}</td>
+        <td>${escapeHtml(row.startParseTime ? formatDateTime(row.startParseTime) : '-')}</td>
+        <td>${escapeHtml(row.finishParseTime ? formatDateTime(row.finishParseTime) : '-')}</td>
+        <td class="cell-actions">
+          <button class="el-button is-link action-task-detail" data-id="${escapeHtml(row.id)}">详情</button>
+        </td>
+      </tr>
+    `
+  }).join('')
+
+  setHtml('taskTbody', rows)
+}
+
+async function loadTaskDetail(taskId, options = {}) {
+  const { silent = false, reloadFiles = true } = options
+  if (!taskId) return
+  state.tasks.detailLoading = true
+  state.tasks.detailTaskId = Number(taskId)
+  try {
+    const res = await zwavApi.sagTaskDetail(taskId)
+    if (!res?.success) {
+      if (!silent) showAlert('error', res?.message || '获取暂降任务详情失败')
+      return
+    }
+    state.tasks.detailTask = res.data || null
+    renderTaskDetail()
+    if (reloadFiles) await loadTaskFiles(silent)
+  } catch (e) {
+    if (!silent) showAlert('error', e.message || '获取暂降任务详情失败')
+  } finally {
+    state.tasks.detailLoading = false
+  }
+}
+
+function renderTaskDetail() {
+  const task = state.tasks.detailTask
+  const statusMeta = getSagTaskStatusMeta(task)
+  setText('taskDetailTitle', task ? `暂降任务详情 - ${task.taskNo || task.id}` : '暂降任务详情')
+  setText('taskDetailTaskNo', task ? `${task.taskNo || '-'} / ${task.taskName || '暂降分析任务'}` : '-')
+  setText('taskDetailMeta', task ? getTaskMetaText(task) : '-')
+  setText('taskDetailSummary', task?.summaryText || '-')
+  setText(
+    'taskDetailFoot',
+    task
+      ? `参考电压处理：${task.referenceType || 'Adaptive'}；参考电压值：${task.referenceVoltage ?? '-'}；暂降阈值：${task.sagThresholdPct ?? '-'}%。`
+      : '-'
+  )
+  const statusTag = byId('taskDetailStatusTag')
+  if (statusTag) {
+    statusTag.className = `el-tag el-tag--${statusMeta.type}`
+    statusTag.textContent = statusMeta.text
+  }
+  setText('taskReceivedCount', String(Number(task?.receivedFileCount || 0)))
+  setText('taskFinishedCount', String(Number(task?.finishedFileCount || 0)))
+  setText('taskFinishedSub', `成功 ${Number(task?.successFileCount || 0)} 个，失败 ${Number(task?.failedFileCount || 0)} 个`)
+  setText('taskPendingCount', String(Number(task?.pendingFileCount || 0)))
+  setText('taskEtaText', formatDurationHms(task?.estimatedRemainingMs))
+  setText('taskProgressSub', `当前进度 ${Number(task?.progress || 0)}%`)
+  const appendBtn = byId('btnTaskAppendFiles')
+  if (appendBtn) appendBtn.disabled = !task || !!task.isClosed
+  const closeBtn = byId('btnTaskCloseFromDetail')
+  if (closeBtn) closeBtn.disabled = !task || !!task.isClosed
+}
+
+async function loadTaskFiles(silent = false) {
+  const taskId = Number(state.tasks.detailTaskId || 0)
+  if (!taskId) return
+  try {
+    const statusRaw = String(byId('taskFileStatusFilter')?.value || '').trim()
+    const params = {
+      keyword: (byId('taskFileKeyword')?.value || '').trim() || undefined,
+      status: statusRaw === '' ? undefined : Number(statusRaw),
+      page: state.tasks.detailPage,
+      pageSize: state.tasks.detailPageSize
+    }
+    const res = await zwavApi.sagTaskEventList(taskId, params)
+    if (!res?.success) {
+      if (!silent) showAlert('error', res?.message || '获取任务文件列表失败')
+      return
+    }
+    state.tasks.detailData = res.data?.data || []
+    state.tasks.detailTotal = res.data?.total || 0
+    renderTaskFiles()
+  } catch (e) {
+    if (!silent) showAlert('error', e.message || '获取任务文件列表失败')
+  }
+}
+
+function renderTaskFiles() {
+  updatePagination(
+    state.tasks.detailTotal,
+    state.tasks.detailPage,
+    state.tasks.detailPageSize,
+    'taskFileTotalText',
+    'taskFilePageText',
+    'taskFilePrev',
+    'taskFileNext'
+  )
+
+  const rows = state.tasks.detailData.map((row, idx) => {
+    const statusText = getAnalyzeStatusText(row.status)
+    const statusType = getAnalyzeStatusType(row.status)
+    return `
+      <tr>
+        <td class="cell-center">${idx + 1 + (state.tasks.detailPage - 1) * state.tasks.detailPageSize}</td>
+        <td class="file-name-cell" title="${escapeHtml(row.originalName || '-')}">${escapeHtml(row.originalName || '-')}</td>
+        <td><span class="el-tag el-tag--${statusType}">${escapeHtml(statusText)}</span></td>
+        <td class="cell-center">${normalizeProgress(row.progress)}%</td>
+        <td class="cell-center">${row.hasSag ? '是' : '否'}</td>
+        <td>${escapeHtml(formatEventType(row.eventType))}</td>
+        <td>${escapeHtml(row.worstPhase || '-')}</td>
+        <td>${escapeHtml(row.startTime ? formatDateTime(row.startTime) : '-')}</td>
+        <td>${escapeHtml(row.finishTime ? formatDateTime(row.finishTime) : '-')}</td>
+        <td title="${escapeHtml(row.errorMessage || '-')}">${escapeHtml(row.errorMessage || '-')}</td>
+      </tr>
+    `
+  }).join('')
+
+  setHtml('taskFileTbody', rows)
+}
+
+function stopTaskPolling() {
+  if (state.tasks.polling) clearInterval(state.tasks.polling)
+  state.tasks.polling = null
+}
+
+function startTaskPolling() {
+  if (state.tasks.polling) return
+  state.tasks.polling = setInterval(async () => {
+    const listOpen = isDialogOpen('taskListModal')
+    const detailOpen = isDialogOpen('taskDetailModal')
+    if (!listOpen && !detailOpen) {
+      stopTaskPolling()
+      return
+    }
+    if (detailOpen && state.tasks.detailTaskId) {
+      await loadTaskDetail(state.tasks.detailTaskId, { silent: true, reloadFiles: true })
+    }
+    if (listOpen) {
+      await loadTaskList(true)
+    }
+  }, 5000)
 }
 
 function computeRecoverThresholdPct(sagThresholdPct, hysteresisPct) {
@@ -1050,6 +1565,7 @@ function syncAnalyzeReferenceUi() {
   updateAnalyzeReferenceModeUi()
 }
 
+/*
 async function startAnalyze() {
   const ids = Array.from(state.analysis.selected)
   if (ids.length === 0) {
@@ -1090,6 +1606,7 @@ async function startAnalyze() {
   }
 
   const body = {
+    taskId: state.analysis.taskContext?.id || null,
     fileIds: [],
     analysisGuids: ids,
     referenceType: referenceSelection.referenceType,
@@ -1105,11 +1622,22 @@ async function startAnalyze() {
     const res = await zwavApi.sagAnalyze(body)
     if (res?.success) {
       const queuedCount = res.data?.queuedCount ?? res.data?.createdEventCount ?? 0
+      const taskId = Number(res.data?.taskId || state.analysis.taskContext?.id || 0)
       state.analysis.selected.clear()
-      showAlert('success', `\u5df2\u52a0\u5165\u5206\u6790\u961f\u5217\uff1a${queuedCount} \u6761\uff0c\u5217\u8868\u5c06\u81ea\u52a8\u5237\u65b0\u5206\u6790\u8fdb\u5ea6`)
       closeDialog('analyzeModal')
+      showAlert('success', `${state.analysis.mode === 'append' ? '已向任务追加录波文件' : '暂降任务已创建'}：新增 ${queuedCount} 条`)
       state.page = 1
       await loadList()
+      if (isDialogOpen('taskListModal')) {
+        await loadTaskList(true)
+      }
+      if (taskId > 0) {
+        openDialog('taskDetailModal')
+        state.tasks.detailPage = 1
+        byId('taskFilePageSize').value = String(state.tasks.detailPageSize)
+        await loadTaskDetail(taskId)
+        startTaskPolling()
+      }
       return
     }
 
@@ -1119,6 +1647,7 @@ async function startAnalyze() {
   }
 }
 
+*/
 async function loadRules() {
   const meta = getRuleTabMeta()
   const ruleState = getRuleListState()
@@ -1353,6 +1882,23 @@ function bindAnalysisDelegation() {
   })
 }
 
+function bindTaskDelegation() {
+  const tbody = byId('taskTbody')
+  if (tbody) {
+    tbody.addEventListener('click', async (e) => {
+      const detailBtn = e.target.closest('.action-task-detail')
+      if (!detailBtn) return
+      const taskId = Number(detailBtn.getAttribute('data-id'))
+      if (!taskId) return
+      state.tasks.detailPage = 1
+      byId('taskFilePageSize').value = String(state.tasks.detailPageSize)
+      openDialog('taskDetailModal')
+      await loadTaskDetail(taskId)
+      startTaskPolling()
+    })
+  }
+}
+
 function bindRuleDelegation() {
   const tbody = byId('ruleTbody')
   if (!tbody) {
@@ -1382,6 +1928,8 @@ function bindRuleDelegation() {
 }
 
 function bindEvents() {
+  ensureSagTaskUi()
+
   on('btnOpenApiConfig', 'click', openApiModal)
   on('btnSaveApiBase', 'click', () => {
     setApiBaseUrl(byId('apiBaseInput').value || '')
@@ -1390,12 +1938,15 @@ function bindEvents() {
 
   bindDialog('apiModal')
   bindDialog('analyzeModal')
+  bindDialog('taskListModal')
+  bindDialog('taskDetailModal')
   bindDialog('channelRuleModal')
   bindDialog('channelRuleEditModal')
   bindDeleteProgressEvents()
 
   bindTableDelegation()
   bindAnalysisDelegation()
+  bindTaskDelegation()
   bindRuleDelegation()
 
   on('btnSearch', 'click', () => {
@@ -1442,20 +1993,42 @@ function bindEvents() {
 
   on('btnBatchDelete', 'click', batchDelete)
 
-  on('btnOpenAnalyze', 'click', async () => {
-    state.analysis.page = 1
-    state.analysis.selected.clear()
-    byId('analysisKeyword').value = ''
-    byId('analysisPageSize').value = String(state.analysis.pageSize)
-    const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="Adaptive"]')
-    if (defaultReferenceRadio) defaultReferenceRadio.checked = true
-    const customReferenceInput = byId('customReferenceVoltage')
-    if (customReferenceInput) customReferenceInput.value = ''
-    state.analyzeRecoverAuto = true
-    syncAnalyzeReferenceUi()
-    syncAnalyzeRecoverThresholdIfAuto()
-    openDialog('analyzeModal')
-    await loadAnalyses()
+  on('btnOpenAnalyze', 'click', () => {
+    openLegacyAnalyzeModal()
+  })
+
+  on('btnOpenCreateTask', 'click', () => {
+    openTaskWorkbenchWindow('create')
+  })
+
+  on('btnOpenTaskList', 'click', async () => {
+    openTaskWorkbenchWindow('list')
+  })
+
+  on('btnTaskCreate', 'click', () => {
+    openTaskWorkbenchWindow('create')
+  })
+
+  on('btnTaskSearch', 'click', () => {
+    state.tasks.page = 1
+    loadTaskList()
+  })
+
+  on('taskPageSize', 'change', () => {
+    state.tasks.pageSize = Number(byId('taskPageSize').value || 10)
+    state.tasks.page = 1
+    loadTaskList()
+  })
+
+  on('taskPrev', 'click', () => {
+    if (state.tasks.page > 1) state.tasks.page--
+    loadTaskList()
+  })
+
+  on('taskNext', 'click', () => {
+    const totalPages = Math.max(1, Math.ceil(state.tasks.total / state.tasks.pageSize))
+    if (state.tasks.page < totalPages) state.tasks.page++
+    loadTaskList()
   })
 
   on('btnAnalysisSearch', 'click', () => {
@@ -1487,7 +2060,78 @@ function bindEvents() {
     renderAnalyses()
   })
 
+  on('btnTaskFileSearch', 'click', () => {
+    state.tasks.detailPage = 1
+    loadTaskFiles()
+  })
+
+  on('taskFilePageSize', 'change', () => {
+    state.tasks.detailPageSize = Number(byId('taskFilePageSize').value || 10)
+    state.tasks.detailPage = 1
+    loadTaskFiles()
+  })
+
+  on('taskFilePrev', 'click', () => {
+    if (state.tasks.detailPage > 1) state.tasks.detailPage--
+    loadTaskFiles()
+  })
+
+  on('taskFileNext', 'click', () => {
+    const totalPages = Math.max(1, Math.ceil(state.tasks.detailTotal / state.tasks.detailPageSize))
+    if (state.tasks.detailPage < totalPages) state.tasks.detailPage++
+    loadTaskFiles()
+  })
+
+  on('btnTaskAppendFiles', 'click', () => {
+    openAnalyzeModalForAppend(state.tasks.detailTask)
+  })
+
+  on('btnTaskCloseFromDetail', 'click', async () => {
+    const taskId = Number(state.tasks.detailTask?.id || 0)
+    if (!taskId) {
+      showAlert('warning', '当前没有可关闭的任务')
+      return
+    }
+
+    try {
+      const res = await zwavApi.sagCloseTask(taskId)
+      if (!res?.success) {
+        showAlert('error', res?.message || '关闭任务失败')
+        return
+      }
+      showAlert('success', '任务已关闭')
+      await loadTaskDetail(taskId)
+      if (isDialogOpen('taskListModal')) {
+        await loadTaskList(true)
+      }
+    } catch (e) {
+      showAlert('error', e.message || '关闭任务失败')
+    }
+  })
+
   on('btnStartAnalyze', 'click', startAnalyze)
+  on('btnCloseSagTask', 'click', async () => {
+    const taskId = state.analysis.activeTask?.id
+    if (!taskId) {
+      showAlert('warning', '当前没有可关闭的任务')
+      return
+    }
+
+    try {
+      const res = await zwavApi.sagCloseTask(taskId)
+      if (!res?.success) {
+        showAlert('error', res?.message || '关闭任务失败')
+        return
+      }
+
+      state.analysis.activeTask = null
+      renderSagTaskSummary()
+      applyTaskParamsToForm(null)
+      showAlert('success', '当前任务已关闭，下次加入录波文件将自动新建任务')
+    } catch (e) {
+      showAlert('error', e.message || '关闭任务失败')
+    }
+  })
 
   on('sagThresholdPct', 'input', () => syncAnalyzeRecoverThresholdIfAuto())
   on('hysteresisPct', 'input', () => syncAnalyzeRecoverThresholdIfAuto())
@@ -1565,6 +2209,318 @@ function bindEvents() {
 
   const apiBase = qs('apiBase')
   if (apiBase) setApiBaseUrl(apiBase)
+}
+
+function ensureSagTaskUi() {
+  if (!document.getElementById('zwavSagTaskStyle')) {
+    const style = document.createElement('style')
+    style.id = 'zwavSagTaskStyle'
+    style.textContent = `
+      .task-summary-card{margin-bottom:14px;padding:14px 16px;border:1px solid #dcdfe6;border-radius:12px;background:linear-gradient(180deg,#f9fbff 0%,#ffffff 100%)}
+      .task-summary-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
+      .task-summary-title{font-size:15px;font-weight:600;color:#303133}
+      .task-summary-sub{margin-top:4px;font-size:12px;color:#909399}
+      .task-summary-body{color:#303133;line-height:1.8}
+      .task-summary-foot{margin-top:8px;font-size:12px;color:#606266}
+    `
+    document.head.appendChild(style)
+  }
+}
+
+function isDialogOpen(id) {
+  return !!byId(id)?.classList.contains('is-open')
+}
+
+function stopSagTaskPolling() {
+  if (state.analysis.taskPolling) clearInterval(state.analysis.taskPolling)
+  state.analysis.taskPolling = null
+}
+
+function startSagTaskPolling() {
+  stopSagTaskPolling()
+}
+
+function getSagTaskStatusMeta(task) {
+  const status = Number(task?.status)
+  if (status === 0) return { type: 'warning', text: '接收中' }
+  if (status === 1) return { type: 'primary', text: '已关闭待收尾' }
+  if (status === 2) return { type: 'success', text: '已完成' }
+  if (status === 3) return { type: 'danger', text: '已完成（有失败）' }
+  return { type: 'info', text: '新任务' }
+}
+
+function formatDurationHms(ms) {
+  const totalMs = Number(ms)
+  if (!Number.isFinite(totalMs) || totalMs < 0) return '--:--:--'
+  const totalSeconds = Math.floor(totalMs / 1000)
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0')
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${hours}:${minutes}:${seconds}`
+}
+
+function getTaskMetaText(task) {
+  if (!task) return '当前会创建一个新的暂降分析任务，后续可以在任务详情中继续追加录波文件。'
+  const taskName = task.taskName || '暂降分析任务'
+  const statusText = task.isClosed ? '已关闭，不可再追加文件' : '未关闭，可继续追加文件'
+  return `${task.taskNo || '-'} | ${taskName} | ${statusText}`
+}
+
+function resetAnalyzeFormDefaults() {
+  const defaultReferenceRadio = document.querySelector('input[name="referenceTypeRadio"][value="Adaptive"]')
+  if (defaultReferenceRadio) defaultReferenceRadio.checked = true
+  const customReferenceInput = byId('customReferenceVoltage')
+  if (customReferenceInput) customReferenceInput.value = ''
+  byId('sagThresholdPct').value = '90'
+  byId('interruptThresholdPct').value = '10'
+  byId('hysteresisPct').value = '2'
+  byId('minDurationMs').value = '10'
+  state.analyzeRecoverAuto = true
+  syncAnalyzeRecoverThresholdIfAuto()
+  updateAnalyzeReferenceModeUi()
+}
+
+function setAnalyzeTaskContext(task, mode) {
+  state.analysis.taskContext = task || null
+  state.analysis.mode = mode || (task ? 'append' : 'legacy')
+  renderSagTaskSummary()
+  applyTaskParamsToForm(state.analysis.taskContext)
+}
+
+function renderSagTaskSummary() {
+  const task = state.analysis.taskContext
+  const mode = state.analysis.mode || 'legacy'
+  const isLegacyMode = mode === 'legacy'
+  const statusMeta = getSagTaskStatusMeta(task)
+  const statusTag = byId('sagTaskStatusTag')
+  const summaryCard = byId('sagTaskSummaryCard')
+
+  if (summaryCard) {
+    summaryCard.style.display = isLegacyMode ? 'none' : ''
+  }
+
+  if (statusTag) {
+    statusTag.className = `el-tag el-tag--${statusMeta.type}`
+    statusTag.textContent = task ? statusMeta.text : '新任务'
+  }
+
+  setText('analyzeModalTitle', task ? '向已有任务追加录波文件' : (isLegacyMode ? '新增暂降分析' : '创建暂降任务'))
+  setText('sagTaskMetaText', getTaskMetaText(task))
+  setText(
+    'sagTaskSummaryText',
+    task?.summaryText || '提交后会立即创建任务，并把当前勾选的录波文件加入该任务进行暂降分析。'
+  )
+  setText(
+    'sagTaskFootText',
+    task
+      ? `当前进度 ${Number(task.progress || 0)}%，已完成 ${Number(task.finishedFileCount || 0)}/${Number(task.receivedFileCount || 0)}，预计剩余时间 ${formatDurationHms(task.estimatedRemainingMs)}。`
+      : '任务创建后，只要没有被手动关闭，就可以在任务详情中继续追加录波文件。'
+  )
+  setText('btnStartAnalyze', mode === 'append' ? '追加并开始分析' : (isLegacyMode ? '开始分析' : '创建并开始分析'))
+}
+
+async function loadActiveSagTask(taskId) {
+  if (!taskId) {
+    setAnalyzeTaskContext(null, 'legacy')
+    return
+  }
+
+  try {
+    const res = await zwavApi.sagTaskDetail(taskId)
+    setAnalyzeTaskContext(res?.success ? (res.data || null) : null, 'append')
+  } catch {
+    setAnalyzeTaskContext(null, 'legacy')
+  }
+}
+
+function openLegacyAnalyzeModal() {
+  state.analysis.page = 1
+  state.analysis.selected.clear()
+  byId('analysisKeyword').value = ''
+  byId('analysisPageSize').value = String(state.analysis.pageSize)
+  resetAnalyzeFormDefaults()
+  setAnalyzeTaskContext(null, 'legacy')
+  openDialog('analyzeModal')
+  loadAnalyses()
+}
+
+async function openAnalyzeModalForCreate() {
+  state.analysis.page = 1
+  state.analysis.selected.clear()
+  byId('analysisKeyword').value = ''
+  byId('analysisPageSize').value = String(state.analysis.pageSize)
+  resetAnalyzeFormDefaults()
+  setAnalyzeTaskContext(null, 'taskCreate')
+  openDialog('analyzeModal')
+
+  try {
+    const res = await zwavApi.sagActiveTask()
+    const activeTask = res?.success ? (res.data || null) : null
+    if (activeTask?.id && !activeTask.isClosed) {
+      setAnalyzeTaskContext(activeTask, 'append')
+    }
+  } catch {
+    setAnalyzeTaskContext(null, 'taskCreate')
+  }
+
+  await loadAnalyses()
+}
+
+async function openAnalyzeModalForAppend(task) {
+  const targetTask = task?.id ? task : state.tasks.detailTask
+  if (!targetTask?.id) {
+    showAlert('warning', '请先选择一个暂降任务')
+    return
+  }
+  if (targetTask.isClosed) {
+    showAlert('warning', '当前任务已关闭，不能再追加录波文件')
+    return
+  }
+
+  state.analysis.page = 1
+  state.analysis.selected.clear()
+  byId('analysisKeyword').value = ''
+  byId('analysisPageSize').value = String(state.analysis.pageSize)
+  resetAnalyzeFormDefaults()
+  openDialog('analyzeModal')
+  await loadActiveSagTask(targetTask.id)
+  await loadAnalyses()
+}
+
+async function startAnalyze() {
+  const ids = Array.from(state.analysis.selected)
+  if (ids.length === 0) {
+    showAlert('warning', '请先选择分析任务')
+    return
+  }
+
+  const referenceSelection = resolveAnalyzeReferenceSelection()
+  const sagThresholdPct = Number(byId('sagThresholdPct').value || 90)
+  const interruptThresholdPct = Number(byId('interruptThresholdPct').value || 10)
+  const hysteresisPct = Number(byId('hysteresisPct').value || 2)
+  const recoverThresholdPct = Number(byId('recoverThresholdPct').value || 0)
+  const minDurationMs = Number(byId('minDurationMs').value || 10)
+
+  if (referenceSelection.referenceType === 'CustomVoltage' && referenceSelection.referenceVoltage <= 0) {
+    showAlert('warning', '自定义参考电压必须大于 0')
+    return
+  }
+  if (sagThresholdPct <= 0 || sagThresholdPct > 100) {
+    showAlert('warning', '暂降阈值必须在 0-100 之间')
+    return
+  }
+  if (interruptThresholdPct <= 0 || interruptThresholdPct > 100) {
+    showAlert('warning', '中断阈值必须在 0-100 之间')
+    return
+  }
+  if (hysteresisPct < 0 || hysteresisPct > 20) {
+    showAlert('warning', '迟滞必须在 0-20 之间')
+    return
+  }
+  if (recoverThresholdPct > 0 && (recoverThresholdPct < sagThresholdPct || recoverThresholdPct > 100)) {
+    showAlert('warning', '恢复阈值必须在暂降阈值到 100 之间')
+    return
+  }
+  if (minDurationMs < 0) {
+    showAlert('warning', '最小持续时间不能为负数')
+    return
+  }
+
+  const mode = state.analysis.mode || 'legacy'
+  const body = {
+    taskId: mode === 'append' ? (state.analysis.taskContext?.id || null) : null,
+    createTask: mode !== 'legacy',
+    fileIds: [],
+    analysisGuids: ids,
+    referenceType: referenceSelection.referenceType,
+    referenceVoltage: referenceSelection.referenceVoltage,
+    sagThresholdPct,
+    recoverThresholdPct: recoverThresholdPct > 0 ? recoverThresholdPct : null,
+    interruptThresholdPct,
+    hysteresisPct,
+    minDurationMs
+  }
+
+  try {
+    const res = await zwavApi.sagAnalyze(body)
+    if (!res?.success) {
+      showAlert('error', res?.message || '暂降分析失败')
+      return
+    }
+
+    const queuedCount = res.data?.queuedCount ?? res.data?.createdEventCount ?? 0
+    const taskId = Number(res.data?.taskId || state.analysis.taskContext?.id || 0)
+    state.analysis.selected.clear()
+    closeDialog('analyzeModal')
+    state.page = 1
+    await loadList()
+
+    if (mode === 'legacy') {
+      showAlert('success', `已提交暂降分析：${queuedCount} 条`)
+      return
+    }
+
+    showAlert('success', `${mode === 'append' ? '已向任务追加录波文件' : '暂降任务已创建'}：新增 ${queuedCount} 条`)
+    if (isDialogOpen('taskListModal')) {
+      await loadTaskList(true)
+    }
+    if (taskId > 0) {
+      openDialog('taskDetailModal')
+      state.tasks.detailPage = 1
+      byId('taskFilePageSize').value = String(state.tasks.detailPageSize)
+      await loadTaskDetail(taskId)
+      startTaskPolling()
+    }
+  } catch (e) {
+    showAlert('error', e.message || '暂降分析失败')
+  }
+}
+
+function selectReferenceMode(mode, voltage) {
+  const value = String(mode || 'Adaptive')
+  const radio = document.querySelector(`input[name="referenceTypeRadio"][value="${value}"]`)
+  if (radio) radio.checked = true
+  const customInput = byId('customReferenceVoltage')
+  if (customInput && Number.isFinite(Number(voltage)) && Number(voltage) > 0) {
+    customInput.value = String(voltage)
+  }
+  updateAnalyzeReferenceModeUi()
+}
+
+function toggleAnalyzeParamsDisabled(disabled) {
+  ;[
+    'sagThresholdPct',
+    'minDurationMs',
+    'interruptThresholdPct',
+    'hysteresisPct',
+    'recoverThresholdPct',
+    'customReferenceVoltage'
+  ].forEach((id) => {
+    const el = byId(id)
+    if (el) el.disabled = !!disabled
+  })
+
+  document.querySelectorAll('input[name="referenceTypeRadio"]').forEach((el) => {
+    el.disabled = !!disabled
+  })
+}
+
+function applyTaskParamsToForm(task) {
+  if (!task) {
+    toggleAnalyzeParamsDisabled(false)
+    updateAnalyzeReferenceModeUi()
+    return
+  }
+
+  byId('sagThresholdPct').value = Number(task.sagThresholdPct || 90)
+  byId('minDurationMs').value = Number(task.minDurationMs || 10)
+  byId('interruptThresholdPct').value = Number(task.interruptThresholdPct || 10)
+  byId('hysteresisPct').value = Number(task.hysteresisPct || 2)
+  byId('recoverThresholdPct').value = task.recoverThresholdPct !== undefined && task.recoverThresholdPct !== null
+    ? Number(task.recoverThresholdPct)
+    : ''
+  selectReferenceMode(task.referenceType || 'Adaptive', task.referenceVoltage)
+  toggleAnalyzeParamsDisabled(true)
 }
 
 async function init() {
