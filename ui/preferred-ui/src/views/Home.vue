@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <main class="home-page">
     <header class="site-header">
       <div class="header-inner">
@@ -11,57 +11,77 @@
         </button>
 
         <nav class="header-nav" aria-label="首页导航">
-          <a href="#featured">精选推荐</a>
           <a href="#resources">资源目录</a>
         </nav>
+
+        <button class="calendar-button" type="button" @click="openCalendarPage">
+          万年日历
+        </button>
+
+        <el-popover
+          placement="bottom-end"
+          trigger="click"
+          :width="360"
+          popper-class="home-notification-popover"
+          @show="handleNotificationPopoverShow"
+        >
+          <template #reference>
+            <button class="notification-button" type="button" title="告警消息">
+              <el-badge :value="notificationBadgeValue" :hidden="unreadNotificationCount === 0">
+                <span class="notification-trigger-icon">
+                  <el-icon><Bell /></el-icon>
+                </span>
+              </el-badge>
+            </button>
+          </template>
+
+          <div class="notification-panel">
+            <div class="notification-panel-header">
+              <div class="notification-panel-heading">
+                <span class="notification-panel-emblem">
+                  <el-icon><Bell /></el-icon>
+                </span>
+                <strong>告警消息</strong>
+                <p>系统监控与通知提醒</p>
+              </div>
+              <span class="notification-count">{{ unreadNotificationCount }} 条</span>
+            </div>
+
+            <div v-if="notificationLoading" class="notification-state">
+              正在加载告警消息...
+            </div>
+            <div v-else-if="notificationError" class="notification-state error">
+              {{ notificationError }}
+            </div>
+            <div v-else-if="notificationItems.length === 0" class="notification-state">
+              暂无告警消息
+            </div>
+            <ul v-else class="notification-list">
+              <li
+                v-for="item in notificationItems"
+                :key="item.id"
+                class="notification-item"
+              >
+                <span class="notification-level-dot"></span>
+                <div class="notification-copy">
+                  <strong>{{ item.name }}</strong>
+                  <p>{{ item.content }}</p>
+                  <small>{{ formatNotificationTime(item.sendTime) }}</small>
+                </div>
+              </li>
+            </ul>
+
+            <button class="notification-more" type="button" @click="openNotificationManagement">
+              查看更多
+            </button>
+          </div>
+        </el-popover>
 
         <button class="admin-button" type="button" title="后台管理" @click="openAdminLogin">
           <el-icon><User /></el-icon>
         </button>
       </div>
     </header>
-
-    <section id="featured" class="section-block" v-if="featuredWebsites.length > 0">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Featured</p>
-          <h2>精选推荐</h2>
-        </div>
-        <button class="text-button" type="button" @click="selectCategory('')">
-          查看全部
-          <el-icon><ArrowRight /></el-icon>
-        </button>
-      </div>
-
-      <div class="featured-grid">
-        <article
-          v-for="website in featuredWebsites"
-          :key="website.id"
-          class="featured-card"
-          @click="handleWebsiteOpen(website)"
-        >
-          <div class="featured-image">
-            <img
-              v-if="!website.imageError && website.pictureUrl"
-              :src="getImageUrl(website.pictureUrl)"
-              :alt="website.name"
-              @error="() => handleImageError(website)"
-            />
-            <div v-else class="image-fallback">
-              <el-icon><Link /></el-icon>
-            </div>
-          </div>
-          <div class="featured-content">
-            <span class="pill">
-              <el-icon><Star /></el-icon>
-              推荐
-            </span>
-            <h3>{{ website.name }}</h3>
-            <p>{{ website.description || '这个资源暂时还没有描述。' }}</p>
-          </div>
-        </article>
-      </div>
-    </section>
 
     <section class="hero-section" aria-label="资源搜索">
       <div class="hero-copy">
@@ -73,34 +93,19 @@
             placeholder="搜索站点、描述或标签"
             @input="handleSearch"
           />
-        </div>
-
-        <div class="hero-stats" aria-label="资源统计">
-          <div>
-            <strong>{{ totalWebsiteCount }}</strong>
-            <span>收录资源</span>
-          </div>
-          <div>
-            <strong>{{ categories.length }}</strong>
-            <span>内容分类</span>
-          </div>
-          <div>
-            <strong>{{ markedWebsiteCount }}</strong>
-            <span>精选推荐</span>
-          </div>
+          <button
+            v-if="searchKeyword.trim()"
+            class="clear-search"
+            type="button"
+            @click="clearSearch"
+          >
+            清除筛选
+          </button>
         </div>
       </div>
     </section>
 
     <section id="resources" class="section-block resource-section">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Directory</p>
-          <h2>资源目录</h2>
-        </div>
-        <span class="result-count">{{ filteredWebsites.length }} 个结果</span>
-      </div>
-
       <div class="category-bar">
         <button
           v-for="category in sortedCategories"
@@ -117,6 +122,8 @@
           {{ category.categoryName }}
           <span>{{ getCategoryCount(category.categoryCode) }}</span>
         </button>
+
+        <span class="result-count category-result-count">{{ filteredWebsites.length }} 个结果</span>
       </div>
 
       <div class="resource-grid" v-loading="loading">
@@ -177,20 +184,43 @@
         description="没有找到匹配的资源"
       />
     </section>
-
   </main>
 </template>
 
 <script setup lang="ts">
 import { getIconClass, getIconComponent, isElementIcon } from '@/data/iconLibrary'
-import { API_CONFIG } from '@/services/api'
+import api, { API_CONFIG } from '@/services/api'
 import AutoLoginService from '@/services/autoLoginService'
 import { categoryService, type Category } from '@/services/categoryService'
 import { networkUrlService, type NetworkUrlListDto, type TagInfo } from '@/services/networkUrlService'
 import { tagService, type Tag } from '@/services/tagService'
-import { ArrowRight, Collection, Link, Search, Star, User, View } from '@element-plus/icons-vue'
+import { ArrowRight, Bell, Collection, Link, Search, User, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+
+interface NotificationListItem {
+  id: number
+  isRead: number
+  name: string
+  content: string
+  notifyType: string
+  notifyStatus: number
+  sendStatus: number
+  sendTime: string
+  sendUser: string
+  receiver: string
+  remark?: string
+}
+
+interface NotificationPagedResponse<T> {
+  data: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+const NOTIFICATION_RECEIVER = 'admin'
 
 const loading = ref(false)
 const searchKeyword = ref('')
@@ -200,19 +230,28 @@ const websites = ref<NetworkUrlListDto[]>([])
 const tags = ref<Tag[]>([])
 const searchTimeout = ref<number | null>(null)
 const tagMap = ref<Map<string, Tag>>(new Map())
+const notificationLoading = ref(false)
+const notificationError = ref('')
+const notificationItems = ref<NotificationListItem[]>([])
+const unreadNotificationCount = ref(0)
+const notificationRefreshTimer = ref<number | null>(null)
+
+const notificationBadgeValue = computed(() => {
+  if (unreadNotificationCount.value <= 0) return ''
+  return unreadNotificationCount.value > 9 ? '9+' : unreadNotificationCount.value
+})
+
+const normalizeNotificationType = (type?: string): 'notice' | 'remind' | 'alert' => {
+  const value = (type || '').trim().toLowerCase()
+  if (value === 'system' || value === 'user' || value === '通知') return 'notice'
+  if (value === 'warning' || value === 'error' || value === 'alert' || value === '告警') return 'alert'
+  if (value === 'remind' || value === '提醒') return 'remind'
+  if (value === 'notice') return 'notice'
+  return 'notice'
+}
 
 const sortedCategories = computed<Category[]>(() => {
   return [...categories.value].sort((a, b) => a.seqNo - b.seqNo)
-})
-
-const totalWebsiteCount = computed(() => websites.value.length)
-const markedWebsiteCount = computed(() => websites.value.filter(isMarked).length)
-
-const featuredWebsites = computed<NetworkUrlListDto[]>(() => {
-  return websites.value
-    .filter((website) => isMarked(website) && isWebsiteAvailable(website))
-    .sort((a, b) => getViewCount(b) - getViewCount(a))
-    .slice(0, 3)
 })
 
 const filteredWebsites = computed<NetworkUrlListDto[]>(() => {
@@ -261,6 +300,14 @@ const handleSearch = (): void => {
   searchTimeout.value = window.setTimeout(() => {
     searchTimeout.value = null
   }, 240)
+}
+
+const clearSearch = (): void => {
+  searchKeyword.value = ''
+  if (searchTimeout.value) {
+    clearTimeout(searchTimeout.value)
+    searchTimeout.value = null
+  }
 }
 
 const handleWebsiteOpen = (website: NetworkUrlListDto): void => {
@@ -348,6 +395,72 @@ const loadWebsites = async (): Promise<void> => {
   }
 }
 
+const loadAlertNotifications = async (): Promise<void> => {
+  try {
+    await AutoLoginService.ensureLoggedIn()
+    notificationLoading.value = true
+    notificationError.value = ''
+
+    const response = await api.get('/api/Notification/list', {
+      params: {
+        page: 1,
+        size: 20,
+        receiver: NOTIFICATION_RECEIVER,
+        isRead: 0
+      }
+    }) as NotificationPagedResponse<NotificationListItem>
+
+    const sourceItems = Array.isArray(response.data) ? response.data : []
+    const filteredItems = sourceItems.filter((item) => {
+      const type = normalizeNotificationType(item.notifyType)
+      return type === 'alert' || type === 'remind'
+    })
+
+    notificationItems.value = filteredItems.slice(0, 6)
+    unreadNotificationCount.value = filteredItems.length
+  } catch (error) {
+    notificationError.value = '告警消息加载失败'
+    console.error('加载告警消息失败:', error)
+  } finally {
+    notificationLoading.value = false
+  }
+}
+
+const handleNotificationPopoverShow = (): void => {
+  void loadAlertNotifications()
+}
+
+const startNotificationPolling = (): void => {
+  stopNotificationPolling()
+  notificationRefreshTimer.value = window.setInterval(() => {
+    void loadAlertNotifications()
+  }, 60000)
+}
+
+const stopNotificationPolling = (): void => {
+  if (notificationRefreshTimer.value) {
+    clearInterval(notificationRefreshTimer.value)
+    notificationRefreshTimer.value = null
+  }
+}
+
+const formatNotificationTime = (value?: string): string => {
+  if (!value) return ''
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return value
+  }
+
+  return parsed.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const getImageUrl = (url: string): string => {
   if (!url) return '/default-image.png'
   if (url.startsWith('http')) return url
@@ -421,18 +534,36 @@ const ADMIN_LOGIN_URL = (import.meta.env.VITE_ADMIN_BASE_URL
   ? `${import.meta.env.VITE_ADMIN_BASE_URL}/login`
   : `${window.location.protocol}//${window.location.hostname}:8081/login`)
 
+const ADMIN_NOTIFICATION_URL = (import.meta.env.VITE_ADMIN_BASE_URL
+  ? `${import.meta.env.VITE_ADMIN_BASE_URL}/notification-management`
+  : `${window.location.protocol}//${window.location.hostname}:8081/notification-management`)
+
 const openAdminLogin = (): void => {
-  window.open(ADMIN_LOGIN_URL, '_blank')
+  window.open(ADMIN_LOGIN_URL, '_blank', 'noopener')
+}
+
+const openNotificationManagement = (): void => {
+  window.open(ADMIN_NOTIFICATION_URL, '_blank', 'noopener')
+}
+
+const openCalendarPage = (): void => {
+  const calendarUrl = new URL('calendar', window.location.origin + import.meta.env.BASE_URL)
+  window.open(calendarUrl.toString(), '_blank', 'noopener')
 }
 
 onMounted(async () => {
   try {
     await AutoLoginService.autoLogin()
-    await Promise.all([loadCategories(), loadTags(), loadWebsites()])
+    await Promise.all([loadCategories(), loadTags(), loadWebsites(), loadAlertNotifications()])
+    startNotificationPolling()
   } catch (error) {
     console.error('首页初始化失败:', error)
     ElMessage.error('登录失败，无法加载数据')
   }
+})
+
+onBeforeUnmount(() => {
+  stopNotificationPolling()
 })
 </script>
 
@@ -464,8 +595,9 @@ onMounted(async () => {
 }
 
 .brand,
+.calendar-button,
+.notification-button,
 .admin-button,
-.text-button,
 .category-chip,
 .resource-open {
   border: 0;
@@ -527,21 +659,91 @@ onMounted(async () => {
   color: #245b55;
 }
 
+.calendar-button {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 999px;
+  color: #245b55;
+  background: rgba(232, 242, 239, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(36, 91, 85, 0.12);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.calendar-button:hover {
+  transform: translateY(-1px);
+  background: #eef7f4;
+  box-shadow:
+    inset 0 0 0 1px rgba(36, 91, 85, 0.18),
+    0 10px 24px rgba(36, 91, 85, 0.12);
+}
+
+.notification-button,
 .admin-button {
-  width: 36px;
-  height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+}
+
+.notification-button {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 14px;
+  color: #245b55;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(240, 248, 245, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(36, 91, 85, 0.12),
+    0 10px 24px rgba(36, 91, 85, 0.1);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.notification-button:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 1), rgba(233, 246, 241, 1));
+  box-shadow:
+    inset 0 0 0 1px rgba(36, 91, 85, 0.16),
+    0 16px 30px rgba(36, 91, 85, 0.14);
+}
+
+.notification-trigger-icon {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #245b55;
+  background: rgba(36, 91, 85, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(36, 91, 85, 0.08);
+}
+
+.admin-button {
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   color: #245b55;
   background: #e8f2ef;
-  cursor: pointer;
+}
+
+.notification-button :deep(.el-badge__content) {
+  border: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: linear-gradient(180deg, #e36c57, #cf4d38);
+  box-shadow: 0 8px 16px rgba(210, 85, 63, 0.32);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .hero-section,
 .section-block {
-  max-width: 1180px;
+  max-width: 1200px;
   margin: 0 auto;
   padding-left: 24px;
   padding-right: 24px;
@@ -552,20 +754,11 @@ onMounted(async () => {
   justify-content: center;
   min-height: auto;
   padding-top: 12px;
-  padding-bottom: 28px;
+  padding-bottom: 12px;
 }
 
 .hero-copy {
-  width: min(760px, 100%);
-}
-
-.eyebrow {
-  margin: 0 0 10px;
-  color: #b85b3d;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  width: 100%;
 }
 
 .hero-search {
@@ -598,36 +791,20 @@ onMounted(async () => {
   font-size: 16px;
 }
 
-.hero-stats {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.hero-stats div {
-  flex: 1;
-  min-width: 0;
-  padding: 14px 16px;
-  box-sizing: border-box;
-  border: 1px solid rgba(36, 91, 85, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.hero-stats strong,
-.hero-stats span {
-  display: block;
-}
-
-.hero-stats strong {
-  font-size: 24px;
-}
-
-.hero-stats span {
-  margin-top: 4px;
-  color: #6a7a75;
+.clear-search {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  color: #245b55;
+  background: transparent;
   font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.clear-search:hover {
+  color: #1a4742;
 }
 
 .section-block {
@@ -635,27 +812,41 @@ onMounted(async () => {
   padding-bottom: 34px;
 }
 
-.section-heading {
+.resource-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.resource-card {
+  border: 1px solid rgba(36, 91, 85, 0.11);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 10px 26px rgba(21, 36, 33, 0.07);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.resource-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 38px rgba(21, 36, 33, 0.13);
+}
+
+.resource-card.unavailable {
+  opacity: 0.62;
+}
+
+.resource-section {
+  scroll-margin-top: 90px;
+  padding-top: 0;
+}
+
+.category-bar {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 18px;
-}
-
-.section-heading h2 {
-  margin: 0;
-  font-size: 30px;
-  line-height: 1.2;
-}
-
-.text-button {
-  display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  color: #245b55;
-  background: transparent;
-  cursor: pointer;
+  gap: 10px;
+  overflow: visible;
+  padding: 4px 0 14px;
 }
 
 .result-count {
@@ -663,96 +854,11 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.featured-grid,
-.resource-grid {
-  display: grid;
-  gap: 16px;
-}
-
-.featured-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.featured-card {
-  overflow: hidden;
-  border: 1px solid rgba(36, 91, 85, 0.11);
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 14px 34px rgba(21, 36, 33, 0.08);
-  cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.featured-card:hover,
-.resource-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 18px 38px rgba(21, 36, 33, 0.13);
-}
-
-.featured-image {
-  height: 164px;
-  background: #e8f2ef;
-}
-
-.featured-image img,
-.image-fallback {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.image-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #245b55;
-  background: #e8f2ef;
-  font-size: 28px;
-}
-
-.featured-content {
-  padding: 16px;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  border-radius: 999px;
-  color: #8f3f28;
-  background: #f9ece6;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.featured-content h3 {
-  margin: 12px 0 8px;
-  font-size: 20px;
-}
-
-.featured-content p {
-  min-height: 44px;
-  margin: 0;
-  color: #5e6d68;
-  line-height: 1.55;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.resource-section {
-  scroll-margin-top: 90px;
-  padding-top: 22px;
-}
-
-.category-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  overflow: visible;
-  padding: 4px 0 18px;
+.category-result-count {
+  margin-left: auto;
+  color: #556661;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .category-chip {
@@ -787,22 +893,6 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.18);
 }
 
-.resource-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.resource-card {
-  border: 1px solid rgba(36, 91, 85, 0.11);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 10px 26px rgba(21, 36, 33, 0.07);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-
-.resource-card.unavailable {
-  opacity: 0.62;
-}
-
 .resource-open {
   width: 100%;
   display: grid;
@@ -828,6 +918,17 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.image-fallback {
+  width: 100%;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #245b55;
+  background: #e8f2ef;
+  font-size: 28px;
 }
 
 .resource-content {
@@ -922,6 +1023,177 @@ onMounted(async () => {
   background: rgba(255, 255, 255, 0.86);
 }
 
+:deep(.home-notification-popover) {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(36, 91, 85, 0.1);
+  background:
+    radial-gradient(circle at top right, rgba(224, 239, 233, 0.72), transparent 36%),
+    linear-gradient(180deg, rgba(250, 252, 251, 0.98), rgba(255, 255, 255, 1));
+  box-shadow: 0 26px 60px rgba(21, 36, 33, 0.16);
+}
+
+.notification-panel {
+  padding: 18px;
+  background: transparent;
+}
+
+.notification-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(36, 91, 85, 0.08);
+}
+
+.notification-panel-heading {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 12px;
+}
+
+.notification-panel-emblem {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  grid-row: span 2;
+  border-radius: 14px;
+  color: #d2553f;
+  background: linear-gradient(180deg, rgba(254, 238, 234, 0.96), rgba(255, 247, 244, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(210, 85, 63, 0.12),
+    0 10px 22px rgba(210, 85, 63, 0.12);
+}
+
+.notification-panel-header strong {
+  display: block;
+  color: #173733;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.notification-panel-header p {
+  margin: 2px 0 0;
+  color: #73827d;
+  font-size: 12px;
+}
+
+.notification-count {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  color: #245b55;
+  background: rgba(232, 242, 239, 0.96);
+  box-shadow: inset 0 0 0 1px rgba(36, 91, 85, 0.08);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.notification-state {
+  padding: 28px 16px;
+  color: #73827d;
+  text-align: center;
+  font-size: 13px;
+}
+
+.notification-state.error {
+  color: #c0523f;
+}
+
+.notification-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 12px;
+  padding: 11px 12px 10px;
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 248, 245, 0.96), rgba(255, 255, 255, 0.98));
+  border: 1px solid rgba(210, 85, 63, 0.1);
+  box-shadow: 0 12px 26px rgba(210, 85, 63, 0.08);
+}
+
+.notification-level-dot {
+  width: 12px;
+  height: 12px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #ea7a62, #d2553f);
+  box-shadow: 0 0 0 6px rgba(210, 85, 63, 0.08);
+}
+
+.notification-copy {
+  min-width: 0;
+}
+
+.notification-copy strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #1f3632;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.notification-copy p {
+  margin: 0;
+  color: #5b6b66;
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.notification-copy small {
+  display: block;
+  margin-top: 6px;
+  color: #8b9793;
+  font-size: 11px;
+}
+
+.notification-more {
+  width: 100%;
+  height: 42px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 14px;
+  color: #245b55;
+  background:
+    linear-gradient(180deg, rgba(236, 246, 243, 0.96), rgba(227, 241, 236, 0.96));
+  box-shadow:
+    inset 0 0 0 1px rgba(36, 91, 85, 0.1),
+    0 10px 20px rgba(36, 91, 85, 0.08);
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.notification-more:hover {
+  transform: translateY(-1px);
+  background:
+    linear-gradient(180deg, rgba(241, 249, 247, 1), rgba(232, 244, 240, 1));
+  box-shadow:
+    inset 0 0 0 1px rgba(36, 91, 85, 0.14),
+    0 14px 24px rgba(36, 91, 85, 0.12);
+}
+
 @media (max-width: 980px) {
   .header-nav {
     display: none;
@@ -929,9 +1201,9 @@ onMounted(async () => {
 
   .hero-section {
     padding-top: 28px;
+    padding-bottom: 10px;
   }
 
-  .featured-grid,
   .resource-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -953,18 +1225,8 @@ onMounted(async () => {
     height: 52px;
   }
 
-  .featured-grid,
   .resource-grid {
     grid-template-columns: 1fr;
-  }
-
-  .hero-stats {
-    flex-direction: column;
-  }
-
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .resource-open {
@@ -978,6 +1240,11 @@ onMounted(async () => {
 
   .open-icon {
     display: none;
+  }
+
+  .category-result-count {
+    width: 100%;
+    margin-left: 0;
   }
 }
 </style>

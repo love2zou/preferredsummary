@@ -7,6 +7,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS build
 WORKDIR /src
 
 # 1) 先拷贝 csproj 做 restore（利用层缓存）
+COPY ["global.json", "."]
 COPY ["Preferred.Api/Preferred.Api.csproj", "Preferred.Api/"]
 COPY ["Preferred.Api/template/tag_import.xlsx", "Preferred.Api/template/"]
 

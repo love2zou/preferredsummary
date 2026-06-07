@@ -13,6 +13,7 @@ namespace Preferred.Api.Services
     /// </summary>
     public class NotificationService : INotificationService
     {
+        private const string DiskUsageAlertRemarkPrefix = "SYSTEM_MONITOR_DISK_ALERT:";
         private readonly ApplicationDbContext _context;
 
         public NotificationService(ApplicationDbContext context)
@@ -426,6 +427,64 @@ namespace Preferred.Api.Services
                 return new ApiResponse<bool> { Success = false, Message = $"批量发送失败：{ex.Message}", Data = false };
             }
         }
+
+        public async Task<ApiResponse<bool>> SendSystemDiskUsageAlertAsync(
+            string diskName,
+            decimal diskUsage,
+            decimal diskFree,
+            decimal diskTotal,
+            string sender = "admin",
+            string receiver = "admin")
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(diskName))
+                {
+                    return new ApiResponse<bool> { Success = false, Message = "磁盘名称不能为空", Data = false };
+                }
+
+                var remark = $"{DiskUsageAlertRemarkPrefix}{diskName}";
+                var normalizedDiskName = diskName.Trim();
+
+                var existsUnreadAlert = await _context.Notifications
+                    .AnyAsync(x =>
+                        x.Receiver == receiver &&
+                        x.IsRead == 0 &&
+                        x.NotifyType == "alert" &&
+                        x.Remark == remark);
+
+                if (existsUnreadAlert)
+                {
+                    return new ApiResponse<bool> { Success = true, Message = "已存在未读的磁盘空间告警，跳过重复创建", Data = true };
+                }
+
+                var result = await CreateNotification(new NotificationCreateDto
+                {
+                    Name = "系统资源监控告警",
+                    Content = $"监控磁盘 {normalizedDiskName} 使用率已达到 {diskUsage:F2}% ，超过 80% 阈值。当前可用空间 {diskFree:F2}GB / 总空间 {diskTotal:F2}GB，请尽快检查并清理磁盘空间。",
+                    NotifyType = "alert",
+                    NotifyStatus = 2,
+                    SendStatus = 1,
+                    SendTime = DateTime.UtcNow,
+                    SendUser = string.IsNullOrWhiteSpace(sender) ? "admin" : sender,
+                    Receiver = string.IsNullOrWhiteSpace(receiver) ? "admin" : receiver,
+                    Remark = remark,
+                    SeqNo = 0
+                });
+
+                return new ApiResponse<bool>
+                {
+                    Success = result.Success,
+                    Message = result.Success ? "磁盘空间告警通知创建成功" : result.Message,
+                    Data = result.Success
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ApiResponse<bool> { Success = false, Message = $"磁盘空间告警通知创建失败：{ex.Message}", Data = false };
+            }
+        }
+
         public async Task<ApiResponse<bool>> BatchMarkAsRead(List<int> ids)
         {
             try

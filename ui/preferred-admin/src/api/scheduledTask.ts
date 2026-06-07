@@ -192,6 +192,11 @@ export const scheduledTaskApi = {
     return request.post(`/api/ScheduledTask/${id}/execute`)
   },
 
+  // 初始化系统内置任务
+  initBuiltInTasks(): Promise<ApiResponse> {
+    return request.post('/api/ScheduledTask/init-built-in-tasks')
+  },
+
   // 获取定时任务日志列表
   getScheduledTaskLogList(params: ScheduledTaskLogSearchParams): Promise<ScheduledTaskLogPagedResponse> {
     return request.get('/api/ScheduledTask/logs', { params })

@@ -10,6 +10,11 @@ const router = createRouter({
       component: Home
     },
     {
+      path: '/calendar',
+      name: 'CalendarPage',
+      component: () => import('@/views/CalendarPage.vue')
+    },
+    {
       path: '/zwav-analysis',
       name: 'ZwavAnalysis',
       component: () => import('@/views/zwavpages/ZwavAnalysis.vue')

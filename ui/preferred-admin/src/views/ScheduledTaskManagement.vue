@@ -41,6 +41,10 @@
                 <el-icon><Plus /></el-icon>
                 新增任务
               </el-button>
+              <el-button type="success" @click="handleInitBuiltInTasks">
+                <el-icon><Refresh /></el-icon>
+                初始化任务
+              </el-button>
               <el-button 
                 type="danger" 
                 :disabled="selectedTasks.length === 0"
@@ -632,6 +636,29 @@ const handleAdd = () => {
     remark: ''
   })
   dialogVisible.value = true
+}
+
+const handleInitBuiltInTasks = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定要初始化系统内置任务吗？已存在的任务会自动跳过。',
+      '初始化确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'info'
+      }
+    )
+
+    const response = await scheduledTaskApi.initBuiltInTasks()
+    ElMessage.success(response.message || '初始化任务成功')
+    getTaskList()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      console.error('初始化任务失败:', error)
+      ElMessage.error('初始化任务失败')
+    }
+  }
 }
 
 // 编辑（添加cronDescription字段）

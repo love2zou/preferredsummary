@@ -21,5 +21,12 @@ namespace Preferred.Api.Services
         // 新增：通知发送（单条/批量）
         Task<ApiResponse<bool>> SendNotification(int id, string sendUser);
         Task<ApiResponse<bool>> BatchSendNotifications(List<int> ids, string sendUser);
+        Task<ApiResponse<bool>> SendSystemDiskUsageAlertAsync(
+            string diskName,
+            decimal diskUsage,
+            decimal diskFree,
+            decimal diskTotal,
+            string sender = "admin",
+            string receiver = "admin");
     }
 }

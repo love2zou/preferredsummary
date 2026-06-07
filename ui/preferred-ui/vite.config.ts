@@ -11,6 +11,13 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    open: true
+    open: true,
+    proxy: {
+      '/api/baidu-hot': {
+        target: 'https://top.baidu.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/baidu-hot/, '/api/board')
+      }
+    }
   }
 })

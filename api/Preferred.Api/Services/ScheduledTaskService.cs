@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +18,10 @@ namespace Preferred.Api.Services
     /// </summary>
     public class ScheduledTaskService : IScheduledTaskService
     {
+        private const string SystemMonitorTaskKey = "systemmonitor";
+        private const string LogCleanupTaskKey = "logcleanup";
+        private const string DataBackupTaskKey = "databackup";
+
         private readonly ApplicationDbContext _context;
         private readonly ILogger<ScheduledTaskService> _logger;
         private readonly IServiceProvider _serviceProvider;
@@ -327,25 +333,90 @@ namespace Preferred.Api.Services
         /// </summary>
         private async Task ExecuteTaskByHandlerAsync(ScheduledTask task)
         {
-            switch (task.Handler)
+            var taskExecutionKey = ResolveTaskExecutionKey(task);
+
+            _logger.LogInformation(
+                "定时任务匹配结果: Task={TaskName}({TaskCode}), Handler={Handler}, ExecutionKey={ExecutionKey}",
+                task.Name,
+                task.Code,
+                task.Handler,
+                taskExecutionKey);
+
+            switch (taskExecutionKey)
             {
-                case "Preferred.Api.Services.SystemMonitorService.MonitorAndSaveAsync":
-                    // 执行系统监控任务
+                case SystemMonitorTaskKey:
                     await ExecuteSystemMonitorTaskAsync(task);
                     break;
-                case "logcleanup":
-                    // 执行日志清理任务
+                case LogCleanupTaskKey:
                     await ExecuteLogCleanupTaskAsync(task);
                     break;
-                case "databackup":
-                    // 执行数据备份任务
+                case DataBackupTaskKey:
                     await ExecuteDataBackupTaskAsync(task);
                     break;
                 default:
-                    // 默认执行逻辑
-                    await Task.Delay(1000); // 模拟执行
-                    break;
+                    throw new NotSupportedException($"未识别的任务处理器: Handler={task.Handler}, Code={task.Code}, Name={task.Name}");
             }
+        }
+
+        private static string ResolveTaskExecutionKey(ScheduledTask task)
+        {
+            var candidates = new[]
+            {
+                NormalizeTaskToken(task.Handler),
+                NormalizeTaskToken(task.Code),
+                NormalizeTaskToken(task.Name)
+            }.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+
+            if (candidates.Any(candidate => MatchesTaskAlias(candidate,
+                    "Preferred.Api.Services.SystemMonitorService.MonitorAndSaveAsync",
+                    "SYSTEM_RESOURCE_MONITOR",
+                    "SystemMonitor",
+                    "MonitorAndSaveAsync")))
+            {
+                return SystemMonitorTaskKey;
+            }
+
+            if (candidates.Any(candidate => MatchesTaskAlias(candidate,
+                    "logcleanup",
+                    "LOG_CLEANUP",
+                    "ExecuteLogCleanupTaskAsync",
+                    "CleanExpiredLogsAsync",
+                    "日志清理",
+                    "清理日志")))
+            {
+                return LogCleanupTaskKey;
+            }
+
+            if (candidates.Any(candidate => MatchesTaskAlias(candidate,
+                    "databackup",
+                    "DATA_BACKUP",
+                    "databasebackup",
+                    "ExecuteDataBackupTaskAsync",
+                    "数据备份",
+                    "备份数据")))
+            {
+                return DataBackupTaskKey;
+            }
+
+            return NormalizeTaskToken(task.Handler);
+        }
+
+        private static bool MatchesTaskAlias(string normalizedCandidate, params string[] aliases)
+        {
+            return aliases.Select(NormalizeTaskToken).Any(alias => alias == normalizedCandidate);
+        }
+
+        private static string NormalizeTaskToken(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return new string(value
+                .Where(char.IsLetterOrDigit)
+                .Select(char.ToLowerInvariant)
+                .ToArray());
         }
         
         /// <summary>
@@ -377,18 +448,14 @@ namespace Preferred.Api.Services
         {
             _logger.LogInformation($"执行日志清理任务: {task.Name}");
             
-            // 解析参数，获取保留天数
-            var days = 30; // 默认30天
-            if (!string.IsNullOrEmpty(task.Parameters))
-            {
-                if (int.TryParse(task.Parameters, out var parsedDays))
-                {
-                    days = parsedDays;
-                }
-            }
-            
-            var cleanedCount = await CleanExpiredLogsAsync(days);
-            _logger.LogInformation($"日志清理完成，清理了 {cleanedCount} 条过期日志");
+            var days = ParseTaskParameterInt(task.Parameters, "days", 30);
+            var (dbLogCount, fileCount) = await CleanExpiredLogsInternalAsync(days);
+            _logger.LogInformation(
+                "日志清理完成: Task={TaskName}, 保留天数={Days}, 清理任务日志={DbLogCount}, 清理日志文件={FileCount}",
+                task.Name,
+                days,
+                dbLogCount,
+                fileCount);
         }
         
         /// <summary>
@@ -397,8 +464,82 @@ namespace Preferred.Api.Services
         private async Task ExecuteDataBackupTaskAsync(ScheduledTask task)
         {
             _logger.LogInformation($"执行数据备份任务: {task.Name}");
-            // TODO: 实现数据备份逻辑
-            await Task.Delay(2000); // 模拟执行
+
+            var backupDirectory = ResolveBackupDirectory(task.Parameters);
+            Directory.CreateDirectory(backupDirectory);
+
+            var now = DateTime.Now;
+            var fileName = $"backup-{now:yyyyMMdd-HHmmss}.json";
+            var filePath = Path.Combine(backupDirectory, fileName);
+
+            var backupPayload = new
+            {
+                createdAt = now,
+                task = new
+                {
+                    task.Id,
+                    task.Name,
+                    task.Code,
+                    task.Handler,
+                    task.Parameters
+                },
+                summary = new
+                {
+                    users = await _context.Users.AsNoTracking().CountAsync(),
+                    categories = await _context.Categories.AsNoTracking().CountAsync(),
+                    tags = await _context.Tags.AsNoTracking().CountAsync(),
+                    pictures = await _context.Pictures.AsNoTracking().CountAsync(),
+                    networkUrls = await _context.NetworkUrls.AsNoTracking().CountAsync(),
+                    files = await _context.FileRecords.AsNoTracking().CountAsync(),
+                    notifications = await _context.Notifications.AsNoTracking().CountAsync(),
+                    systemResources = await _context.SystemResources.AsNoTracking().CountAsync(),
+                    scheduledTasks = await _context.ScheduledTasks.AsNoTracking().CountAsync(),
+                    scheduledTaskLogs = await _context.ScheduledTaskLogs.AsNoTracking().CountAsync()
+                },
+                data = new
+                {
+                    scheduledTasks = await _context.ScheduledTasks.AsNoTracking()
+                        .OrderBy(x => x.Id)
+                        .ToListAsync(),
+                    categories = await _context.Categories.AsNoTracking()
+                        .OrderBy(x => x.Id)
+                        .ToListAsync(),
+                    tags = await _context.Tags.AsNoTracking()
+                        .OrderBy(x => x.Id)
+                        .ToListAsync(),
+                    pictures = await _context.Pictures.AsNoTracking()
+                        .OrderBy(x => x.Id)
+                        .ToListAsync(),
+                    networkUrls = await _context.NetworkUrls.AsNoTracking()
+                        .OrderBy(x => x.Id)
+                        .ToListAsync(),
+                    fileRecords = await _context.FileRecords.AsNoTracking()
+                        .OrderBy(x => x.Id)
+                        .ToListAsync(),
+                    notifications = await _context.Notifications.AsNoTracking()
+                        .OrderByDescending(x => x.Id)
+                        .Take(500)
+                        .ToListAsync(),
+                    systemResources = await _context.SystemResources.AsNoTracking()
+                        .OrderByDescending(x => x.Id)
+                        .Take(1000)
+                        .ToListAsync(),
+                    scheduledTaskLogs = await _context.ScheduledTaskLogs.AsNoTracking()
+                        .OrderByDescending(x => x.Id)
+                        .Take(1000)
+                        .ToListAsync()
+                }
+            };
+
+            var json = JsonSerializer.Serialize(backupPayload, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+
+            await File.WriteAllTextAsync(filePath, json);
+            CleanupExpiredBackupFiles(backupDirectory, ParseTaskParameterInt(task.Parameters, "maxFiles", 10));
+
+            _logger.LogInformation("数据备份完成: Task={TaskName}, File={FilePath}", task.Name, filePath);
         }
         
         /// <summary>
@@ -478,21 +619,167 @@ namespace Preferred.Api.Services
         /// </summary>
         public async Task<int> CleanExpiredLogsAsync(int days = 30)
         {
+            var (dbLogCount, fileCount) = await CleanExpiredLogsInternalAsync(days);
+            return dbLogCount + fileCount;
+        }
+
+        private async Task<(int DbLogCount, int FileCount)> CleanExpiredLogsInternalAsync(int days)
+        {
             var expiredDate = DateTime.Now.AddDays(-days);
             
             var expiredLogs = await _context.ScheduledTaskLogs
                 .Where(x => x.CrtTime < expiredDate)
                 .ToListAsync();
+
+            var dbLogCount = expiredLogs.Count;
                 
             if (expiredLogs.Any())
             {
                 _context.ScheduledTaskLogs.RemoveRange(expiredLogs);
                 await _context.SaveChangesAsync();
                 
-                _logger.LogInformation($"清理过期日志 {expiredLogs.Count} 条");
+                _logger.LogInformation($"清理过期任务日志 {expiredLogs.Count} 条");
             }
             
-            return expiredLogs.Count;
+            var fileCount = CleanExpiredApplicationLogFiles(expiredDate);
+            return (dbLogCount, fileCount);
+        }
+
+        private int CleanExpiredApplicationLogFiles(DateTime expiredDate)
+        {
+            var deletedCount = 0;
+            var logDirectories = new[]
+            {
+                Path.Combine(Directory.GetCurrentDirectory(), "logs"),
+                Path.Combine(AppContext.BaseDirectory, "logs")
+            }
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(Directory.Exists);
+
+            foreach (var logDirectory in logDirectories)
+            {
+                foreach (var logFile in Directory.GetFiles(logDirectory, "*.log", SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        var fileInfo = new FileInfo(logFile);
+                        if (fileInfo.LastWriteTime >= expiredDate)
+                        {
+                            continue;
+                        }
+
+                        fileInfo.Delete();
+                        deletedCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "删除过期日志文件失败: {LogFile}", logFile);
+                    }
+                }
+            }
+
+            if (deletedCount > 0)
+            {
+                _logger.LogInformation("清理过期应用日志文件 {DeletedCount} 个", deletedCount);
+            }
+
+            return deletedCount;
+        }
+
+        private static int ParseTaskParameterInt(string? parameters, string propertyName, int defaultValue)
+        {
+            if (string.IsNullOrWhiteSpace(parameters))
+            {
+                return defaultValue;
+            }
+
+            if (int.TryParse(parameters, out var directValue))
+            {
+                return directValue;
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(parameters);
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty(propertyName, out var property))
+                {
+                    if (property.ValueKind == JsonValueKind.Number && property.TryGetInt32(out var numberValue))
+                    {
+                        return numberValue;
+                    }
+
+                    if (property.ValueKind == JsonValueKind.String
+                        && int.TryParse(property.GetString(), out var stringValue))
+                    {
+                        return stringValue;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore malformed JSON parameters and use defaults.
+            }
+
+            return defaultValue;
+        }
+
+        private static string ResolveBackupDirectory(string? parameters)
+        {
+            const string defaultDirectoryName = "backups";
+
+            if (string.IsNullOrWhiteSpace(parameters))
+            {
+                return Path.Combine(Directory.GetCurrentDirectory(), defaultDirectoryName);
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(parameters);
+                if (document.RootElement.ValueKind == JsonValueKind.Object
+                    && document.RootElement.TryGetProperty("directory", out var directoryProperty)
+                    && directoryProperty.ValueKind == JsonValueKind.String)
+                {
+                    var configuredDirectory = directoryProperty.GetString();
+                    if (!string.IsNullOrWhiteSpace(configuredDirectory))
+                    {
+                        return Path.IsPathRooted(configuredDirectory)
+                            ? configuredDirectory
+                            : Path.Combine(Directory.GetCurrentDirectory(), configuredDirectory);
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore malformed JSON parameters and use defaults.
+            }
+
+            return Path.Combine(Directory.GetCurrentDirectory(), defaultDirectoryName);
+        }
+
+        private void CleanupExpiredBackupFiles(string backupDirectory, int maxFilesToKeep)
+        {
+            if (maxFilesToKeep <= 0 || !Directory.Exists(backupDirectory))
+            {
+                return;
+            }
+
+            var backupFiles = new DirectoryInfo(backupDirectory)
+                .GetFiles("backup-*.json", SearchOption.TopDirectoryOnly)
+                .OrderByDescending(x => x.CreationTimeUtc)
+                .ToList();
+
+            foreach (var expiredFile in backupFiles.Skip(maxFilesToKeep))
+            {
+                try
+                {
+                    expiredFile.Delete();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "删除旧备份文件失败: {BackupFile}", expiredFile.FullName);
+                }
+            }
         }
         
         /// <summary>

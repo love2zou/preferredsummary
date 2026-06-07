@@ -678,7 +678,8 @@ const getPictureByCode = async (imageCode: string): Promise<PictureType | null> 
   try {
     const response = await pictureApi.getPictureList({
       page: 1,
-      pageSize: 1,
+      pageSize: 1000,
+      imageCode,
       imageName: '', // 使用imageName而不是imageCode
       appType: '访问地址-标签类型'
     })
@@ -978,7 +979,13 @@ const handleEdit = async (row: ExtendedNetworkUrlListDto) => {
   
   // 获取关联图片信息
   if (row.imageCode) {
-    await getPictureByCode(row.imageCode)
+    // 图片回显在下方统一解析
+  }
+
+  const resolvedPicture = row.imageCode ? await getPictureByCode(row.imageCode) : row.selectedPicture ?? null
+  if (resolvedPicture) {
+    selectedPicture.value = resolvedPicture
+    selectedPictureId.value = resolvedPicture.id
   }
   
   getCategoryList() // 加载分类列表
@@ -1019,12 +1026,20 @@ const handleSubmit = async () => {
       submitLoading.value = true
       try {
         // 将多选数组转换为逗号分隔的字符串
-        const submitData = {
-          ...networkUrlForm,
+        const imageCode = selectedPicture.value?.imageCode || networkUrlForm.imageCode
+        const submitData: NetworkUrlDto = {
+          name: networkUrlForm.name,
+          url: networkUrlForm.url,
+          description: networkUrlForm.description,
+          imageCode,
+          isAvailable: networkUrlForm.isAvailable,
+          isMark: networkUrlForm.isMark,
+          seqNo: networkUrlForm.seqNo,
           tagCodeType: networkUrlForm.tagCodeTypes.join(','),
           categoryCode: networkUrlForm.categoryCodes.join(',') // 处理多选分类菜单
         }
-        
+        networkUrlForm.imageCode = imageCode
+
         if (isEdit.value && currentNetworkUrlId.value) {
           await networkUrlApi.updateNetworkUrl(currentNetworkUrlId.value, submitData)
           ElMessage.success('更新成功')

@@ -3740,70 +3740,46 @@
             <summary>
             获取所有定时任务
             </summary>
-            <returns>定时任务列表</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetTaskById(System.Int32)">
             <summary>
-            根据ID获取定时任务
+            根据 ID 获取定时任务
             </summary>
-            <param name="id">任务ID</param>
-            <returns>定时任务信息</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.CreateTask(Preferred.Api.Models.ScheduledTaskDto)">
             <summary>
             创建定时任务
             </summary>
-            <param name="taskDto">任务信息</param>
-            <returns>创建的任务信息</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.UpdateTask(System.Int32,Preferred.Api.Models.ScheduledTaskDto)">
             <summary>
             更新定时任务
             </summary>
-            <param name="id">任务ID</param>
-            <param name="taskDto">任务信息</param>
-            <returns>更新的任务信息</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.DeleteTask(System.Int32)">
             <summary>
             删除定时任务
             </summary>
-            <param name="id">任务ID</param>
-            <returns>删除结果</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.BatchDeleteTasks(Preferred.Api.Models.BatchDeleteTaskRequest)">
             <summary>
             批量删除定时任务
             </summary>
-            <param name="request">批量删除请求</param>
-            <returns>删除结果</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.SetTaskEnabled(System.Int32,Preferred.Api.Models.TaskEnabledRequest)">
             <summary>
             启用/禁用定时任务
             </summary>
-            <param name="id">任务ID</param>
-            <param name="request">启用/禁用请求</param>
-            <returns>操作结果</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.ExecuteTask(System.Int32)">
             <summary>
             手动执行定时任务
             </summary>
-            <param name="id">任务ID</param>
-            <returns>执行结果</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.GetTaskLogs(System.Nullable{System.Int32},System.Nullable{System.Boolean},System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Int32,System.Int32)">
             <summary>
             获取任务执行日志
             </summary>
-            <param name="taskId">任务ID（可选）</param>
-            <param name="success">执行结果（可选）</param>
-            <param name="startTime">开始时间（可选）</param>
-            <param name="endTime">结束时间（可选）</param>
-            <param name="page">页码</param>
-            <param name="size">页大小</param>
-            <returns>执行日志列表</returns>
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.CleanExpiredLogs(System.Int32)">
             <summary>
@@ -3812,9 +3788,13 @@
         </member>
         <member name="M:Preferred.Api.Controllers.ScheduledTaskController.InitSystemMonitorTask">
             <summary>
-            初始化系统资源监控定时任务
+            初始化系统资源监控任务
             </summary>
-            <returns>初始化结果</returns>
+        </member>
+        <member name="M:Preferred.Api.Controllers.ScheduledTaskController.InitBuiltInTasks">
+            <summary>
+            初始化系统内置定时任务
+            </summary>
         </member>
         <member name="T:Preferred.Api.Controllers.SystemResourceController">
             <summary>

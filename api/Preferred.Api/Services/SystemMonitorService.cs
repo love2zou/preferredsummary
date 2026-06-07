@@ -25,9 +25,11 @@ namespace Preferred.Api.Services
     {
         private readonly ILogger<SystemMonitorService> _logger;
         private readonly ISystemResourceService _systemResourceService;
+        private readonly INotificationService _notificationService;
         private readonly SystemMonitorConfig _config;
         private readonly bool _isWindows;
         private readonly bool _isLinux;
+        private const decimal DiskUsageAlertThreshold = 80m;
         
 #if WINDOWS
         private PerformanceCounter _cpuCounter;
@@ -37,10 +39,12 @@ namespace Preferred.Api.Services
         public SystemMonitorService(
             ILogger<SystemMonitorService> logger,
             ISystemResourceService systemResourceService,
+            INotificationService notificationService,
             IOptions<SystemMonitorConfig> config)
         {
             _logger = logger;
             _systemResourceService = systemResourceService;
+            _notificationService = notificationService;
             _config = config.Value;
             
             // 检测操作系统
@@ -127,10 +131,45 @@ namespace Preferred.Api.Services
                 {
                     _logger.LogError($"系统资源监控数据保存失败: {result.Message}");
                 }
+
+                await TrySendDiskUsageAlertAsync(resourceData);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "执行系统资源监控时发生错误");
+            }
+        }
+
+        private async Task TrySendDiskUsageAlertAsync(SystemResourceCreateDto resourceData)
+        {
+            if (resourceData == null || resourceData.DiskUsage <= DiskUsageAlertThreshold)
+            {
+                return;
+            }
+
+            var notifyResult = await _notificationService.SendSystemDiskUsageAlertAsync(
+                resourceData.DiskName,
+                resourceData.DiskUsage,
+                resourceData.DiskFree,
+                resourceData.DiskTotal,
+                "admin",
+                "admin");
+
+            if (notifyResult.Success)
+            {
+                _logger.LogInformation(
+                    "磁盘空间占用告警处理完成: Disk={DiskName}, Usage={DiskUsage}%, Message={Message}",
+                    resourceData.DiskName,
+                    resourceData.DiskUsage,
+                    notifyResult.Message);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "磁盘空间占用告警处理失败: Disk={DiskName}, Usage={DiskUsage}%, Message={Message}",
+                    resourceData.DiskName,
+                    resourceData.DiskUsage,
+                    notifyResult.Message);
             }
         }
         
